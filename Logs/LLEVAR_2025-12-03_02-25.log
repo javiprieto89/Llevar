@@ -1,0 +1,11 @@
+[2025-12-03 02:25:35] [INFO] ========================================
+[2025-12-03 02:25:35] [INFO] Iniciando LLEVAR.PS1
+[2025-12-03 02:25:35] [INFO] Usuario: javie
+[2025-12-03 02:25:35] [INFO] Computadora: JARVIS
+[2025-12-03 02:25:35] [INFO] ========================================
+[2025-12-03 02:26:15] [INFO] Intentando conectar a: ftp://192.168.7.107 (Usuario: FTPUser)
+[2025-12-03 02:26:15] [INFO] Conexión FTP exitosa: ftp://192.168.7.107 - 125 Data connection already open; Transfer starting.
+
+[2025-12-03 02:26:36] [INFO] Intentando conectar a: ftp://192.168.136.128 (Usuario: javierp)
+[2025-12-03 02:26:36] [INFO] Conexión FTP exitosa: ftp://192.168.136.128 - 125 Data connection already open; Transfer starting.
+

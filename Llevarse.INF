@@ -1,0 +1,62 @@
+;
+; "Llevarse esto en diskettes" AlexToy
+;
+; Copyright 2000 Alex Soft
+;
+[version]
+signature="$CHICAGO$"
+
+[LlevarseInstall]
+CopyFiles = Llevarse.Files.Inf
+AddReg    = Llevarse.Reg
+
+[DefaultInstall]
+CopyFiles = Llevarse.Files.Inf
+AddReg    = Llevarse.Reg
+
+[DefaultInstall.ntx86]
+CopyFiles = Llevarse.Files.Inf
+AddReg    = Llevarse.Reg.NT
+
+[DefaultUnInstall]
+DelFiles  = Llevarse.Files.Inf
+DelReg    = Llevarse.Reg
+
+[DefaultUnInstall.ntx86]
+DelFiles  = Llevarse.Files.Inf
+DelReg    = Llevarse.Reg.NT
+
+[SourceDisksNames]
+55="Llevarse esto en diskettes","",1
+
+[SourceDisksFiles]
+Llevarse.INF=55
+
+[DestinationDirs]
+Llevarse.Files.Inf = 17
+
+[Llevarse.Files.Inf]
+Llevarse.INF
+
+[Llevarse.Reg]
+HKLM,%UDHERE%
+HKLM,%UDHERE%,DisplayName,,"%LlevarseName%"
+HKLM,%UDHERE%,UninstallString,,"%10%\rundll.exe setupx.dll,InstallHinfSection DefaultUninstall 132 %17%\Llevarse.inf"
+HKCR,Directory\Shell\Llevarse,,,"%LlevarseAccel%"
+HKCR,Directory\Shell\LLevarse\command,,,"%10%\command.com /k Llevar ""%1"""
+HKCR,Drive\Shell\LLevarse,,,"%LLevarseAccel%"
+HKCR,Drive\Shell\LLevarse\command,,,"%10%\command.com /k Llevar ""%1"""
+
+[LLevarse.Reg.NT]
+HKLM,%UDHERE%
+HKLM,%UDHERE%,DisplayName,,"%LlevarseName%"
+HKLM,%UDHERE%,UninstallString,,"rundll32.exe syssetup.dll,SetupInfObjectInstallAction DefaultUninstall 132 %17%\LLevarse.inf"
+HKCR,Directory\Shell\LLevarse,,,"%LLevarseAccel%"
+HKCR,Directory\Shell\LLevarse\command,,,"%11%\cmd.exe /k Llevar ""%1"""
+HKCR,Drive\Shell\LLevarse,,,"%LLevarseAccel%"
+HKCR,Drive\Shell\LLevarse\command,,,"%11%\cmd.exe /k Llevar ""%1"""
+
+[Strings]
+LlevarseName="LLevarse esto en diskettes AlexToy"
+LLevarseAccel="LLevarse esto en dis&kettes"
+UDHERE="Software\Microsoft\Windows\CurrentVersion\Uninstall\LLevarse"

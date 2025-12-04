@@ -1,0 +1,43 @@
+; Llevar.inf
+; Archivo de instalación para agregar "Llevar A..." al menú contextual de Windows
+; Compatible con Windows 10/11
+; Copyright 2025 - Actualizado para PowerShell
+
+[Version]
+Signature="$Windows NT$"
+Provider="Alex Soft"
+
+[DefaultInstall]
+AddReg=Llevar.AddReg
+
+[DefaultUninstall]
+DelReg=Llevar.DelReg
+
+[Llevar.AddReg]
+; Menú contextual para CARPETAS
+HKCR,"Directory\shell\LlevarA",,,"Llevar A..."
+HKCR,"Directory\shell\LlevarA","Icon",,"C:\Llevar\Llevar.ps1"
+HKCR,"Directory\shell\LlevarA\command",,,"pwsh.exe -NoExit -ExecutionPolicy Bypass -File ""C:\Llevar\Llevar.ps1"" -Origen ""%1"""
+
+; Menú contextual para ARCHIVOS
+HKCR,"*\shell\LlevarA",,,"Llevar A..."
+HKCR,"*\shell\LlevarA","Icon",,"C:\Llevar\Llevar.ps1"
+HKCR,"*\shell\LlevarA\command",,,"pwsh.exe -NoExit -ExecutionPolicy Bypass -File ""C:\Llevar\Llevar.ps1"" -Origen ""%1"""
+
+; Menú contextual para UNIDADES (drives)
+HKCR,"Drive\shell\LlevarA",,,"Llevar A..."
+HKCR,"Drive\shell\LlevarA","Icon",,"C:\Llevar\Llevar.ps1"
+HKCR,"Drive\shell\LlevarA\command",,,"pwsh.exe -NoExit -ExecutionPolicy Bypass -File ""C:\Llevar\Llevar.ps1"" -Origen ""%1"""
+
+[Llevar.DelReg]
+; Eliminar menú contextual de CARPETAS
+HKCR,"Directory\shell\LlevarA"
+
+; Eliminar menú contextual de ARCHIVOS
+HKCR,"*\shell\LlevarA"
+
+; Eliminar menú contextual de UNIDADES
+HKCR,"Drive\shell\LlevarA"
+
+[Strings]
+LlevarName="Llevar A... - Sistema de transporte USB"
