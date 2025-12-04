@@ -862,7 +862,7 @@ function Show-Banner {
 # ========================================================================== #
 #                    FUNCIÓN PARA SONIDOS ESTILO DOS-MIDI                    #
 # ========================================================================== #
-function Play-DOSBeep {
+function Invoke-DOSBeep {
     param(
         [int]$LineIndex = 0,
         [int]$TotalLines = 100
@@ -1166,7 +1166,7 @@ function Show-AsciiLogo {
         
         # === REPRODUCIR SONIDO ESTILO DOS ===
         if ($PlaySound) {
-            Play-DOSBeep -LineIndex $i -TotalLines $effectiveLines.Count
+            Invoke-DOSBeep -LineIndex $i -TotalLines $effectiveLines.Count
         }
         
         # === LLAMAR A LA FUNCIÓN DE BARRA DE PROGRESO ===
@@ -2421,7 +2421,7 @@ function Select-PathNavigator {
             Write-Host "Esto puede tardar unos segundos..." -ForegroundColor Gray
             
             # Obtener computadoras en la red local
-            $computers = Get-WmiObject -Class Win32_ComputerSystem -ErrorAction SilentlyContinue | 
+            #$computers = Get-WmiObject -Class Win32_ComputerSystem -ErrorAction SilentlyContinue | 
             Select-Object -ExpandProperty Name
             
             # Buscar en la red local usando net view
@@ -2553,7 +2553,7 @@ function Select-PathNavigator {
     }
     
     # Función para dibujar la interfaz
-    function Draw-Interface {
+    function Show-Interface {
         param(
             [string]$Path,
             [array]$Items,
@@ -2663,7 +2663,7 @@ function Select-PathNavigator {
             $selectedIndex = [Math]::Max(0, $items.Count - 1)
         }
         
-        Draw-Interface -Path $pathDisplay -Items $items -SelectedIndex $selectedIndex -ScrollOffset $scrollOffset
+        Show-Interface -Path $pathDisplay -Items $items -SelectedIndex $selectedIndex -ScrollOffset $scrollOffset
         
         $key = $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
         
@@ -2790,7 +2790,7 @@ function Select-PathNavigator {
                 Write-Log "Usuario activó F3 para descubrir recursos de red" "INFO"
                 
                 # Guardar contexto actual
-                $savedPath = $currentPath
+                #$savedPath = $currentPath
                 
                 # Llamar a la función de discovery UNC
                 $uncResult = Select-NetworkPath -Purpose "NAVEGADOR"
@@ -4742,7 +4742,7 @@ function Copy-LlevarLocalToOneDrive {
             Write-LlevarProgressBar -Percent 50 -StartTime $StartTime -Label "Subiendo a OneDrive API..." -Top $ProgressTop -Width 50
         }
         
-        # TODO: Usar Upload-OneDriveFile o Upload-OneDriveFolder con progreso
+        # TODO: Usar Send-OneDriveFile o Send-OneDriveFolder con progreso
         throw "Copia Local → OneDrive API no implementada aún con progreso"
     }
 }
@@ -4764,7 +4764,7 @@ function Copy-LlevarLocalToDropbox {
             Write-LlevarProgressBar -Percent 50 -StartTime $StartTime -Label "Subiendo a Dropbox API..." -Top $ProgressTop -Width 50
         }
         
-        # TODO: Usar Upload-DropboxFile o Upload-DropboxFolder con progreso
+        # TODO: Usar Send-DropboxFile o Send-DropboxFolder con progreso
         throw "Copia Local → Dropbox API no implementada aún con progreso"
     }
 }
@@ -4808,7 +4808,7 @@ function Copy-LlevarOneDriveToLocal {
             Write-LlevarProgressBar -Percent 50 -StartTime $StartTime -Label "Descargando de OneDrive API..." -Top $ProgressTop -Width 50
         }
         
-        # TODO: Usar Download-OneDriveFile o Download-OneDriveFolder con progreso
+        # TODO: Usar Receive-OneDriveFile o Receive-OneDriveFolder con progreso
         throw "Copia OneDrive API → Local no implementada aún con progreso"
     }
 }
@@ -4839,7 +4839,7 @@ function Copy-LlevarDropboxToLocal {
             Write-LlevarProgressBar -Percent 50 -StartTime $StartTime -Label "Descargando de Dropbox API..." -Top $ProgressTop -Width 50
         }
         
-        # TODO: Usar Download-DropboxFile o Download-DropboxFolder con progreso
+        # TODO: Usar Receive-DropboxFile o Receive-DropboxFolder con progreso
         throw "Copia Dropbox API → Local no implementada aún con progreso"
     }
 }
@@ -5757,7 +5757,7 @@ function Test-UncPathAccess {
             
             # Intentar montar la ruta con credenciales
             $netUseCmd = "net use `"$UncPath`" /user:$username $password 2>&1"
-            $result = Invoke-Expression $netUseCmd
+            Invoke-Expression $netUseCmd | Out-Null
             
             if ($LASTEXITCODE -eq 0) {
                 # Verificar acceso
@@ -6235,7 +6235,7 @@ function Test-IsOneDrivePath {
     return $Path -match '^onedrive://|^ONEDRIVE:'
 }
 
-function Ensure-GraphConnected {
+function Connect-GraphSession {
     <#
     .SYNOPSIS
         Asegura conexión autenticada con Microsoft Graph
@@ -6264,7 +6264,7 @@ function Ensure-GraphConnected {
     }
 }
 
-function Upload-OneDriveFile {
+function Send-OneDriveFile {
     <#
     .SYNOPSIS
         Sube archivo a OneDrive
@@ -6336,7 +6336,7 @@ function Upload-OneDriveFile {
     }
 }
 
-function Download-OneDriveFile {
+function Receive-OneDriveFile {
     <#
     .SYNOPSIS
         Descarga archivo desde OneDrive
@@ -6369,7 +6369,7 @@ function Download-OneDriveFile {
     }
 }
 
-function Upload-OneDriveFolder {
+function Send-OneDriveFolder {
     <#
     .SYNOPSIS
         Sube todos los archivos de una carpeta a OneDrive
@@ -6402,7 +6402,7 @@ function Upload-OneDriveFolder {
         Write-Host "[$current/$total] Subiendo: $relativePath" -ForegroundColor Gray
         
         try {
-            Upload-OneDriveFile -LocalPath $file.FullName -RemotePath $targetFolder
+            Send-OneDriveFile -LocalPath $file.FullName -RemotePath $targetFolder
         }
         catch {
             Write-Host "  [X] Error al subir $relativePath" -ForegroundColor Red
@@ -6412,7 +6412,7 @@ function Upload-OneDriveFolder {
     Write-Host "[✓] Carpeta subida completamente" -ForegroundColor Green
 }
 
-function Download-OneDriveFolder {
+function Receive-OneDriveFolder {
     <#
     .SYNOPSIS
         Descarga todos los archivos de una carpeta de OneDrive
@@ -6442,13 +6442,13 @@ function Download-OneDriveFolder {
             if ($item.Folder) {
                 # Es una carpeta, recursión
                 $subPath = "$OneDrivePath/$($item.Name)"
-                Download-OneDriveFolder -OneDrivePath $subPath -LocalFolder $localPath
+                Receive-OneDriveFolder -OneDrivePath $subPath -LocalFolder $localPath
             }
             else {
                 # Es un archivo
                 Write-Host "  Descargando: $($item.Name)" -ForegroundColor Gray
                 $itemPath = "root:/$($item.ParentReference.Path)/$($item.Name):"
-                Download-OneDriveFile -OneDrivePath $itemPath -LocalPath $localPath
+                Receive-OneDriveFile -OneDrivePath $itemPath -LocalPath $localPath
             }
         }
         
@@ -6522,7 +6522,7 @@ function Get-DropboxToken {
     }
 }
 
-function Ensure-DropboxConnected {
+function Connect-DropboxSession {
     <#
     .SYNOPSIS
         Asegura que hay un token válido de Dropbox
@@ -6548,7 +6548,7 @@ function Ensure-DropboxConnected {
     }
 }
 
-function Upload-DropboxFile {
+function Send-DropboxFile {
     <#
     .SYNOPSIS
         Sube archivo a Dropbox
@@ -6582,7 +6582,7 @@ function Upload-DropboxFile {
         # Para archivos grandes (>150MB), usar sesión de upload
         if ($fileSize -gt 150MB) {
             Write-Host "    Archivo grande detectado, usando upload por sesiones..." -ForegroundColor Gray
-            Upload-DropboxFileLarge -LocalPath $LocalPath -RemotePath $RemotePath -Token $Token
+            Send-DropboxFileLarge -LocalPath $LocalPath -RemotePath $RemotePath -Token $Token
         }
         else {
             # Upload simple para archivos pequeños
@@ -6609,7 +6609,7 @@ function Upload-DropboxFile {
     }
 }
 
-function Upload-DropboxFileLarge {
+function Send-DropboxFileLarge {
     <#
     .SYNOPSIS
         Sube archivo grande a Dropbox usando sesiones
@@ -6698,7 +6698,7 @@ function Upload-DropboxFileLarge {
     }
 }
 
-function Download-DropboxFile {
+function Receive-DropboxFile {
     <#
     .SYNOPSIS
         Descarga archivo desde Dropbox
@@ -6747,7 +6747,7 @@ function Download-DropboxFile {
     }
 }
 
-function Upload-DropboxFolder {
+function Send-DropboxFolder {
     <#
     .SYNOPSIS
         Sube todos los archivos de una carpeta a Dropbox
@@ -6787,7 +6787,7 @@ function Upload-DropboxFolder {
         Write-Host "[$current/$total] Subiendo: $relativePath" -ForegroundColor Gray
         
         try {
-            Upload-DropboxFile -LocalPath $file.FullName -RemotePath $targetPath -Token $Token
+            Send-DropboxFile -LocalPath $file.FullName -RemotePath $targetPath -Token $Token
         }
         catch {
             Write-Host "  [X] Error al subir $relativePath" -ForegroundColor Red
@@ -6797,7 +6797,7 @@ function Upload-DropboxFolder {
     Write-Host "[✓] Carpeta subida completamente" -ForegroundColor Green
 }
 
-function Download-DropboxFolder {
+function Receive-DropboxFolder {
     <#
     .SYNOPSIS
         Descarga todos los archivos de una carpeta de Dropbox
@@ -6849,7 +6849,7 @@ function Download-DropboxFolder {
                 $localPath = Join-Path $LocalFolder $relativePath.Replace('/', '\\')
                 
                 Write-Host "  Descargando: $($entry.name)" -ForegroundColor Gray
-                Download-DropboxFile -RemotePath $entry.path_display -LocalPath $localPath -Token $Token
+                Receive-DropboxFile -RemotePath $entry.path_display -LocalPath $localPath -Token $Token
             }
         }
         
@@ -8068,7 +8068,7 @@ try {
         Write-Host "═══════════════════════════════════════════════════" -ForegroundColor Cyan
         Write-Host ""
         
-        if (-not (Ensure-GraphConnected)) {
+        if (-not (Connect-GraphSession)) {
             Write-Host "No se pudo autenticar con OneDrive. Cancelando." -ForegroundColor Red
             return
         }
@@ -8081,7 +8081,7 @@ try {
         Write-Host "═══════════════════════════════════════════════════" -ForegroundColor Cyan
         Write-Host ""
         
-        if (-not (Ensure-DropboxConnected)) {
+        if (-not (Connect-DropboxSession)) {
             Write-Host "No se pudo autenticar con Dropbox. Cancelando." -ForegroundColor Red
             return
         }
@@ -8357,7 +8357,7 @@ try {
         }
         New-Item -Type Directory $tempOrigenCloud | Out-Null
         
-        Download-OneDriveFolder -OneDrivePath "root:${origenMontado}:" -LocalFolder $tempOrigenCloud
+        Receive-OneDriveFolder -OneDrivePath "root:${origenMontado}:" -LocalFolder $tempOrigenCloud
         $origenParaComprimir = $tempOrigenCloud
     }
     elseif ($origenEsDropbox) {
@@ -8368,7 +8368,7 @@ try {
         }
         New-Item -Type Directory $tempOrigenCloud | Out-Null
         
-        Download-DropboxFolder -RemotePath $origenMontado -LocalFolder $tempOrigenCloud -Token $Global:DropboxToken
+        Receive-DropboxFolder -RemotePath $origenMontado -LocalFolder $tempOrigenCloud -Token $Global:DropboxToken
         $origenParaComprimir = $tempOrigenCloud
     }
     
@@ -8389,19 +8389,19 @@ try {
             $currentBlock++
             $fileName = [System.IO.Path]::GetFileName($block)
             Write-Host "[$currentBlock/$totalBlocks] Subiendo: $fileName" -ForegroundColor Gray
-            Upload-OneDriveFile -LocalPath $block -RemotePath $destinoMontado
+            Send-OneDriveFile -LocalPath $block -RemotePath $destinoMontado
         }
         
         # Subir instalador
         if ($installerScript -and (Test-Path $installerScript)) {
             Write-Host "Subiendo INSTALAR.ps1..." -ForegroundColor Gray
-            Upload-OneDriveFile -LocalPath $installerScript -RemotePath $destinoMontado
+            Send-OneDriveFile -LocalPath $installerScript -RemotePath $destinoMontado
         }
         
         # Subir 7-Zip si es necesario
         if ($SevenZ -and $compressionType -ne "NATIVE_ZIP" -and (Test-Path $SevenZ)) {
             Write-Host "Subiendo 7z.exe..." -ForegroundColor Gray
-            Upload-OneDriveFile -LocalPath $SevenZ -RemotePath $destinoMontado
+            Send-OneDriveFile -LocalPath $SevenZ -RemotePath $destinoMontado
         }
         
         Write-Host "`n✓ Todos los archivos subidos a OneDrive" -ForegroundColor Green
@@ -8417,7 +8417,7 @@ try {
             $fileName = [System.IO.Path]::GetFileName($block)
             $remotePath = "$destinoMontado/$fileName".Replace('//', '/')
             Write-Host "[$currentBlock/$totalBlocks] Subiendo: $fileName" -ForegroundColor Gray
-            Upload-DropboxFile -LocalPath $block -RemotePath $remotePath -Token $Global:DropboxToken
+            Send-DropboxFile -LocalPath $block -RemotePath $remotePath -Token $Global:DropboxToken
         }
         
         # Subir instalador
@@ -8425,14 +8425,14 @@ try {
             Write-Host "Subiendo INSTALAR.ps1..." -ForegroundColor Gray
             $installerName = [System.IO.Path]::GetFileName($installerScript)
             $remotePath = "$destinoMontado/$installerName".Replace('//', '/')
-            Upload-DropboxFile -LocalPath $installerScript -RemotePath $remotePath -Token $Global:DropboxToken
+            Send-DropboxFile -LocalPath $installerScript -RemotePath $remotePath -Token $Global:DropboxToken
         }
         
         # Subir 7-Zip si es necesario
         if ($SevenZ -and $compressionType -ne "NATIVE_ZIP" -and (Test-Path $SevenZ)) {
             Write-Host "Subiendo 7z.exe..." -ForegroundColor Gray
             $remotePath = "$destinoMontado/7z.exe".Replace('//', '/')
-            Upload-DropboxFile -LocalPath $SevenZ -RemotePath $remotePath -Token $Global:DropboxToken
+            Send-DropboxFile -LocalPath $SevenZ -RemotePath $remotePath -Token $Global:DropboxToken
         }
         
         Write-Host "`n✓ Todos los archivos subidos a Dropbox" -ForegroundColor Green
