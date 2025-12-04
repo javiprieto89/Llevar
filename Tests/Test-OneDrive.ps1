@@ -23,14 +23,13 @@ param(
     [switch]$SkipIntegration
 )
 
+# Importar módulos de Llevar para tests
+. (Join-Path $PSScriptRoot "Import-LlevarModules.ps1")
+
 # Importar módulo de Pester si está disponible
 $pesterAvailable = $null -ne (Get-Module -ListAvailable -Name Pester)
 
-Write-Host ""
-Write-Host "═══════════════════════════════════════════════════════" -ForegroundColor Cyan
-Write-Host "  TESTS DE ONEDRIVE" -ForegroundColor Yellow
-Write-Host "═══════════════════════════════════════════════════════" -ForegroundColor Cyan
-Write-Host ""
+Show-Banner "TESTS DE ONEDRIVE" -BorderColor Cyan -TextColor Yellow
 
 # Función de Test-IsOneDrivePath (copiada del script principal)
 function Test-IsOneDrivePath {
@@ -382,10 +381,7 @@ elseif ($SkipIntegration) {
 # RESUMEN
 # ==========================================
 
-Write-Host "═══════════════════════════════════════════════════════" -ForegroundColor Cyan
-Write-Host "  RESUMEN DE TESTS DE ONEDRIVE" -ForegroundColor Yellow
-Write-Host "═══════════════════════════════════════════════════════" -ForegroundColor Cyan
-Write-Host ""
+Show-Banner "RESUMEN DE TESTS DE ONEDRIVE" -BorderColor Cyan -TextColor Yellow
 Write-Host "  Tests ejecutados: " -NoNewline
 Write-Host ($passed + $failed) -ForegroundColor White
 Write-Host "  Pasados         : " -NoNewline

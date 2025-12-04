@@ -23,11 +23,10 @@ param(
     [switch]$SkipIntegration
 )
 
-Write-Host ""
-Write-Host "═══════════════════════════════════════════════════════" -ForegroundColor Cyan
-Write-Host "  TESTS DE DROPBOX" -ForegroundColor Yellow
-Write-Host "═══════════════════════════════════════════════════════" -ForegroundColor Cyan
-Write-Host ""
+# Importar módulos de Llevar para tests
+. (Join-Path $PSScriptRoot "Import-LlevarModules.ps1")
+
+Show-Banner "TESTS DE DROPBOX" -BorderColor Cyan -TextColor Yellow
 
 # Función de Test-IsDropboxPath (copiada del script principal)
 function Test-IsDropboxPath {
@@ -462,10 +461,7 @@ elseif ($SkipIntegration) {
 # RESUMEN
 # ==========================================
 
-Write-Host "═══════════════════════════════════════════════════════" -ForegroundColor Cyan
-Write-Host "  RESUMEN DE TESTS DE DROPBOX" -ForegroundColor Yellow
-Write-Host "═══════════════════════════════════════════════════════" -ForegroundColor Cyan
-Write-Host ""
+Show-Banner "RESUMEN DE TESTS DE DROPBOX" -BorderColor Cyan -TextColor Yellow
 Write-Host "  Tests ejecutados: " -NoNewline
 Write-Host ($passed + $failed) -ForegroundColor White
 Write-Host "  Pasados         : " -NoNewline

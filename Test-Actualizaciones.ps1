@@ -15,10 +15,7 @@ $scriptPath = Join-Path $PSScriptRoot "Llevar.ps1"
 
 Clear-Host
 
-Write-Host "`n╔══════════════════════════════════════════════════════╗" -ForegroundColor Cyan
-Write-Host "║  PRUEBA: BANNERS, MENÚS Y POPUPS ACTUALIZADOS       ║" -ForegroundColor Cyan
-Write-Host "╚══════════════════════════════════════════════════════╝" -ForegroundColor Cyan
-Write-Host ""
+Show-Banner "PRUEBA: BANNERS, MENÚS Y POPUPS ACTUALIZADOS" -BorderColor Cyan -TextColor Cyan
 
 # Prueba 1: Banner con bordes laterales
 Write-Host "1. Banner con bordes laterales completos..." -ForegroundColor Yellow
@@ -113,18 +110,9 @@ Write-Host "   Seleccionó: $result`n" -ForegroundColor Gray
 Write-Host "10. Verificación visual de todos los bordes..." -ForegroundColor Yellow
 Write-Host ""
 Write-Host "Banner esperado:" -ForegroundColor White
-Write-Host "╔═══════════════╗" -ForegroundColor Cyan
-Write-Host "║   TÍTULO      ║" -ForegroundColor Cyan
-Write-Host "╚═══════════════╝" -ForegroundColor Cyan
-Write-Host ""
-Write-Host "Banner real:" -ForegroundColor White
-Show-Banner -Text "TÍTULO" -BorderColor Cyan -TextColor White
-Write-Host ""
+Show-Banner "TÍTULO" -BorderColor Cyan -TextColor White
 
-Write-Host "╔══════════════════════════════════════════════════════╗" -ForegroundColor Green
-Write-Host "║  TODAS LAS PRUEBAS COMPLETADAS                       ║" -ForegroundColor Green
-Write-Host "╚══════════════════════════════════════════════════════╝" -ForegroundColor Green
-Write-Host ""
+Show-Banner "TODAS LAS PRUEBAS COMPLETADAS" -BorderColor Green -TextColor Green
 Write-Host "Características verificadas:" -ForegroundColor White
 Write-Host "  ✓ Banners con bordes laterales ║" -ForegroundColor Green
 Write-Host "  ✓ Mensaje del popup centrado" -ForegroundColor Green

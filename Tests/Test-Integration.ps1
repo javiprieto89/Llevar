@@ -10,6 +10,9 @@
     - Reconstruir en destino
 #>
 
+# Importar todos los módulos de Llevar
+. (Join-Path $PSScriptRoot "Import-LlevarModules.ps1")
+
 # Importar módulos de test
 $mockUSBPath = Join-Path $PSScriptRoot "Mock-USBDevices.ps1"
 . $mockUSBPath
@@ -26,10 +29,7 @@ $script:TestResults = @{
 }
 
 function Initialize-TestEnvironment {
-    Write-Host "`n╔═══════════════════════════════════════════════════╗" -ForegroundColor Cyan
-    Write-Host "║  INICIALIZANDO ENTORNO DE TESTS                   ║" -ForegroundColor Yellow
-    Write-Host "╚═══════════════════════════════════════════════════╝" -ForegroundColor Cyan
-    Write-Host ""
+    Show-Banner "INICIALIZANDO ENTORNO DE TESTS" -BorderColor Cyan -TextColor Yellow
     
     # Limpiar entorno anterior si existe
     if (Test-Path $script:TestRoot) {
@@ -73,10 +73,7 @@ function New-TestData {
         [int]$TotalSizeMB = 50
     )
     
-    Write-Host "`n═══════════════════════════════════════════════════" -ForegroundColor Cyan
-    Write-Host "  CREANDO DATOS DE PRUEBA" -ForegroundColor Yellow
-    Write-Host "═══════════════════════════════════════════════════" -ForegroundColor Cyan
-    Write-Host ""
+    Show-Banner "CREANDO DATOS DE PRUEBA" -BorderColor Cyan -TextColor Yellow
     
     # Crear estructura de carpetas
     $subfolders = @("Documentos", "Imagenes", "Videos", "Datos")
@@ -156,11 +153,7 @@ Creado: $(Get-Date)
     # Calcular tamaño real
     $totalSize = (Get-ChildItem $OrigenPath -Recurse -File | Measure-Object -Property Length -Sum).Sum
     
-    Write-Host "═══════════════════════════════════════════════════" -ForegroundColor Cyan
-    Write-Host "✓ Datos creados exitosamente" -ForegroundColor Green
-    Write-Host "  Tamaño total: $(Format-LlevarBytes $totalSize)" -ForegroundColor White
-    Write-Host "═══════════════════════════════════════════════════" -ForegroundColor Cyan
-    Write-Host ""
+    Show-Banner "✓ Datos creados exitosamente`nTamaño total: $(Format-LlevarBytes $totalSize)" -BorderColor Cyan -TextColor Green
 }
 
 function Test-CompressionAndSplitting {
@@ -173,10 +166,7 @@ function Test-CompressionAndSplitting {
         [hashtable]$TestEnv
     )
     
-    Write-Host "`n═══════════════════════════════════════════════════" -ForegroundColor Cyan
-    Write-Host "  TEST: COMPRESIÓN Y DIVISIÓN EN BLOQUES" -ForegroundColor Yellow
-    Write-Host "═══════════════════════════════════════════════════" -ForegroundColor Cyan
-    Write-Host ""
+    Show-Banner "TEST: COMPRESIÓN Y DIVISIÓN EN BLOQUES" -BorderColor Cyan -TextColor Yellow
     
     $script:TestResults.Total++
     
@@ -231,10 +221,7 @@ function Test-USBDistribution {
         [array]$Blocks
     )
     
-    Write-Host "`n═══════════════════════════════════════════════════" -ForegroundColor Cyan
-    Write-Host "  TEST: DISTRIBUCIÓN EN MÚLTIPLES USBs" -ForegroundColor Yellow
-    Write-Host "═══════════════════════════════════════════════════" -ForegroundColor Cyan
-    Write-Host ""
+    Show-Banner "TEST: DISTRIBUCIÓN EN MÚLTIPLES USBs" -BorderColor Cyan -TextColor Yellow
     
     $script:TestResults.Total++
     
@@ -276,13 +263,8 @@ function Test-USBDistribution {
             Write-Host "  ✓ $($blockInfo.Name) → USB $usbIndex" -ForegroundColor Green
         }
         
-        Write-Host ""
-        Write-Host "═══════════════════════════════════════════════════" -ForegroundColor Cyan
-        Write-Host "Distribución completada:" -ForegroundColor White
-        Write-Host "  USB 1: $($usb1.Files.Count) archivos ($(Format-LlevarBytes $usb1.UsedSize))" -ForegroundColor Gray
-        Write-Host "  USB 2: $($usb2.Files.Count) archivos ($(Format-LlevarBytes $usb2.UsedSize))" -ForegroundColor Gray
-        Write-Host "═══════════════════════════════════════════════════" -ForegroundColor Cyan
-        Write-Host ""
+        
+        Show-Banner "Distribución completada:`nUSB 1: $($usb1.Files.Count) archivos ($(Format-LlevarBytes $usb1.UsedSize))`nUSB 2: $($usb2.Files.Count) archivos ($(Format-LlevarBytes $usb2.UsedSize))" -BorderColor Cyan -TextColor White
         
         $script:TestResults.Passed++
         
@@ -312,10 +294,7 @@ function Test-ReconstructionAndDecompression {
         [string]$DestinationPath
     )
     
-    Write-Host "`n═══════════════════════════════════════════════════" -ForegroundColor Cyan
-    Write-Host "  TEST: RECONSTRUCCIÓN Y DESCOMPRESIÓN" -ForegroundColor Yellow
-    Write-Host "═══════════════════════════════════════════════════" -ForegroundColor Cyan
-    Write-Host ""
+    Show-Banner "TEST: RECONSTRUCCIÓN Y DESCOMPRESIÓN" -BorderColor Cyan -TextColor Yellow
     
     $script:TestResults.Total++
     
@@ -382,14 +361,8 @@ function Test-ReconstructionAndDecompression {
         }
         
         Write-Host "  ✓ Carpeta restaurada en: $finalDestination" -ForegroundColor Green
-        Write-Host ""
         
-        Write-Host "═══════════════════════════════════════════════════" -ForegroundColor Cyan
-        Write-Host "✓ Reconstrucción y descompresión completadas" -ForegroundColor Green
-        Write-Host "  Carpeta temporal de instalación: $installTemp" -ForegroundColor Gray
-        Write-Host "  Carpeta final restaurada: $finalDestination" -ForegroundColor Gray
-        Write-Host "═══════════════════════════════════════════════════" -ForegroundColor Cyan
-        Write-Host ""
+        Show-Banner "✓ Reconstrucción y descompresión completadas`nCarpeta temporal de instalación: $installTemp`nCarpeta final restaurada: $finalDestination" -BorderColor Cyan -TextColor Green
         
         $script:TestResults.Passed++
         
@@ -411,10 +384,7 @@ function Remove-TestEnvironment {
         Limpia el entorno de tests
     #>
     
-    Write-Host "`n═══════════════════════════════════════════════════" -ForegroundColor Cyan
-    Write-Host "  LIMPIEZA DE ENTORNO" -ForegroundColor Yellow
-    Write-Host "═══════════════════════════════════════════════════" -ForegroundColor Cyan
-    Write-Host ""
+    Show-Banner "LIMPIEZA DE ENTORNO" -BorderColor Cyan -TextColor Yellow
     
     # Limpiar USBs simulados
     Remove-AllMockUSBs
@@ -429,10 +399,7 @@ function Remove-TestEnvironment {
 }
 
 function Show-IntegrationTestSummary {
-    Write-Host "`n╔═══════════════════════════════════════════════════╗" -ForegroundColor Cyan
-    Write-Host "║  RESUMEN DE TESTS DE INTEGRACIÓN                  ║" -ForegroundColor Yellow
-    Write-Host "╚═══════════════════════════════════════════════════╝" -ForegroundColor Cyan
-    Write-Host ""
+    Show-Banner "RESUMEN DE TESTS DE INTEGRACIÓN" -BorderColor Cyan -TextColor Yellow
     Write-Host "Total de tests: " -NoNewline
     Write-Host "$($script:TestResults.Total)" -ForegroundColor White
     
@@ -466,10 +433,7 @@ function Show-IntegrationTestSummary {
 # ==========================================
 
 function Invoke-IntegrationTests {
-    Write-Host ""
-    Write-Host "╔═══════════════════════════════════════════════════╗" -ForegroundColor Cyan
-    Write-Host "║  TESTS DE INTEGRACIÓN - LLEVAR.PS1                ║" -ForegroundColor Yellow
-    Write-Host "╚═══════════════════════════════════════════════════╝" -ForegroundColor Cyan
+    Show-Banner "TESTS DE INTEGRACIÓN - LLEVAR.PS1" -BorderColor Cyan -TextColor Yellow
     
     try {
         # 1. Inicializar entorno

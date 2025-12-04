@@ -1,0 +1,245 @@
+# Q:\Utilidad\LLevar\Modules\Core\Config.psm1
+# Módulo de configuración para Llevar.ps1
+# Gestiona la estructura de configuración unificada para origen, destino y opciones generales
+# Proporciona funciones para inicializar, obtener y establecer valores de configuración
+
+# ========================================================================== #
+#                          ESTRUCTURA DE CONFIGURACIÓN                       #
+# ========================================================================== #
+
+function Initialize-LlevarConfig {
+    <#
+    .SYNOPSIS
+        Inicializa la estructura de configuración por defecto
+    .DESCRIPTION
+        Crea un hashtable con la configuración completa de origen, destino y opciones
+    .OUTPUTS
+        Hashtable con la configuración inicial
+    #>
+    
+    $config = @{
+        # Configuración de Origen
+        Origen         = @{
+            Tipo           = "Local"
+            Path           = $null
+            LocalPath      = $null
+            FtpServer      = $null
+            FtpPort        = 21
+            FtpUser        = $null
+            FtpPassword    = $null
+            FtpPath        = $null
+            UncPath        = $null
+            UncUser        = $null
+            UncPassword    = $null
+            OneDriveEmail  = $null
+            OneDriveToken  = $null
+            OneDrivePath   = $null
+            OneDriveApiUrl = $null
+            DropboxToken   = $null
+            DropboxPath    = $null
+            DropboxApiUrl  = $null
+            UseLocal       = $false
+        }
+        
+        # Configuración de Destino
+        Destino        = @{
+            Tipo           = "Local"
+            Path           = $null
+            LocalPath      = $null
+            FtpServer      = $null
+            FtpPort        = 21
+            FtpUser        = $null
+            FtpPassword    = $null
+            FtpPath        = $null
+            UncPath        = $null
+            UncUser        = $null
+            UncPassword    = $null
+            OneDriveEmail  = $null
+            OneDriveToken  = $null
+            OneDrivePath   = $null
+            OneDriveApiUrl = $null
+            DropboxToken   = $null
+            DropboxPath    = $null
+            DropboxApiUrl  = $null
+            UseLocal       = $false
+        }
+        
+        # Configuración general
+        BlockSizeMB    = 10
+        Clave          = $null
+        UseNativeZip   = $false
+        Iso            = $false
+        IsoDestino     = "dvd"
+        RobocopyMirror = $false
+        Action         = $null
+    }
+    
+    return $config
+}
+
+function Get-ConfigValue {
+    <#
+    .SYNOPSIS
+        Obtiene un valor de la configuración
+    .DESCRIPTION
+        Navega por la estructura de configuración y retorna el valor solicitado
+    .PARAMETER Config
+        Hashtable de configuración
+    .PARAMETER Path
+        Ruta al valor (ej: "Origen.Tipo", "BlockSizeMB")
+    #>
+    param(
+        [hashtable]$Config,
+        [string]$Path
+    )
+    
+    $parts = $Path -split '\.'
+    $current = $Config
+    
+    foreach ($part in $parts) {
+        if ($current.ContainsKey($part)) {
+            $current = $current[$part]
+        }
+        else {
+            return $null
+        }
+    }
+    
+    return $current
+}
+
+function Set-ConfigValue {
+    <#
+    .SYNOPSIS
+        Establece un valor en la configuración
+    .DESCRIPTION
+        Navega por la estructura de configuración y establece el valor solicitado
+    .PARAMETER Config
+        Hashtable de configuración
+    .PARAMETER Path
+        Ruta al valor (ej: "Origen.Tipo", "BlockSizeMB")
+    .PARAMETER Value
+        Nuevo valor a establecer
+    #>
+    param(
+        [hashtable]$Config,
+        [string]$Path,
+        $Value
+    )
+    
+    $parts = $Path -split '\.'
+    $current = $Config
+    
+    for ($i = 0; $i -lt $parts.Count - 1; $i++) {
+        if ($current.ContainsKey($parts[$i])) {
+            $current = $current[$parts[$i]]
+        }
+        else {
+            throw "Ruta de configuración inválida: $Path"
+        }
+    }
+    
+    $lastPart = $parts[$parts.Count - 1]
+    $current[$lastPart] = $Value
+}
+
+function Export-LlevarConfig {
+    <#
+    .SYNOPSIS
+        Exporta la configuración a un archivo JSON
+    .DESCRIPTION
+        Guarda la configuración actual en un archivo para persistencia
+    .PARAMETER Config
+        Hashtable de configuración
+    .PARAMETER Path
+        Ruta del archivo JSON de salida
+    #>
+    param(
+        [hashtable]$Config,
+        [string]$Path
+    )
+    
+    $Config | ConvertTo-Json -Depth 10 | Out-File -FilePath $Path -Encoding UTF8
+}
+
+function Import-LlevarConfig {
+    <#
+    .SYNOPSIS
+        Importa la configuración desde un archivo JSON
+    .DESCRIPTION
+        Carga la configuración desde un archivo guardado previamente
+    .PARAMETER Path
+        Ruta del archivo JSON de entrada
+    .OUTPUTS
+        Hashtable con la configuración cargada
+    #>
+    param(
+        [string]$Path
+    )
+    
+    if (-not (Test-Path $Path)) {
+        throw "Archivo de configuración no encontrado: $Path"
+    }
+    
+    $json = Get-Content -Path $Path -Raw -Encoding UTF8
+    return $json | ConvertFrom-Json -AsHashtable
+}
+
+function Reset-ConfigSection {
+    <#
+    .SYNOPSIS
+        Reinicia una sección de la configuración a valores por defecto
+    .DESCRIPTION
+        Limpia todos los valores de una sección (Origen o Destino)
+    .PARAMETER Config
+        Hashtable de configuración
+    .PARAMETER Section
+        Sección a reiniciar ("Origen" o "Destino")
+    #>
+    param(
+        [hashtable]$Config,
+        [ValidateSet("Origen", "Destino")]
+        [string]$Section
+    )
+    
+    $default = Initialize-LlevarConfig
+    $Config[$Section] = $default[$Section]
+}
+
+function Copy-ConfigSection {
+    <#
+    .SYNOPSIS
+        Copia una sección de configuración a otra
+    .DESCRIPTION
+        Duplica todos los valores de una sección a otra
+    .PARAMETER Config
+        Hashtable de configuración
+    .PARAMETER From
+        Sección origen ("Origen" o "Destino")
+    .PARAMETER To
+        Sección destino ("Origen" o "Destino")
+    #>
+    param(
+        [hashtable]$Config,
+        [ValidateSet("Origen", "Destino")]
+        [string]$From,
+        [ValidateSet("Origen", "Destino")]
+        [string]$To
+    )
+    
+    $Config[$To] = $Config[$From].Clone()
+}
+
+# ========================================================================== #
+#                          EXPORTAR FUNCIONES                                #
+# ========================================================================== #
+
+Export-ModuleMember -Function @(
+    'Initialize-LlevarConfig',
+    'Get-ConfigValue',
+    'Set-ConfigValue',
+    'Export-LlevarConfig',
+    'Import-LlevarConfig',
+    'Reset-ConfigSection',
+    'Copy-ConfigSection'
+)

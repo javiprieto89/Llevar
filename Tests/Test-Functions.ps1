@@ -7,93 +7,25 @@
     Incluye simulación de dispositivos USB, compresión, y transferencia.
 #>
 
-# Importar funciones específicas del script principal
-$scriptPath = Join-Path $PSScriptRoot "..\Llevar.ps1"
+# Importar todos los módulos de Llevar
+. (Join-Path $PSScriptRoot "Import-LlevarModules.ps1")
 
-# Definir las funciones que necesitamos testar directamente aquí
-# En lugar de importar todo el script (que causa problemas)
-
-# Función de Format-LlevarBytes del script principal
-function Format-LlevarBytes {
-    param([long]$Bytes)
-    
-    if ($Bytes -lt 1KB) { return "{0} B" -f $Bytes }
-    elseif ($Bytes -lt 1MB) { return "{0:N2} KB" -f ($Bytes / 1KB) }
-    elseif ($Bytes -lt 1GB) { return "{0:N2} MB" -f ($Bytes / 1MB) }
-    else { return "{0:N2} GB" -f ($Bytes / 1GB) }
-}
-
-# Función de Format-LlevarTime del script principal
-function Format-LlevarTime {
-    param([int]$Seconds)
-    
-    if ($Seconds -lt 0) { $Seconds = 0 }
-    
-    $h = [math]::Floor($Seconds / 3600)
-    $m = [math]::Floor(($Seconds % 3600) / 60)
-    $s = $Seconds % 60
-    
-    $parts = @()
-    if ($h -gt 0) { $parts += "${h}h" }
-    if ($m -gt 0) { $parts += "${m}m" }
-    if ($s -gt 0 -or $parts.Count -eq 0) { $parts += "${s}s" }
-    
-    return $parts -join " "
-}
-
-# Función Test-Windows10OrLater del script principal
-function Test-Windows10OrLater {
-    $version = [System.Environment]::OSVersion.Version
-    return ($version.Major -ge 10)
-}
-
-# Función Test-IsFtpPath del script principal
-function Test-IsFtpPath {
-    param([string]$Path)
-    return ($Path -match '^ftps?://')
-}
-
-# Función Test-IsRunningInIDE del script principal
-function Test-IsRunningInIDE {
-    $hostName = $host.Name
-    
-    $ideHosts = @(
-        'Visual Studio Code Host',
-        'Windows PowerShell ISE Host',
-        'PowerShell ISE Host',
-        'Visual Studio Host',
-        'JetBrains Rider',
-        'Default Host'
-    )
-    
-    foreach ($ide in $ideHosts) {
-        if ($hostName -like "*$ide*") {
-            return $true
-        }
-    }
-    
-    if ($env:VSCODE_PID -or $env:TERM_PROGRAM -eq 'vscode') {
+# ==========================================
+#  TESTS UNITARIOS
+# ==========================================
+$parentProcess = (Get-Process -Id $PID).Parent
+if ($parentProcess) {
+    $parentName = $parentProcess.ProcessName
+    if ($parentName -match 'code|devenv|rider|powershell_ise') {
         return $true
     }
+}
+}
+catch {
+    # Ignorar errores
+}
     
-    if ($PSDebugContext) {
-        return $true
-    }
-    
-    try {
-        $parentProcess = (Get-Process -Id $PID).Parent
-        if ($parentProcess) {
-            $parentName = $parentProcess.ProcessName
-            if ($parentName -match 'code|devenv|rider|powershell_ise') {
-                return $true
-            }
-        }
-    }
-    catch {
-        # Ignorar errores
-    }
-    
-    return $false
+return $false
 }
 
 # ==========================================
@@ -126,9 +58,7 @@ function Write-TestResult {
 function Write-TestHeader {
     param([string]$Header)
     
-    Write-Host "`n═══════════════════════════════════════════════════" -ForegroundColor Cyan
-    Write-Host "  $Header" -ForegroundColor Yellow
-    Write-Host "═══════════════════════════════════════════════════" -ForegroundColor Cyan
+    Show-Banner "$Header" -BorderColor Cyan -TextColor Yellow
 }
 
 # ==========================================
@@ -359,10 +289,7 @@ function Test-IDEDetection {
 
 function Show-TestSummary {
     Write-Host "`n"
-    Write-Host "═══════════════════════════════════════════════════" -ForegroundColor Cyan
-    Write-Host "  RESUMEN DE TESTS" -ForegroundColor Yellow
-    Write-Host "═══════════════════════════════════════════════════" -ForegroundColor Cyan
-    Write-Host ""
+    Show-Banner "RESUMEN DE TESTS" -BorderColor Cyan -TextColor Yellow
     Write-Host "Total de tests: " -NoNewline
     Write-Host "$($script:TestResults.Total)" -ForegroundColor White
     
@@ -389,8 +316,6 @@ function Show-TestSummary {
     }
     
     Write-Host ""
-    Write-Host "═══════════════════════════════════════════════════" -ForegroundColor Cyan
-    Write-Host ""
 }
 
 # ==========================================
@@ -398,10 +323,7 @@ function Show-TestSummary {
 # ==========================================
 
 function Invoke-AllTests {
-    Write-Host ""
-    Write-Host "╔═══════════════════════════════════════════════════╗" -ForegroundColor Cyan
-    Write-Host "║  SUITE DE TESTS - LLEVAR.PS1                      ║" -ForegroundColor Yellow
-    Write-Host "╚═══════════════════════════════════════════════════╝" -ForegroundColor Cyan
+    Show-Banner "SUITE DE TESTS - LLEVAR.PS1" -BorderColor Cyan -TextColor Yellow
     
     # Ejecutar tests de funciones utilitarias
     Test-FormatBytes

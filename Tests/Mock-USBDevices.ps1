@@ -194,10 +194,7 @@ function Test-MockUSBScenario {
         Simula un escenario completo de múltiples USBs
     #>
     
-    Write-Host "`n╔═══════════════════════════════════════════════════╗" -ForegroundColor Cyan
-    Write-Host "║  SIMULACIÓN DE MÚLTIPLES DISPOSITIVOS USB         ║" -ForegroundColor Yellow
-    Write-Host "╚═══════════════════════════════════════════════════╝" -ForegroundColor Cyan
-    Write-Host ""
+    Show-Banner "SIMULACIÓN DE MÚLTIPLES DISPOSITIVOS USB" -BorderColor Cyan -TextColor Yellow
     
     try {
         # Crear 3 USBs con diferentes capacidades
@@ -213,8 +210,6 @@ function Test-MockUSBScenario {
         $usb3 = New-MockUSB -DriveLetter "G" -Label "USB_03_EXTRA" -CapacityMB 8192
         Write-Host "✓ USB 3: 8 GB - G:\ (USB_03_EXTRA)" -ForegroundColor Green
         
-        Write-Host ""
-        Write-Host "═══════════════════════════════════════════════════" -ForegroundColor Cyan
         Write-Host ""
         
         # Crear archivos de prueba en cada USB
@@ -254,8 +249,6 @@ function Test-MockUSBScenario {
         Write-Host "  ✓ __EOF__ (marcador de fin)" -ForegroundColor Green
         
         Write-Host ""
-        Write-Host "═══════════════════════════════════════════════════" -ForegroundColor Cyan
-        Write-Host ""
         
         # Mostrar información de cada USB
         Get-MockUSBInfo -USB $usb1
@@ -266,10 +259,7 @@ function Test-MockUSBScenario {
         Write-Host ""
         
         # Resumen
-        Write-Host "═══════════════════════════════════════════════════" -ForegroundColor Cyan
-        Write-Host "  RESUMEN DEL ESCENARIO" -ForegroundColor Yellow
-        Write-Host "═══════════════════════════════════════════════════" -ForegroundColor Cyan
-        Write-Host ""
+        Show-Banner "RESUMEN DEL ESCENARIO" -BorderColor Cyan -TextColor Yellow
         
         $totalCapacity = $usb1.TotalSize + $usb2.TotalSize + $usb3.TotalSize
         $totalUsed = $usb1.UsedSize + $usb2.UsedSize + $usb3.UsedSize
@@ -286,9 +276,6 @@ function Test-MockUSBScenario {
         Write-Host "  USB 1: $($usb1.Path)" -ForegroundColor Gray
         Write-Host "  USB 2: $($usb2.Path)" -ForegroundColor Gray
         Write-Host "  USB 3: $($usb3.Path)" -ForegroundColor Gray
-        Write-Host ""
-        
-        Write-Host "═══════════════════════════════════════════════════" -ForegroundColor Cyan
         Write-Host ""
         
         # Retornar los USBs para uso posterior
@@ -340,7 +327,6 @@ if ($MyInvocation.InvocationName -notmatch '^\.' -and $PSCommandPath) {
     }
     catch {
         Write-Host "`n✗ ERROR EN LA SIMULACIÓN DE USB" -ForegroundColor Red
-        Write-Host "═══════════════════════════════════════════════════" -ForegroundColor Red
         Write-Host ""
         Write-Host "Mensaje de error:" -ForegroundColor Yellow
         Write-Host "  $($_.Exception.Message)" -ForegroundColor White
@@ -354,7 +340,6 @@ if ($MyInvocation.InvocationName -notmatch '^\.' -and $PSCommandPath) {
         Write-Host "Stack trace:" -ForegroundColor Yellow
         Write-Host "$($_.ScriptStackTrace)" -ForegroundColor Gray
         Write-Host ""
-        Write-Host "═══════════════════════════════════════════════════" -ForegroundColor Red
         
         Remove-AllMockUSBs
         exit 1

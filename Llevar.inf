@@ -1,11 +1,11 @@
-; Llevar.inf
-; Archivo de instalación para agregar "Llevar A..." al menú contextual de Windows
-; Compatible con Windows 10/11
-; Copyright 2025 - Actualizado para PowerShell
+;
+; Llevar.ps1 - Menú Contextual para Windows 10/11
+; Copyright 2024 - Modernización del clásico AlexSoft
+;
 
 [Version]
 Signature="$Windows NT$"
-Provider="Alex Soft"
+Provider="AlexSoft"
 
 [DefaultInstall]
 AddReg=Llevar.AddReg
@@ -13,31 +13,38 @@ AddReg=Llevar.AddReg
 [DefaultUninstall]
 DelReg=Llevar.DelReg
 
+; ============================================================================
+; INSTALACIÓN: Agregar entradas al registro
+; ============================================================================
 [Llevar.AddReg]
 ; Menú contextual para CARPETAS
-HKCR,"Directory\shell\LlevarA",,,"Llevar A..."
-HKCR,"Directory\shell\LlevarA","Icon",,"C:\Llevar\Llevar.ps1"
-HKCR,"Directory\shell\LlevarA\command",,,"pwsh.exe -NoExit -ExecutionPolicy Bypass -File ""C:\Llevar\Llevar.ps1"" -Origen ""%1"""
-
-; Menú contextual para ARCHIVOS
-HKCR,"*\shell\LlevarA",,,"Llevar A..."
-HKCR,"*\shell\LlevarA","Icon",,"C:\Llevar\Llevar.ps1"
-HKCR,"*\shell\LlevarA\command",,,"pwsh.exe -NoExit -ExecutionPolicy Bypass -File ""C:\Llevar\Llevar.ps1"" -Origen ""%1"""
+HKCR,"Directory\shell\Llevar",,0x00000000,"Llevar A..."
+HKCR,"Directory\shell\Llevar","Icon",0x00020000,"%SystemRoot%\System32\imageres.dll,-1043"
+HKCR,"Directory\shell\Llevar\command",,0x00020000,"pwsh.exe -NoProfile -ExecutionPolicy Bypass -File ""C:\Llevar\Llevar.ps1"" -Origen ""%1"""
 
 ; Menú contextual para UNIDADES (drives)
-HKCR,"Drive\shell\LlevarA",,,"Llevar A..."
-HKCR,"Drive\shell\LlevarA","Icon",,"C:\Llevar\Llevar.ps1"
-HKCR,"Drive\shell\LlevarA\command",,,"pwsh.exe -NoExit -ExecutionPolicy Bypass -File ""C:\Llevar\Llevar.ps1"" -Origen ""%1"""
+HKCR,"Drive\shell\Llevar",,0x00000000,"Llevar A..."
+HKCR,"Drive\shell\Llevar","Icon",0x00020000,"%SystemRoot%\System32\imageres.dll,-1043"
+HKCR,"Drive\shell\Llevar\command",,0x00020000,"pwsh.exe -NoProfile -ExecutionPolicy Bypass -File ""C:\Llevar\Llevar.ps1"" -Origen ""%1"""
 
+; Información de desinstalación
+HKLM,"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Llevar","DisplayName",0x00000000,"Llevar.ps1"
+HKLM,"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Llevar","DisplayVersion",0x00000000,"2.0"
+HKLM,"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Llevar","Publisher",0x00000000,"AlexSoft"
+HKLM,"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Llevar","InstallLocation",0x00000000,"C:\Llevar"
+HKLM,"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Llevar","UninstallString",0x00020000,"rundll32.exe setupapi.dll,InstallHinfSection DefaultUninstall 132 C:\Llevar\Llevar.inf"
+
+; ============================================================================
+; DESINSTALACIÓN: Eliminar entradas del registro
+; ============================================================================
 [Llevar.DelReg]
-; Eliminar menú contextual de CARPETAS
-HKCR,"Directory\shell\LlevarA"
-
-; Eliminar menú contextual de ARCHIVOS
-HKCR,"*\shell\LlevarA"
-
-; Eliminar menú contextual de UNIDADES
-HKCR,"Drive\shell\LlevarA"
+; Eliminar menú contextual de carpetas
+HKCR,"Directory\shell\Llevar"
+; Eliminar menú contextual de unidades
+HKCR,"Drive\shell\Llevar"
+; Eliminar información de desinstalación
+HKLM,"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Llevar"
 
 [Strings]
-LlevarName="Llevar A... - Sistema de transporte USB"
+; Cadenas localizadas (para futura expansión)
+

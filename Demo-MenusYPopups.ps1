@@ -12,10 +12,7 @@ $scriptPath = Join-Path $PSScriptRoot "Llevar.ps1"
 
 Clear-Host
 
-Write-Host "`n══════════════════════════════════════════════════════" -ForegroundColor Cyan
-Write-Host "  DEMO: MENÚS Y POPUPS CON BORDES BOX-DRAWING" -ForegroundColor Cyan
-Write-Host "══════════════════════════════════════════════════════" -ForegroundColor Cyan
-Write-Host ""
+Show-Banner "DEMO: MENÚS Y POPUPS CON BORDES BOX-DRAWING" -BorderColor Cyan -TextColor Cyan
 
 # Demo 1: Popup Simple
 Write-Host "1. Popup simple centrado..." -ForegroundColor Yellow
@@ -74,7 +71,6 @@ Write-Host "   Seleccionó: $result`n" -ForegroundColor Gray
 Write-Host "7. Banner formateado..." -ForegroundColor Yellow
 Start-Sleep -Milliseconds 500
 Show-Banner -Text @("SISTEMA DE MENÚS", "Versión 3.0") -BorderColor Cyan -TextColor Yellow
-Write-Host ""
 
 # Demo 8: Popup con advertencia
 Write-Host "8. Popup de advertencia..." -ForegroundColor Yellow
@@ -88,10 +84,7 @@ Start-Sleep -Milliseconds 500
 $result = Show-ConsolePopup -Title "✓ ÉXITO" -Message "La operación se completó correctamente" -Options @("*Aceptar") -TitleColor Black -TitleBackgroundColor Green -BorderColor Green
 Write-Host "   Resultado: $result`n" -ForegroundColor Gray
 
-Write-Host "══════════════════════════════════════════════════════" -ForegroundColor Green
-Write-Host "  DEMO COMPLETADO" -ForegroundColor Green
-Write-Host "══════════════════════════════════════════════════════" -ForegroundColor Green
-Write-Host ""
+Show-Banner "DEMO COMPLETADO" -BorderColor Green -TextColor Green
 Write-Host "Características de los nuevos bordes:" -ForegroundColor White
 Write-Host "  • Caracteres box-drawing Unicode: ╔ ═ ╗ ║ ╚ ╝" -ForegroundColor Gray
 Write-Host "  • Menús siempre hacen Clear-Host" -ForegroundColor Gray

@@ -14,10 +14,10 @@ param(
     [string]$LlevarPath = "..\Llevar.ps1"
 )
 
-Write-Host "═══════════════════════════════════════════════════" -ForegroundColor Cyan
-Write-Host "  TEST: FTP → Local" -ForegroundColor Yellow
-Write-Host "═══════════════════════════════════════════════════" -ForegroundColor Cyan
-Write-Host ""
+# Importar módulos de Llevar para tests
+. (Join-Path $PSScriptRoot "Import-LlevarModules.ps1")
+
+Show-Banner "TEST: FTP → Local" -BorderColor Cyan -TextColor Yellow
 
 # Verificar Llevar.ps1
 $llevarScript = Join-Path $PSScriptRoot $LlevarPath
@@ -109,11 +109,7 @@ try {
     $endTime = Get-Date
     $duration = $endTime - $startTime
     
-    Write-Host ""
-    Write-Host "═══════════════════════════════════════════════════" -ForegroundColor Green
-    Write-Host "  ✓ TEST COMPLETADO" -ForegroundColor Green
-    Write-Host "═══════════════════════════════════════════════════" -ForegroundColor Green
-    Write-Host ""
+    Show-Banner "✓ TEST COMPLETADO" -BorderColor Green -TextColor Green
     Write-Host "Tiempo total: " -NoNewline
     Write-Host ("{0:hh\:mm\:ss}" -f $duration) -ForegroundColor White
     

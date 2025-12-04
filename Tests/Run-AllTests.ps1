@@ -36,6 +36,9 @@ param(
     [switch]$Integration
 )
 
+# Importar módulos de Llevar para tests
+. (Join-Path $PSScriptRoot "Import-LlevarModules.ps1")
+
 # ==========================================
 #  CONFIGURACIÓN
 # ==========================================
@@ -195,11 +198,7 @@ function Invoke-TestRunner {
                 else {
                     $results.Failed++
                     Write-Host "`n✗ Test suite falló con código: $exitCode" -ForegroundColor Red
-                    Write-Host ""
-                    Write-Host "═══════════════════════════════════════════════════" -ForegroundColor Yellow
-                    Write-Host "  INFORMACIÓN DE DEBUG" -ForegroundColor Yellow
-                    Write-Host "═══════════════════════════════════════════════════" -ForegroundColor Yellow
-                    Write-Host ""
+                    Show-Banner "INFORMACIÓN DE DEBUG" -BorderColor Yellow -TextColor Yellow
                     Write-Host "Script ejecutado: $testScriptFullPath" -ForegroundColor White
                     Write-Host "Código de salida: $exitCode" -ForegroundColor White
                     Write-Host "Test suite:       $($testInfo.Name)" -ForegroundColor White
@@ -225,18 +224,12 @@ function Invoke-TestRunner {
                 $results.Total++
                 $results.Failed++
                 Write-Host "`n✗ Error al ejecutar test: $($_.Exception.Message)" -ForegroundColor Red
-                Write-Host ""
-                Write-Host "═══════════════════════════════════════════════════" -ForegroundColor Red
-                Write-Host "  ERROR CRÍTICO EN EJECUCIÓN" -ForegroundColor Red
-                Write-Host "═══════════════════════════════════════════════════" -ForegroundColor Red
-                Write-Host ""
+                Show-Banner "ERROR CRÍTICO EN EJECUCIÓN" -BorderColor Red -TextColor Red
                 Write-Host "Script:         $testScriptFullPath" -ForegroundColor White
                 Write-Host "Mensaje:        $($_.Exception.Message)" -ForegroundColor White
                 Write-Host "Línea:          $($_.InvocationInfo.ScriptLineNumber)" -ForegroundColor White
                 Write-Host "Stack trace:" -ForegroundColor Yellow
                 Write-Host "$($_.ScriptStackTrace)" -ForegroundColor Gray
-                Write-Host ""
-                Write-Host "═══════════════════════════════════════════════════" -ForegroundColor Red
                 Write-Host ""
                 Write-Host "Presione ENTER para continuar o ESC para abortar..." -ForegroundColor Cyan
                 
@@ -312,8 +305,6 @@ function Invoke-TestRunner {
         Write-Host "$successRate% ✗" -ForegroundColor Red
     }
     
-    Write-Host ""
-    Write-Host "═══════════════════════════════════════════════════" -ForegroundColor Cyan
     Write-Host ""
     
     # Limpieza opcional

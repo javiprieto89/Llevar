@@ -10,11 +10,10 @@
     - Integración con script principal
 #>
 
-Write-Host ""
-Write-Host "═══════════════════════════════════════════════════════" -ForegroundColor Cyan
-Write-Host "  TESTS DE ROBOCOPY MIRROR" -ForegroundColor Yellow
-Write-Host "═══════════════════════════════════════════════════════" -ForegroundColor Cyan
-Write-Host ""
+# Importar módulos de Llevar para tests
+. (Join-Path $PSScriptRoot "Import-LlevarModules.ps1")
+
+Show-Banner "TESTS DE ROBOCOPY MIRROR" -BorderColor Cyan -TextColor Yellow
 
 $passed = 0
 $failed = 0
@@ -346,10 +345,7 @@ Write-Host ""
 # RESUMEN
 # ==========================================
 
-Write-Host "═══════════════════════════════════════════════════════" -ForegroundColor Cyan
-Write-Host "  RESUMEN DE TESTS DE ROBOCOPY MIRROR" -ForegroundColor Yellow
-Write-Host "═══════════════════════════════════════════════════════" -ForegroundColor Cyan
-Write-Host ""
+Show-Banner "RESUMEN DE TESTS DE ROBOCOPY MIRROR" -BorderColor Cyan -TextColor Yellow
 Write-Host "  Tests ejecutados: " -NoNewline
 Write-Host ($passed + $failed) -ForegroundColor White
 Write-Host "  Pasados         : " -NoNewline
