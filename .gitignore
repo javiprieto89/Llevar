@@ -5,11 +5,18 @@ arj32.exe
 ask.exe
 
 # Archivos de imagen y recursos
+*.png
+*.bmp
+*.jpg
 earthbl2.bpm
 earthbl2.png
 llevarbienascci.png
 
 # Backups y versiones antiguas del script
+*.backup
+*.ps1_
+*.ps1~
+llevar2.ps1_
 llevar2.ps1_
 llevar.ps1.backup2
 llevar.ps1.backup
@@ -22,3 +29,4 @@ logs/
 # Archivos de ayuda
 7-zip.chm
 license.txt
+*.code-workspace
