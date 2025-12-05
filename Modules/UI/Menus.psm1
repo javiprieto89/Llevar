@@ -329,10 +329,10 @@ function Show-DosMenu {
                     }
                 }
                 elseif ($ch -match '^[A-Za-z0-9]$') {
-                    $upperCh = [string]::ToUpper([string]$ch)
+                    $upperCh = ([string]$ch).ToUpper()
                     foreach ($m in $optionMeta) {
                         if ($m.HotkeyChar) {
-                            $mKey = [string]::ToUpper([string]$m.HotkeyChar)
+                            $mKey = ([string]$m.HotkeyChar).ToUpper()
                             if ($mKey -eq $upperCh) {
                                 Clear-Host  # Limpiar solo al salir del menú
                                 return [int]$m.Value
@@ -443,8 +443,8 @@ function Show-ConsolePopup {
 
     $usedHotkeys = @()
     foreach ($m in $meta) {
-        if ($m.HotkeyChar -ne $null -and [string]::IsNullOrEmpty($m.HotkeyChar) -eq $false) {
-            $key = [string]::ToUpper([string]$m.HotkeyChar)
+        if ($m.HotkeyChar -and -not [string]::IsNullOrEmpty($m.HotkeyChar)) {
+            $key = ([string]$m.HotkeyChar).ToUpper()
             if ($usedHotkeys -contains $key) {
                 $m.HotkeyChar = $null
                 $m.HotkeyIndex = -1
@@ -461,7 +461,7 @@ function Show-ConsolePopup {
             for ($idx = 0; $idx -lt $text.Length; $idx++) {
                 $ch = $text[$idx]
                 if ([char]::IsLetterOrDigit($ch)) {
-                    $upper = [string]::ToUpper([string]$ch)
+                    $upper = ([string]$ch).ToUpper()
                     if (-not ($usedHotkeys -contains $upper)) {
                         $m.HotkeyChar = $ch
                         $m.HotkeyIndex = $idx
@@ -654,11 +654,11 @@ function Show-ConsolePopup {
             default {
                 $ch = $key.KeyChar
                 if ($ch -match '^[A-Za-z0-9]$') {
-                    $upperCh = [string]::ToUpper([string]$ch)
+                    $upperCh = ([string]$ch).ToUpper()
                     for ($i = 0; $i -lt $meta.Count; $i++) {
                         $m = $meta[$i]
                         if ($m.HotkeyChar) {
-                            $k = [string]::ToUpper([string]$m.HotkeyChar)
+                            $k = ([string]$m.HotkeyChar).ToUpper()
                             if ($k -eq $upperCh) {
                                 return $i
                             }
