@@ -187,13 +187,11 @@ function Test-FTPComponent {
         Luego prueba la conexión y muestra el resultado.
     #>
     
-    Write-Host "Simulando selección de destino FTP..." -ForegroundColor Cyan
+    Write-Host "Simulando seleccion de destino FTP..." -ForegroundColor Cyan
     Write-Host ""
     
-    # Simular menú de configuración FTP
-    Write-Host "╔══════════════════════════════════════════════════════════════╗" -ForegroundColor DarkCyan
-    Write-Host "║          CONFIGURACIÓN DE SERVIDOR FTP (PRUEBA)             ║" -ForegroundColor Cyan
-    Write-Host "╚══════════════════════════════════════════════════════════════╝" -ForegroundColor DarkCyan
+    # Usar Show-Banner en lugar de dibujarlo manualmente
+    Show-Banner "CONFIGURACION DE SERVIDOR FTP (PRUEBA)" -BorderColor DarkCyan -TextColor Cyan
     Write-Host ""
     
     # Solicitar datos FTP
@@ -312,11 +310,11 @@ function Test-FTPComponent {
 function Test-OneDriveComponent {
     <#
     .SYNOPSIS
-        Prueba la autenticación con OneDrive.
+        Prueba la autenticación y operaciones con OneDrive.
     
     .DESCRIPTION
-        Simula el flujo de autenticación con OneDrive y muestra
-        si se pudo obtener acceso correctamente.
+        Simula el flujo completo de autenticación, listado de archivos,
+        subida y descarga de un archivo de prueba.
     #>
     
     Write-Host "Probando autenticación con OneDrive..." -ForegroundColor Cyan
@@ -324,21 +322,39 @@ function Test-OneDriveComponent {
     
     try {
         Write-Host "Intentando autenticar con OneDrive..." -ForegroundColor Yellow
-        Write-Host "(Esto abrirá el navegador web para autenticación)" -ForegroundColor Gray
         Write-Host ""
         
-        $result = Mount-OneDrive
+        $result = Get-OneDriveAuth
         
         if ($result) {
             Show-Banner "ONEDRIVE: AUTENTICACION EXITOSA" -BorderColor Green -TextColor White
             Write-Host ""
             Write-Host "  [OK] Autenticacion completada correctamente" -ForegroundColor Green
-            Write-Host "  [OK] Token obtenido y guardado" -ForegroundColor Green
+            Write-Host "  [OK] Acceso a OneDrive configurado" -ForegroundColor Green
             Write-Host ""
-            Write-Host "  Ruta montada: " -NoNewline -ForegroundColor Gray
-            Write-Host $result -ForegroundColor White
-            Write-Host ""
-            Show-Banner "PRUEBA COMPLETADA" -BorderColor Green -TextColor White
+            
+            if ($result.UseLocal) {
+                Write-Host "  Modo: " -NoNewline -ForegroundColor Gray
+                Write-Host "Local" -ForegroundColor Cyan
+                Write-Host "  Ruta: " -NoNewline -ForegroundColor Gray
+                Write-Host $result.LocalPath -ForegroundColor White
+                Write-Host ""
+                Show-Banner "PRUEBA COMPLETADA" -BorderColor Green -TextColor White
+            }
+            else {
+                Write-Host "  Modo: " -NoNewline -ForegroundColor Gray
+                Write-Host "API" -ForegroundColor Cyan
+                Write-Host "  Email: " -NoNewline -ForegroundColor Gray
+                Write-Host $result.Email -ForegroundColor White
+                Write-Host "  Token: " -NoNewline -ForegroundColor Gray
+                Write-Host "********" -ForegroundColor DarkGray
+                
+                # Ejecutar pruebas de operaciones
+                Test-OneDriveConnection -OneDriveConfig $result
+                
+                Write-Host ""
+                Show-Banner "PRUEBA COMPLETADA" -BorderColor Green -TextColor White
+            }
         }
         else {
             Show-Banner "ONEDRIVE: AUTENTICACION FALLIDA" -BorderColor Red -TextColor White
@@ -373,20 +389,33 @@ function Test-DropboxComponent {
     Write-Host ""
     
     try {
-        Write-Host "Intentando autenticar con Dropbox..." -ForegroundColor Yellow
-        Write-Host "(Esto abrirá el navegador web para autenticación)" -ForegroundColor Gray
+        Write-Host "Iniciando autenticacion con Dropbox..." -ForegroundColor Yellow
+        Write-Host "(Esto abrira el navegador web para autenticacion OAuth)" -ForegroundColor Gray
         Write-Host ""
         
-        $result = Mount-Dropbox
+        $result = Get-DropboxAuth
         
         if ($result) {
             Show-Banner "DROPBOX: AUTENTICACION EXITOSA" -BorderColor Green -TextColor White
             Write-Host ""
             Write-Host "  [OK] Autenticacion completada correctamente" -ForegroundColor Green
-            Write-Host "  [OK] Token obtenido y guardado" -ForegroundColor Green
+            Write-Host "  [OK] Token de acceso obtenido" -ForegroundColor Green
             Write-Host ""
-            Write-Host "  Ruta montada: " -NoNewline -ForegroundColor Gray
-            Write-Host $result -ForegroundColor White
+            
+            if ($result.UseLocal) {
+                Write-Host "  Modo: " -NoNewline -ForegroundColor Gray
+                Write-Host "Local" -ForegroundColor Cyan
+                Write-Host "  Ruta: " -NoNewline -ForegroundColor Gray
+                Write-Host $result.LocalPath -ForegroundColor White
+            }
+            else {
+                Write-Host "  Modo: " -NoNewline -ForegroundColor Gray
+                Write-Host "API" -ForegroundColor Cyan
+                Write-Host "  Token: " -NoNewline -ForegroundColor Gray
+                Write-Host "********" -ForegroundColor DarkGray
+                Write-Host "  API URL: " -NoNewline -ForegroundColor Gray
+                Write-Host $result.ApiUrl -ForegroundColor White
+            }
             Write-Host ""
             Show-Banner "PRUEBA COMPLETADA" -BorderColor Green -TextColor White
         }

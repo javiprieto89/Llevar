@@ -1,18 +1,13 @@
 # ========================================================================== #
 #                      MÓDULO: OPERACIONES ONEDRIVE                          #
 # ========================================================================== #
-# Propósito: Autenticación y operaciones con OneDrive (local y API)
-# Funciones:
-#   - Get-OneDriveAuth: Configuración con detección local o API OAuth
-#   - Test-MicrosoftGraphModule: Verifica/instala módulos Microsoft.Graph
-#   - Test-IsOneDrivePath: Detecta rutas OneDrive
-#   - Connect-GraphSession: Asegura sesión autenticada con Microsoft Graph
-#   - Send-OneDriveFile: Sube archivo a OneDrive
-#   - Receive-OneDriveFile: Descarga archivo desde OneDrive
-#   - Send-OneDriveFolder: Sube carpeta completa
-#   - Receive-OneDriveFolder: Descarga carpeta completa
-#   - Copy-LlevarLocalToOneDrive: Copia con progreso
-#   - Copy-LlevarOneDriveToLocal: Descarga con progreso
+# Propósito: Autenticación y operaciones con OneDrive (API REST)             #
+# Funciones:                                                                 #  
+#   - Get-OneDriveAuth: Autenticación OAuth con captura automática           #
+#   - Get-OneDriveFiles: Lista archivos del root de OneDrive                 #
+#   - Send-OneDriveFile: Sube archivo a OneDrive                             #
+#   - Receive-OneDriveFile: Descarga archivo desde OneDrive                  #
+#   - Test-OneDriveConnection: Prueba completa de conexión y operaciones     #
 # ========================================================================== #
 
 function Test-IsOneDrivePath {
@@ -22,80 +17,6 @@ function Test-IsOneDrivePath {
     #>
     param([string]$Path)
     return $Path -match '^onedrive://|^ONEDRIVE:'
-}
-
-function Test-MicrosoftGraphModule {
-    <#
-    .SYNOPSIS
-        Verifica e instala módulos Microsoft.Graph si es necesario
-    .OUTPUTS
-        $true si módulos disponibles, $false si faltan
-    #>
-    
-    Show-Banner "VERIFICACIÓN DE MÓDULOS MICROSOFT.GRAPH" -BorderColor Cyan -TextColor Yellow
-    
-    $requiredModules = @(
-        'Microsoft.Graph.Authentication',
-        'Microsoft.Graph.Files'
-    )
-    
-    $missingModules = @()
-    
-    foreach ($moduleName in $requiredModules) {
-        Write-Host "Verificando $moduleName..." -NoNewline -ForegroundColor Gray
-        
-        $module = Get-Module -ListAvailable -Name $moduleName | Select-Object -First 1
-        
-        if ($module) {
-            Write-Host " ✓ v$($module.Version)" -ForegroundColor Green
-        }
-        else {
-            Write-Host " ✗ No encontrado" -ForegroundColor Yellow
-            $missingModules += $moduleName
-        }
-    }
-    
-    if ($missingModules.Count -eq 0) {
-        Write-Host "`n✓ Todos los módulos requeridos están instalados" -ForegroundColor Green
-        
-        foreach ($moduleName in $requiredModules) {
-            if (-not (Get-Module -Name $moduleName)) {
-                Import-Module $moduleName -ErrorAction Stop
-            }
-        }
-        return $true
-    }
-    
-    # Intentar instalar
-    Show-Banner "MÓDULOS REQUERIDOS" -BorderColor Yellow -TextColor Yellow
-    
-    Write-Host "Se requieren los siguientes módulos:" -ForegroundColor Cyan
-    $missingModules | ForEach-Object { Write-Host "  • $_" -ForegroundColor White }
-    Write-Host ""
-    
-    $response = Read-Host "¿Desea instalar ahora? (S/N)"
-    
-    if ($response -notmatch '^[SsYy]') {
-        Write-Host "`n✗ Instalación cancelada" -ForegroundColor Red
-        return $false
-    }
-    
-    try {
-        Write-Host "`nInstalando Microsoft.Graph..." -ForegroundColor Cyan
-        Install-Module Microsoft.Graph -Scope CurrentUser -Force -AllowClobber -ErrorAction Stop
-        
-        Write-Host "✓ Instalación completada" -ForegroundColor Green
-        
-        foreach ($moduleName in $requiredModules) {
-            Import-Module $moduleName -ErrorAction Stop
-        }
-        
-        return $true
-    }
-    catch {
-        Write-Host "✗ Error en instalación: $($_.Exception.Message)" -ForegroundColor Red
-        return $false
-    }
 }
 
 function Get-OneDriveAuth {
@@ -153,43 +74,41 @@ function Get-OneDriveAuth {
         }
     }
     
-    # Configuración API
+    # Configuración API con Device Code Flow
     Show-Banner "AUTENTICACIÓN ONEDRIVE API" -BorderColor Cyan -TextColor White
-    Write-Host "`nPara usar OneDrive API necesita:" -ForegroundColor Yellow
-    Write-Host "  1. Cuenta Microsoft" -ForegroundColor White
-    Write-Host "  2. Token OAuth 2.0" -ForegroundColor White
+    Write-Host "`nAutenticación con Microsoft Device Code Flow" -ForegroundColor Yellow
+    Write-Host "Solo necesitas tu cuenta Microsoft" -ForegroundColor White
     Write-Host ""
     
-    $email = Read-Host "Email de Microsoft"
-    if ([string]::IsNullOrWhiteSpace($email)) { return $null }
-    
-    $tokenSecure = Read-Host "Token OAuth 2.0" -AsSecureString
-    $token = [Runtime.InteropServices.Marshal]::PtrToStringAuto(
-        [Runtime.InteropServices.Marshal]::SecureStringToBSTR($tokenSecure)
-    )
-    
-    if ([string]::IsNullOrWhiteSpace($token)) { return $null }
-    
-    # Validar token
     try {
+        $tokenData = Get-OneDriveDeviceToken
+        
+        if (-not $tokenData) {
+            Write-Host "`n✗ Autenticación cancelada o fallida" -ForegroundColor Red
+            return $null
+        }
+        
+        # Obtener información del usuario
         $headers = @{
-            "Authorization" = "Bearer $token"
+            "Authorization" = "Bearer $($tokenData.access_token)"
             "Content-Type"  = "application/json"
         }
         
         $apiUrl = "https://graph.microsoft.com/v1.0/me/drive"
-        $response = Invoke-RestMethod -Uri $apiUrl -Headers $headers -Method Get -TimeoutSec 10
+        $userInfo = Invoke-RestMethod -Uri "https://graph.microsoft.com/v1.0/me" -Headers $headers -Method Get
         
         Write-Host "`n✓ Autenticación exitosa" -ForegroundColor Green
-        Write-Host "  Usuario: $($response.owner.user.displayName)" -ForegroundColor White
-        Write-Log "OneDrive API autenticado: $email" "INFO"
+        Write-Host "  Usuario: $($userInfo.displayName)" -ForegroundColor White
+        Write-Host "  Email: $($userInfo.userPrincipalName)" -ForegroundColor White
+        Write-Log "OneDrive API autenticado: $($userInfo.userPrincipalName)" "INFO"
         
         return @{
-            Email     = $email
-            Token     = $token
-            ApiUrl    = $apiUrl
-            LocalPath = $null
-            UseLocal  = $false
+            Email        = $userInfo.userPrincipalName
+            Token        = $tokenData.access_token
+            RefreshToken = $tokenData.refresh_token
+            ApiUrl       = $apiUrl
+            LocalPath    = $null
+            UseLocal     = $false
         }
     }
     catch {
@@ -199,279 +118,433 @@ function Get-OneDriveAuth {
     }
 }
 
-function Connect-GraphSession {
-    <#
-    .SYNOPSIS
-        Asegura conexión con Microsoft Graph
-    #>
-    try {
-        $ctx = Get-MgContext -ErrorAction Stop
-        if ($ctx.Account) {
-            Write-Host "[+] Autenticado como $($ctx.Account)" -ForegroundColor Green
-            return $true
+function Start-Browser {
+    param(
+        [string]$Url,
+        [switch]$Incognito
+    )
+
+    $chrome = "$env:ProgramFiles\Google\Chrome\Application\chrome.exe"
+    $chromeX86 = "$env:ProgramFiles(x86)\Google\Chrome\Application\chrome.exe"
+    $edge = "$env:ProgramFiles(x86)\Microsoft\Edge\Application\msedge.exe"
+    $firefox = "$env:ProgramFiles\Mozilla Firefox\firefox.exe"
+
+    if (-not $Incognito) {
+        Start-Process $Url
+        return
+    }
+
+    if (Test-Path $chrome) {
+        Start-Process $chrome --incognito $Url
+        return
+    }
+    elseif (Test-Path $chromeX86) {
+        Start-Process $chromeX86 --incognito $Url
+        return
+    }
+    elseif (Test-Path $edge) {
+        Start-Process $edge -inprivate $Url
+        return
+    }
+    elseif (Test-Path $firefox) {
+        Start-Process $firefox -private-window $Url
+        return
+    }
+
+    Start-Process $Url
+}
+
+function Get-BrowserOAuthCode {
+    param(
+        [string]$ExpectedPrefix = "https://login.microsoftonline.com/common/oauth2/nativeclient"
+    )
+
+    Add-Type -AssemblyName UIAutomationClient
+
+    Write-Host "Esperando redirección del navegador..." -ForegroundColor Cyan
+    
+    $timeout = (Get-Date).AddMinutes(2)
+
+    while ((Get-Date) -lt $timeout) {
+        Start-Sleep -Milliseconds 300
+
+        $procs = Get-Process | Where-Object { $_.Name -in "msedge", "chrome", "firefox" }
+
+        foreach ($p in $procs) {
+            try {
+                $ae = [System.Windows.Automation.AutomationElement]::FromHandle($p.MainWindowHandle)
+                if (-not $ae) { continue }
+
+                # Buscar barra de direcciones (Edit controls)
+                $cond = New-Object System.Windows.Automation.PropertyCondition(
+                    [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
+                    [System.Windows.Automation.ControlType]::Edit
+                )
+
+                $editList = $ae.FindAll([System.Windows.Automation.TreeScope]::Descendants, $cond)
+
+                foreach ($edit in $editList) {
+                    try {
+                        $vp = $edit.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern)
+                        $url = $vp.Current.Value
+
+                        # Buscar "code=" en la URL sin importar el prefijo exacto
+                        if ($url -and $url -match "code=([^&\s]+)") {
+                            $code = $matches[1]
+                            Write-Host "`n✓ Código capturado automáticamente!" -ForegroundColor Green
+                            
+                            # Cerrar la pestaña/ventana del navegador
+                            try {
+                                $window.Quit()
+                            }
+                            catch {
+                                # Si no se puede cerrar, intentar navegar a blank
+                                try {
+                                    $window.Navigate("about:blank")
+                                }
+                                catch {}
+                            }
+                            
+                            return $code
+                        }
+                    }
+                    catch {}
+                }
+            }
+            catch {}
         }
     }
-    catch {}
+
+    Write-Host "✗ No se pudo capturar automáticamente el código." -ForegroundColor Red
+    return $null
+}
+
+
+function Get-OneDriveDeviceToken {
+    <#
+    .SYNOPSIS
+        Autenticación OAuth con captura automática del código desde el navegador
+    .DESCRIPTION
+        Abre el navegador para autenticar y captura automáticamente el código de la URL
+    .OUTPUTS
+        Hashtable con access_token, refresh_token, expires_in
+    #>
     
-    Write-Host "[*] Iniciando login con MFA..." -ForegroundColor Yellow
+    $clientId = "a9279514-9d58-4233-989a-cf21e5ea6bf1"
+    $redirectUri = "https://login.microsoftonline.com/common/oauth2/nativeclient"
+    $scope = "offline_access Files.ReadWrite.All User.Read"
     
     try {
-        Connect-MgGraph -Scopes "Files.ReadWrite.All" | Out-Null
-        Write-Host "[+] Autenticación correcta" -ForegroundColor Green
-        return $true
+        Write-Host ""
+        Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+        Write-Host "║        AUTENTICACIÓN INTERACTIVA MICROSOFT ONEDRIVE            ║" -ForegroundColor Cyan
+        Write-Host "╠════════════════════════════════════════════════════════════════╣" -ForegroundColor Cyan
+        Write-Host "║  1. Se abrirá el navegador para iniciar sesión                 ║" -ForegroundColor White
+        Write-Host "║  2. Autoriza el acceso a OneDrive                              ║" -ForegroundColor White
+        Write-Host "║  3. El código se capturará automáticamente                     ║" -ForegroundColor White
+        Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+        Write-Host ""
+        
+        $authUrl = "https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize"
+        $params = @{
+            client_id     = $clientId
+            redirect_uri  = $redirectUri
+            response_type = "code"
+            scope         = $scope
+        }
+        
+        $queryString = ($params.GetEnumerator() | ForEach-Object { 
+                "$($_.Key)=$([System.Net.WebUtility]::UrlEncode($_.Value))" 
+            }) -join "&"
+        
+        $authUri = "$authUrl`?$queryString"
+        
+        Write-Host "Abriendo navegador para autenticación..." -ForegroundColor Yellow
+        Start-Browser -Url $authUri
+        
+        $code = Get-BrowserOAuthCode -ExpectedPrefix $redirectUri
+        
+        if (-not $code) {
+            Write-Host "`nPega manualmente el código de la URL:" -ForegroundColor Yellow
+            Write-Host "Busca en la barra de direcciones: code=MC543_Bl2.2U..." -ForegroundColor Gray
+            $code = Read-Host "Código"
+            
+            if (-not $code) {
+                Write-Host "`n✗ No se ingresó código" -ForegroundColor Red
+                return $null
+            }
+            
+            $code = $code -replace '^code=', '' -replace '\s', ''
+        }
+        
+        if ($code.Length -lt 10) {
+            Write-Host "`n✗ Código inválido (muy corto)" -ForegroundColor Red
+            return $null
+        }
+        
+        Write-Host "`n✓ Obteniendo token de acceso..." -ForegroundColor Green
+        
+        $tokenUrl = "https://login.microsoftonline.com/consumers/oauth2/v2.0/token"
+        $tokenParams = @{
+            client_id    = $clientId
+            redirect_uri = $redirectUri
+            code         = $code
+            grant_type   = "authorization_code"
+        }
+        
+        $response = Invoke-RestMethod -Uri $tokenUrl -Method Post -Body $tokenParams -ErrorAction Stop
+        
+        if ($response.access_token) {
+            Write-Host "✓ ¡Autenticación exitosa!" -ForegroundColor Green
+            return @{
+                access_token  = $response.access_token
+                refresh_token = $response.refresh_token
+                expires_in    = $response.expires_in
+            }
+        }
+        else {
+            Write-Host "✗ No se pudo obtener el token" -ForegroundColor Red
+            return $null
+        }
     }
     catch {
-        Write-Host "[X] Error: $($_.Exception.Message)" -ForegroundColor Red
-        return $false
+        Write-Host "`n✗ Error en autenticación: $($_.Exception.Message)" -ForegroundColor Red
+        return $null
+    }
+}
+
+function Get-OneDriveFiles {
+    <#
+    .SYNOPSIS
+        Lista archivos y carpetas del root de OneDrive
+    .PARAMETER Token
+        Token de acceso de OneDrive
+    #>
+    param([string]$Token)
+    
+    try {
+        $headers = @{
+            "Authorization" = "Bearer $Token"
+            "Content-Type"  = "application/json"
+        }
+        
+        $url = "https://graph.microsoft.com/v1.0/me/drive/root/children"
+        $response = Invoke-RestMethod -Uri $url -Headers $headers -Method Get
+        
+        return $response.value
+    }
+    catch {
+        Write-Host "✗ Error listando archivos: $($_.Exception.Message)" -ForegroundColor Red
+        return $null
     }
 }
 
 function Send-OneDriveFile {
     <#
     .SYNOPSIS
-        Sube archivo a OneDrive
+        Sube un archivo a OneDrive
+    .PARAMETER Token
+        Token de acceso
+    .PARAMETER LocalPath
+        Ruta local del archivo
+    .PARAMETER RemoteFileName
+        Nombre del archivo en OneDrive
     #>
-    param([string]$LocalPath, [string]$RemotePath)
-    
-    if (-not (Test-Path $LocalPath)) {
-        throw "Archivo no existe: $LocalPath"
-    }
-    
-    $bytes = [System.IO.File]::ReadAllBytes($LocalPath)
-    $fileName = Split-Path $LocalPath -Leaf
-    $remote = "root:/$RemotePath/${fileName}:"
-    
-    Write-Host "[*] Subiendo $fileName a OneDrive..." -ForegroundColor Cyan
+    param(
+        [string]$Token,
+        [string]$LocalPath,
+        [string]$RemoteFileName
+    )
     
     try {
-        $fileSize = (Get-Item $LocalPath).Length
-        
-        if ($fileSize -gt 4MB) {
-            # Upload con sesión para archivos grandes
-            $uploadUrl = "https://graph.microsoft.com/v1.0/me/drive/$remote/createUploadSession"
-            $uploadSession = Invoke-MgGraphRequest -Method POST -Uri $uploadUrl
-            
-            $chunkSize = 320KB * 10
-            $stream = [System.IO.File]::OpenRead($LocalPath)
-            $buffer = New-Object byte[] $chunkSize
-            $bytesUploaded = 0
-            
-            while ($bytesUploaded -lt $fileSize) {
-                $bytesRead = $stream.Read($buffer, 0, $chunkSize)
-                $rangeStart = $bytesUploaded
-                $rangeEnd = $bytesUploaded + $bytesRead - 1
-                
-                $headers = @{
-                    "Content-Length" = $bytesRead
-                    "Content-Range"  = "bytes $rangeStart-$rangeEnd/$fileSize"
-                }
-                
-                $dataToSend = $buffer[0..($bytesRead - 1)]
-                Invoke-RestMethod -Method PUT -Uri $uploadSession.uploadUrl -Body $dataToSend -Headers $headers | Out-Null
-                
-                $bytesUploaded += $bytesRead
-                $percent = [int](($bytesUploaded * 100) / $fileSize)
-                Write-Host "`r  Progreso: $percent%" -NoNewline -ForegroundColor Gray
-            }
-            
-            $stream.Close()
-            Write-Host ""
-        }
-        else {
-            # Upload simple
-            New-MgDriveItemContent -DriveId "me" -DriveItemId $remote -BodyParameter $bytes | Out-Null
+        if (-not (Test-Path $LocalPath)) {
+            throw "Archivo no existe: $LocalPath"
         }
         
-        Write-Host "[✓] Subida completada" -ForegroundColor Green
+        $fileContent = [System.IO.File]::ReadAllBytes($LocalPath)
+        
+        $headers = @{
+            "Authorization" = "Bearer $Token"
+            "Content-Type"  = "application/octet-stream"
+        }
+        
+        $url = "https://graph.microsoft.com/v1.0/me/drive/root:/${RemoteFileName}:/content"
+        $response = Invoke-RestMethod -Uri $url -Headers $headers -Method Put -Body $fileContent
+        
+        return $response
     }
     catch {
-        Write-Host "[X] Error: $($_.Exception.Message)" -ForegroundColor Red
-        throw
+        Write-Host "✗ Error subiendo archivo: $($_.Exception.Message)" -ForegroundColor Red
+        return $null
     }
 }
 
 function Receive-OneDriveFile {
     <#
     .SYNOPSIS
-        Descarga archivo desde OneDrive
+        Descarga un archivo desde OneDrive
+    .PARAMETER Token
+        Token de acceso
+    .PARAMETER RemoteFileName
+        Nombre del archivo en OneDrive
+    .PARAMETER LocalPath
+        Ruta local donde guardar
     #>
-    param([string]$OneDrivePath, [string]$LocalPath)
-    
-    Write-Host "[*] Descargando desde OneDrive..." -ForegroundColor Cyan
+    param(
+        [string]$Token,
+        [string]$RemoteFileName,
+        [string]$LocalPath
+    )
     
     try {
-        $content = Get-MgDriveItemContent -DriveId "me" -DriveItemId $OneDrivePath
-        
-        $folder = Split-Path $LocalPath
-        if (-not (Test-Path $folder)) {
-            New-Item -ItemType Directory -Path $folder | Out-Null
+        $headers = @{
+            "Authorization" = "Bearer $Token"
         }
         
-        [System.IO.File]::WriteAllBytes($LocalPath, $content)
-        Write-Host "[✓] Descargado → $LocalPath" -ForegroundColor Green
+        # Obtener URL de descarga
+        $url = "https://graph.microsoft.com/v1.0/me/drive/root:/${RemoteFileName}"
+        $fileInfo = Invoke-RestMethod -Uri $url -Headers $headers -Method Get
+        
+        if (-not $fileInfo.'@microsoft.graph.downloadUrl') {
+            throw "No se pudo obtener URL de descarga"
+        }
+        
+        # Descargar archivo
+        $downloadUrl = $fileInfo.'@microsoft.graph.downloadUrl'
+        Invoke-WebRequest -Uri $downloadUrl -OutFile $LocalPath
+        
+        return $true
     }
     catch {
-        Write-Host "[X] Error: $($_.Exception.Message)" -ForegroundColor Red
-        throw
+        Write-Host "✗ Error descargando archivo: $($_.Exception.Message)" -ForegroundColor Red
+        return $false
     }
 }
 
-function Send-OneDriveFolder {
+function Test-OneDriveConnection {
     <#
     .SYNOPSIS
-        Sube carpeta completa a OneDrive
+        Prueba completa de conexión y operaciones con OneDrive
+    .PARAMETER OneDriveConfig
+        Configuración de OneDrive con Token
     #>
-    param([string]$LocalFolder, [string]$RemotePath)
-    
-    if (-not (Test-Path $LocalFolder)) {
-        throw "Carpeta no existe: $LocalFolder"
-    }
-    
-    Write-Host "[*] Subiendo carpeta: $LocalFolder → $RemotePath" -ForegroundColor Cyan
-    
-    $files = Get-ChildItem -Path $LocalFolder -File -Recurse
-    $total = $files.Count
-    $current = 0
-    
-    foreach ($file in $files) {
-        $current++
-        $relativePath = $file.FullName.Substring($LocalFolder.Length).TrimStart('\\', '/')
-        $targetPath = "$RemotePath/$relativePath".Replace('\\', '/')
-        $targetFolder = Split-Path $targetPath -Parent
-        
-        Write-Host "[$current/$total] $relativePath" -ForegroundColor Gray
-        
-        try {
-            Send-OneDriveFile -LocalPath $file.FullName -RemotePath $targetFolder
-        }
-        catch {
-            Write-Host "  [X] Error: $relativePath" -ForegroundColor Red
-        }
-    }
-    
-    Write-Host "[✓] Carpeta subida" -ForegroundColor Green
-}
-
-function Receive-OneDriveFolder {
-    <#
-    .SYNOPSIS
-        Descarga carpeta completa desde OneDrive
-    #>
-    param([string]$OneDrivePath, [string]$LocalFolder)
-    
-    Write-Host "[*] Descargando carpeta: $OneDrivePath → $LocalFolder" -ForegroundColor Cyan
+    param([hashtable]$OneDriveConfig)
     
     try {
-        $items = Get-MgDriveItem -DriveId "me" -DriveItemId $OneDrivePath -ExpandProperty "children"
+        Write-Host "`n╔══════════════════════════════════════╗" -ForegroundColor Cyan
+        Write-Host "║  PRUEBA DE CONEXIÓN Y OPERACIONES   ║" -ForegroundColor Cyan
+        Write-Host "╚══════════════════════════════════════╝" -ForegroundColor Cyan
+        Write-Host ""
         
-        if (-not (Test-Path $LocalFolder)) {
-            New-Item -ItemType Directory -Path $LocalFolder | Out-Null
+        $token = $OneDriveConfig.Token
+        
+        # 1. Listar archivos del root
+        Write-Host "[1/3] Listando archivos en OneDrive raíz..." -ForegroundColor Yellow
+        $files = Get-OneDriveFiles -Token $token
+        
+        if ($files) {
+            Write-Host "✓ Archivos encontrados: $($files.Count)" -ForegroundColor Green
+            foreach ($file in $files | Select-Object -First 10) {
+                $icon = if ($file.folder) { "📁" } else { "📄" }
+                $size = if ($file.size) { " ($([Math]::Round($file.size/1KB, 2)) KB)" } else { "" }
+                Write-Host "  $icon $($file.name)$size" -ForegroundColor Gray
+            }
+            if ($files.Count -gt 10) {
+                Write-Host "  ... y $($files.Count - 10) más" -ForegroundColor DarkGray
+            }
+        }
+        else {
+            Write-Host "✗ No se pudieron listar archivos" -ForegroundColor Red
+            return $false
         }
         
-        foreach ($item in $items.Children) {
-            $localPath = Join-Path $LocalFolder $item.Name
+        # 2. Crear archivo de prueba y subirlo
+        Write-Host "`n[2/3] Creando y subiendo archivo de prueba..." -ForegroundColor Yellow
+        
+        $testFileName = "LLEVAR_Test_$(Get-Date -Format 'yyyyMMdd_HHmmss').txt"
+        $tempFile = Join-Path $env:TEMP $testFileName
+        $testContent = @"
+╔════════════════════════════════════════╗
+║     ARCHIVO DE PRUEBA - LLEVAR         ║
+╚════════════════════════════════════════╝
+
+Fecha: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
+Usuario: $($OneDriveConfig.Email)
+Sistema: $env:COMPUTERNAME
+
+Este archivo fue creado automáticamente
+para probar la conexión con OneDrive.
+
+✓ Subida exitosa
+"@
+        
+        [System.IO.File]::WriteAllText($tempFile, $testContent, [System.Text.Encoding]::UTF8)
+        Write-Host "  Archivo temporal creado: $testFileName" -ForegroundColor Gray
+        
+        $uploadResult = Send-OneDriveFile -Token $token -LocalPath $tempFile -RemoteFileName $testFileName
+        
+        if ($uploadResult) {
+            Write-Host "✓ Archivo subido a OneDrive: $testFileName" -ForegroundColor Green
+            Write-Host "  (El archivo permanecerá en OneDrive para verificación)" -ForegroundColor Gray
+        }
+        else {
+            Write-Host "✗ Error subiendo archivo" -ForegroundColor Red
+            return $false
+        }
+        
+        # 3. Descargar el archivo
+        Write-Host "`n[3/3] Descargando archivo desde OneDrive..." -ForegroundColor Yellow
+        
+        $downloadPath = "C:\Temp"
+        if (-not (Test-Path $downloadPath)) {
+            New-Item -ItemType Directory -Path $downloadPath -Force | Out-Null
+        }
+        
+        $downloadFile = Join-Path $downloadPath $testFileName
+        
+        $downloadResult = Receive-OneDriveFile -Token $token -RemoteFileName $testFileName -LocalPath $downloadFile
+        
+        if ($downloadResult -and (Test-Path $downloadFile)) {
+            Write-Host "✓ Archivo descargado correctamente" -ForegroundColor Green
+            Write-Host "  Ubicación: $downloadFile" -ForegroundColor Gray
             
-            if ($item.Folder) {
-                $subPath = "$OneDrivePath/$($item.Name)"
-                Receive-OneDriveFolder -OneDrivePath $subPath -LocalFolder $localPath
-            }
-            else {
-                Write-Host "  $($item.Name)" -ForegroundColor Gray
-                $itemPath = "root:/$($item.ParentReference.Path)/$($item.Name):"
-                Receive-OneDriveFile -OneDrivePath $itemPath -LocalPath $localPath
+            # Mostrar contenido
+            Write-Host "  Contenido del archivo descargado:" -ForegroundColor Cyan
+            Get-Content $downloadFile | ForEach-Object {
+                Write-Host "  $_" -ForegroundColor White
             }
         }
+        else {
+            Write-Host "✗ Error descargando archivo" -ForegroundColor Red
+            return $false
+        }
         
-        Write-Host "[✓] Carpeta descargada" -ForegroundColor Green
+        # Limpiar solo el archivo temporal local (el de OneDrive queda)
+        if (Test-Path $tempFile) {
+            Remove-Item $tempFile -Force
+        }
+        
+        Write-Host ""
+        Write-Host "📌 Archivo de prueba en OneDrive: $testFileName" -ForegroundColor Cyan
+        Write-Host "📂 Archivo descargado localmente: $downloadFile" -ForegroundColor Cyan
+        
+        Write-Host "`n✓ ¡Todas las operaciones completadas exitosamente!" -ForegroundColor Green
+        return $true
     }
     catch {
-        Write-Host "[X] Error: $($_.Exception.Message)" -ForegroundColor Red
-        throw
-    }
-}
-
-function Copy-LlevarLocalToOneDrive {
-    <#
-    .SYNOPSIS
-        Copia de local a OneDrive con progreso
-    #>
-    param(
-        [string]$SourcePath,
-        [hashtable]$OneDriveConfig,
-        [long]$TotalBytes = 0,
-        [int]$FileCount = 0,
-        [datetime]$StartTime = (Get-Date),
-        [bool]$ShowProgress = $true,
-        [int]$ProgressTop = -1
-    )
-    
-    Write-Log "Copia Local → OneDrive: $SourcePath" "INFO"
-    
-    if ($OneDriveConfig.UseLocal -and $OneDriveConfig.LocalPath) {
-        # Usar copia local
-        Copy-LlevarLocalToLocal -SourcePath $SourcePath -DestinationPath $OneDriveConfig.LocalPath `
-            -TotalBytes $TotalBytes -FileCount $FileCount -StartTime $StartTime `
-            -ShowProgress $ShowProgress -ProgressTop $ProgressTop
-    }
-    else {
-        if ($ShowProgress) {
-            Write-LlevarProgressBar -Percent 50 -StartTime $StartTime -Label "Subiendo a OneDrive API..." -Top $ProgressTop -Width 50
-        }
-        
-        # TODO: Usar Send-OneDriveFile con progreso
-        throw "OneDrive API no completamente implementado"
-    }
-}
-
-function Copy-LlevarOneDriveToLocal {
-    <#
-    .SYNOPSIS
-        Copia de OneDrive a local con progreso
-    #>
-    param(
-        [hashtable]$OneDriveConfig,
-        [string]$DestinationPath,
-        [datetime]$StartTime = (Get-Date),
-        [bool]$ShowProgress = $true,
-        [int]$ProgressTop = -1
-    )
-    
-    Write-Log "Copia OneDrive → Local: $DestinationPath" "INFO"
-    
-    if ($OneDriveConfig.UseLocal -and $OneDriveConfig.LocalPath) {
-        $totalBytes = 0
-        $fileCount = 0
-        
-        if (Test-Path $OneDriveConfig.LocalPath -PathType Container) {
-            $files = Get-ChildItem -Path $OneDriveConfig.LocalPath -Recurse -File
-            $fileCount = $files.Count
-            $totalBytes = ($files | Measure-Object -Property Length -Sum).Sum
-        }
-        
-        Copy-LlevarLocalToLocal -SourcePath $OneDriveConfig.LocalPath -DestinationPath $DestinationPath `
-            -TotalBytes $totalBytes -FileCount $fileCount -StartTime $StartTime `
-            -ShowProgress $ShowProgress -ProgressTop $ProgressTop
-    }
-    else {
-        if ($ShowProgress) {
-            Write-LlevarProgressBar -Percent 50 -StartTime $StartTime -Label "Descargando de OneDrive API..." -Top $ProgressTop -Width 50
-        }
-        
-        # TODO: Usar Receive-OneDriveFile con progreso
-        throw "OneDrive API no completamente implementado"
+        Write-Host "`n✗ Error en prueba: $($_.Exception.Message)" -ForegroundColor Red
+        return $false
     }
 }
 
 # Exportar funciones
 Export-ModuleMember -Function @(
     'Test-IsOneDrivePath',
-    'Test-MicrosoftGraphModule',
     'Get-OneDriveAuth',
-    'Connect-GraphSession',
+    'Start-Browser',
+    'Get-BrowserOAuthCode',
+    'Get-OneDriveFiles',
     'Send-OneDriveFile',
     'Receive-OneDriveFile',
-    'Send-OneDriveFolder',
-    'Receive-OneDriveFolder',
-    'Copy-LlevarLocalToOneDrive',
-    'Copy-LlevarOneDriveToLocal'
+    'Test-OneDriveConnection'
 )
