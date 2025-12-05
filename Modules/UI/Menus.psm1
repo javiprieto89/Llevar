@@ -8,92 +8,68 @@
 # ========================================================================== #
 
 function Show-DosMenu {
-    <#
-    .SYNOPSIS
-        Menú interactivo estilo DOS con navegación por teclado
-    .DESCRIPTION
-        Muestra un menú con opciones que pueden navegarse con:
-        - Flechas arriba/abajo
-        - Enter para seleccionar
-        - Números para selección directa
-        - Hotkeys (marcadas con * en el texto)
-        - Hotkeys automáticas (primera letra disponible)
-    .PARAMETER Title
-        Título del menú
-    .PARAMETER Items
-        Array de opciones del menú. Use * para marcar hotkey: "*Archivo"
-    .PARAMETER CancelValue
-        Valor devuelto al cancelar (default 0)
-    .PARAMETER DefaultValue
-        Valor seleccionado por defecto
-    .PARAMETER X
-        Posición X del menú (opcional, -1 para auto)
-    .PARAMETER Y
-        Posición Y del menú (opcional, -1 para auto)
-    .OUTPUTS
-        Int con el índice seleccionado (1-based)
-    .EXAMPLE
-        $sel = Show-DosMenu -Title "OPCIONES" -Items @("*Nuevo","*Abrir","*Guardar")
-    #>
+    [CmdletBinding()]
     param(
         [Parameter(Mandatory = $true)]
         [string]$Title,
+        
         [Parameter(Mandatory = $true)]
         [string[]]$Items,
-        [int]$CancelValue = 0,
 
-        [ConsoleColor]$BorderColor = [ConsoleColor]::White,
-        [ConsoleColor]$TextColor = [ConsoleColor]::Gray,
-        [ConsoleColor]$TextBackgroundColor = [ConsoleColor]::Black,
-        [ConsoleColor]$HighlightForegroundColor = [ConsoleColor]::Black,
-        [ConsoleColor]$HighlightBackgroundColor = [ConsoleColor]::Yellow,
-        [ConsoleColor]$HotkeyColor = [ConsoleColor]::Cyan,
-        [ConsoleColor]$AutoHotkeyColor = [ConsoleColor]::DarkCyan,
-        [ConsoleColor]$HotkeyBackgroundColor = [ConsoleColor]::Black,
-        [int]$DefaultValue = $CancelValue,
-        
-        [int]$X = -1,
-        [int]$Y = -1
+        [int]$CancelValue = 0,
+        [int]$DefaultValue = 0,
+
+        # Colores
+        [ConsoleColor]$BorderColor = "White",
+        [ConsoleColor]$TextColor = "Gray",
+        [ConsoleColor]$TextBackgroundColor = "Black",
+        [ConsoleColor]$HighlightForegroundColor = "Black",
+        [ConsoleColor]$HighlightBackgroundColor = "Yellow",
+        [ConsoleColor]$HotkeyColor = "Cyan",
+        [ConsoleColor]$AutoHotkeyColor = "DarkCyan",
+
+        # Posicionamiento del menú
+        [int]$X = 0,
+        [int]$Y = 0
     )
 
     if (-not $Items -or $Items.Count -eq 0) {
         throw "Show-DosMenu: no hay elementos para mostrar."
     }
 
-    $hasCancel = $true
-    $cancelLabel = "Cancelar / Volver"
-
-    # 1) Parsear items con posible *hotkey
+    # ----------------------------
+    # 1) PROCESAR HOTKEYS
+    # ----------------------------
     $meta = @()
+    $usedHotkeys = @()
+
     for ($i = 0; $i -lt $Items.Count; $i++) {
-        $num = $i + 1
         $raw = $Items[$i]
         $display = $raw
-        $hotChar = $null
         $hotIndex = -1
-        $isAuto = $false
+        $hotChar = $null        
 
-        $starIndex = $raw.IndexOf('*')
-        if ($starIndex -ge 0 -and $starIndex -lt ($raw.Length - 1)) {
-            $hotChar = $raw[$starIndex + 1]
-            $display = $raw.Remove($starIndex, 1)
-            $hotIndex = $starIndex
+        # Hotkey explícita con *
+        $star = $raw.IndexOf('*')
+        if ($star -ge 0 -and $star -lt ($raw.Length - 1)) {
+            $hotChar = $raw[$star + 1]
+            $display = $raw.Remove($star, 1)
+            $hotIndex = $star
         }
 
         $meta += [pscustomobject]@{
-            Value        = $num
+            Value        = ($i + 1)
             DisplayText  = $display
             HotkeyChar   = $hotChar
             HotkeyIndex  = $hotIndex
-            IsAutoHotkey = $isAuto
+            IsAutoHotkey = $false
         }
     }
 
-    # 2) Evitar teclas repetidas
-    $usedHotkeys = @()
+    # Evitar duplicados explícitos
     foreach ($m in $meta) {
-        if ($m.HotkeyChar -ne $null -and [string]::IsNullOrEmpty($m.HotkeyChar) -eq $false) {
-            $key = [string]::ToUpper([string]$m.HotkeyChar)
+        if ($m.HotkeyChar) {
+            $key = ([string]$m.HotkeyChar).ToUpper()
             if ($usedHotkeys -contains $key) {
                 $m.HotkeyChar = $null
                 $m.HotkeyIndex = -1
@@ -104,17 +80,17 @@ function Show-DosMenu {
         }
     }
 
-    # 3) Asignar teclas automaticas donde falten
+    # Asignar hotkeys automáticas
     foreach ($m in $meta) {
         if (-not $m.HotkeyChar) {
             $text = $m.DisplayText
-            for ($idx = 0; $idx -lt $text.Length; $idx++) {
-                $ch = $text[$idx]
+            for ($i = 0; $i -lt $text.Length; $i++) {
+                $ch = $text[$i]
                 if ([char]::IsLetterOrDigit($ch)) {
-                    $upper = [string]::ToUpper([string]$ch)
+                    $upper = ([string]$ch).ToUpper()
                     if (-not ($usedHotkeys -contains $upper)) {
                         $m.HotkeyChar = $ch
-                        $m.HotkeyIndex = $idx
+                        $m.HotkeyIndex = $i
                         $m.IsAutoHotkey = $true
                         $usedHotkeys += $upper
                         break
@@ -124,219 +100,173 @@ function Show-DosMenu {
         }
     }
 
-    # 4) Construir lista de opciones (incluye cancelar)
-    $optionLines = @()
-    $optionMeta = @()
-
-    if ($hasCancel) {
-        $cancelMeta = [pscustomobject]@{
+    # ----------------------------
+    # 2) AGREGAR LA OPCIÓN CANCELAR
+    # ----------------------------
+    $optionMeta = @(
+        [pscustomobject]@{
             Value        = $CancelValue
-            DisplayText  = $cancelLabel
+            DisplayText  = "Cancelar / Volver"
             HotkeyChar   = $null
             HotkeyIndex  = -1
             IsAutoHotkey = $false
         }
-        $optionMeta += $cancelMeta
-        $optionLines += ("{0}: {1}" -f $CancelValue, $cancelLabel)
+    ) + $meta
+
+    # ----------------------------
+    # 3) CALCULAR TAMAÑOS
+    # ----------------------------
+    $leftIndent = 2      # espacios después del borde izquierdo
+    $rightMargin = 2      # margen a la derecha de la opción más larga
+
+    # longitud máxima real de las opciones como se van a dibujar: "N: Texto"
+    $maxOptionCore = 0
+    foreach ($m in $optionMeta) {
+        $lineCore = "{0}: {1}" -f $m.Value, $m.DisplayText
+        if ($lineCore.Length -gt $maxOptionCore) {
+            $maxOptionCore = $lineCore.Length
+        }
     }
 
-    foreach ($m in $meta) {
-        $optionMeta += $m
-        $optionLines += ("{0}: {1}" -f $m.Value, $m.DisplayText)
+    # ancho interior (entre ║ y ║)
+    $innerWidth = $leftIndent + $maxOptionCore + $rightMargin
+
+    # el título puede requerir más ancho
+    if ($Title.Length -gt $innerWidth) {
+        $innerWidth = $Title.Length + 2   # un poco de aire para el título
     }
-
-    $contentWidth = ($optionLines | ForEach-Object { $_.Length } | Measure-Object -Maximum).Maximum
-    $titleWidth = $Title.Length
-    if ($titleWidth -gt $contentWidth) { $contentWidth = $titleWidth }
-
-    $padding = 2
-    $innerWidth = $contentWidth + ($padding * 2)
 
     $top = "╔" + ("═" * $innerWidth) + "╗"
+    $div = "╠" + ("═" * $innerWidth) + "╣"
     $bottom = "╚" + ("═" * $innerWidth) + "╝"
 
-    # Línea divisoria
-    $divider = "╠" + ("═" * $innerWidth) + "╣"
-
-    # Título centrado
-    $leftPad = [int][Math]::Floor(($innerWidth - $Title.Length) / 2)
+    # Título centrado según innerWidth
+    $leftPad = [Math]::Floor(($innerWidth - $Title.Length) / 2)
     $rightPad = $innerWidth - $Title.Length - $leftPad
     $titleLine = "║" + (" " * $leftPad) + $Title + (" " * $rightPad) + "║"
 
-    # Seleccion inicial
-    $selectedIndex = 0
-    if ($optionMeta.Count -gt 0) {
-        for ($i = 0; $i -lt $optionMeta.Count; $i++) {
-            if ($optionMeta[$i].Value -eq $DefaultValue) {
-                $selectedIndex = $i
-                break
-            }
-        }
+    # ----------------------------
+    # 4) DIBUJO SIN PARPADEO
+    # ----------------------------
+    function Write-MenuLine {
+        param($Ypos, $Text, $Fg, $Bg)
+
+        [Console]::SetCursorPosition($menuX, $Ypos)
+        Write-Host $Text -ForegroundColor $Fg -BackgroundColor $Bg
     }
 
-    # Calcular posición si se especificó
-    $menuX = -1
-    $menuY = -1
-    if ($X -ge 0 -and $Y -ge 0) {
-        $winWidth = [Console]::WindowWidth
-        $winHeight = [Console]::WindowHeight
-        $menuX = [Math]::Max(0, [Math]::Min($X, $winWidth - $innerWidth - 2))
-        $menuY = [Math]::Max(0, [Math]::Min($Y, $winHeight - ($optionLines.Count + 5)))
-    }
+    # Ubicación final del menú
+    $menuX = $X
+    $menuY = $Y
 
-    # Dibujar menú completo solo una vez
-    $needsFullRedraw = $true
-    $previousSelection = -1
+    $selected = 0
+    # LIMPIAR UNA SOLA VEZ LA PANTALLA
+    Clear-Host
 
     while ($true) {
-        # Solo redibujar si es la primera vez
-        if ($needsFullRedraw) {
-            Clear-Host
-            $needsFullRedraw = $false
-        
-            # Si se especificó posición, mover cursor a esa posición
-            if ($menuX -ge 0 -and $menuY -ge 0) {
-                try {
-                    [Console]::SetCursorPosition($menuX, $menuY)
-                }
-                catch {
-                    # Si falla, continuar con posición por defecto
-                }
-            }
-        
-            Write-Host $top       -ForegroundColor $BorderColor
-        
-            if ($menuX -ge 0 -and $menuY -ge 0) {
-                [Console]::SetCursorPosition($menuX, $menuY + 1)
-            }
-            Write-Host $titleLine -ForegroundColor $BorderColor
-        
-            if ($menuX -ge 0 -and $menuY -ge 0) {
-                [Console]::SetCursorPosition($menuX, $menuY + 2)
-            }
-            Write-Host $divider -ForegroundColor $BorderColor
-        
-            if ($menuX -ge 0 -and $menuY -ge 0) {
-                [Console]::SetCursorPosition($menuX, $menuY + 3)
-            }
-            Write-Host ("║" + (" " * $innerWidth) + "║") -ForegroundColor $BorderColor
-        }
 
-        # Redibujar solo las líneas que cambiaron
-        $linesToRedraw = @()
-        if ($previousSelection -ge 0 -and $previousSelection -ne $selectedIndex) {
-            $linesToRedraw += $previousSelection
-        }
-        if ($selectedIndex -ge 0) {
-            $linesToRedraw += $selectedIndex
-        }
-        
-        # Si es primera vez, dibujar todas
-        if ($previousSelection -eq -1) {
-            $linesToRedraw = 0..($optionLines.Count - 1)
-        }
+        # DIBUJO ESTÁTICO (bordes y título)
+        Write-MenuLine ($menuY + 0) $top $BorderColor $TextBackgroundColor
+        Write-MenuLine ($menuY + 1) $titleLine $BorderColor $TextBackgroundColor
+        Write-MenuLine ($menuY + 2) $div $BorderColor $TextBackgroundColor
 
-        foreach ($i in $linesToRedraw) {
-            $line = $optionLines[$i]
+        # Línea vacía debajo del título (aire)$result
+        Write-MenuLine ($menuY + 3) ("║" + (" " * $innerWidth) + "║") $BorderColor $TextBackgroundColor
+
+        # DIBUJO DINÁMICO DE OPCIONES
+        for ($i = 0; $i -lt $optionMeta.Count; $i++) {
             $metaItem = $optionMeta[$i]
-            $padRight = $innerWidth - $line.Length
-            if ($padRight -lt 0) { $padRight = 0 }
+            $isSel = ($i -eq $selected)
 
-            $isSelected = ($i -eq $selectedIndex)
+            $fg = if ($isSel) { $HighlightForegroundColor } else { $TextColor }
+            $bg = if ($isSel) { $HighlightBackgroundColor } else { $TextBackgroundColor }
 
-            $lineBg = $TextBackgroundColor
-            $lineFg = $TextColor
-            if ($isSelected) {
-                $lineBg = $HighlightBackgroundColor
-                $lineFg = $HighlightForegroundColor
-            }
+            $coreText = "{0}: {1}" -f $metaItem.Value, $metaItem.DisplayText
+            $coreLen = $coreText.Length
 
-            $prefix = ("{0}: " -f $metaItem.Value)
-            $display = $metaItem.DisplayText
+            $totalUsed = $leftIndent + $coreLen
+            $paddingNeeded = $innerWidth - $totalUsed
+            if ($paddingNeeded -lt 0) { $paddingNeeded = 0 }
 
-            if ($menuX -ge 0 -and $menuY -ge 0) {
-                [Console]::SetCursorPosition($menuX, $menuY + 4 + $i)
-            }
-            Write-Host -NoNewline "║ " -ForegroundColor $BorderColor -BackgroundColor $lineBg
-            Write-Host -NoNewline $prefix -ForegroundColor $lineFg -BackgroundColor $lineBg
+            # Posicionar al inicio de la línea
+            [Console]::SetCursorPosition($menuX, $menuY + 4 + $i)
 
-            if ($metaItem.HotkeyIndex -ge 0 -and $metaItem.HotkeyIndex -lt $display.Length) {
-                $left = $display.Substring(0, $metaItem.HotkeyIndex)
-                $keyChar = $display.Substring($metaItem.HotkeyIndex, 1)
-                $right = ""
-                if ($metaItem.HotkeyIndex -lt ($display.Length - 1)) {
-                    $right = $display.Substring($metaItem.HotkeyIndex + 1)
+            # Borde izquierdo
+            Write-Host -NoNewline "║" -ForegroundColor $BorderColor -BackgroundColor $bg
+
+            # Indent
+            Write-Host -NoNewline (" " * $leftIndent) -ForegroundColor $fg -BackgroundColor $bg
+
+            # Prefijo numérico "N: "
+            $numPrefix = "{0}: " -f $metaItem.Value
+            Write-Host -NoNewline $numPrefix -ForegroundColor $fg -BackgroundColor $bg
+
+            # Texto con hotkey coloreada
+            $disp = $metaItem.DisplayText
+            if ($metaItem.HotkeyIndex -ge 0 -and $metaItem.HotkeyIndex -lt $disp.Length) {
+                $left = $disp.Substring(0, $metaItem.HotkeyIndex)
+                $keyCh = $disp.Substring($metaItem.HotkeyIndex, 1)
+                $right = if ($metaItem.HotkeyIndex -lt ($disp.Length - 1)) {
+                    $disp.Substring($metaItem.HotkeyIndex + 1)
+                }
+                else {
+                    ""
                 }
 
                 if ($left.Length -gt 0) {
-                    Write-Host -NoNewline $left -ForegroundColor $lineFg -BackgroundColor $lineBg
+                    Write-Host -NoNewline $left -ForegroundColor $fg -BackgroundColor $bg
                 }
 
                 $keyFg = if ($metaItem.IsAutoHotkey) { $AutoHotkeyColor } else { $HotkeyColor }
-                $keyBg = $HotkeyBackgroundColor
-                if ($isSelected) {
-                    $keyBg = $HighlightBackgroundColor
-                }
-
-                Write-Host -NoNewline $keyChar -ForegroundColor $keyFg -BackgroundColor $keyBg
+                Write-Host -NoNewline $keyCh -ForegroundColor $keyFg -BackgroundColor $bg
 
                 if ($right.Length -gt 0) {
-                    Write-Host -NoNewline $right -ForegroundColor $lineFg -BackgroundColor $lineBg
+                    Write-Host -NoNewline $right -ForegroundColor $fg -BackgroundColor $bg
                 }
             }
             else {
-                Write-Host -NoNewline $display -ForegroundColor $lineFg -BackgroundColor $lineBg
+                # sin hotkey marcada
+                Write-Host -NoNewline $disp -ForegroundColor $fg -BackgroundColor $bg
             }
 
-            Write-Host -NoNewline (" " * ($padRight - 1)) -ForegroundColor $lineBg -BackgroundColor $lineBg
-            Write-Host "║" -ForegroundColor $BorderColor -BackgroundColor $lineBg
-        }
+            # Relleno hasta el borde derecho
+            Write-Host -NoNewline (" " * $paddingNeeded) -ForegroundColor $fg -BackgroundColor $bg
 
-        # Dibujar bottom y ayuda solo la primera vez
-        if ($previousSelection -eq -1) {
-            if ($menuX -ge 0 -and $menuY -ge 0) {
-                [Console]::SetCursorPosition($menuX, $menuY + 4 + $optionLines.Count)
-            }
-            Write-Host $bottom -ForegroundColor $BorderColor
-            Write-Host ""
-            Write-Host "Use flechas, ENTER, numero, o tecla resaltada."
+            # Borde derecho
+            Write-Host "║" -ForegroundColor $BorderColor -BackgroundColor $bg
         }
-        
-        # Actualizar selección previa
-        $previousSelection = $selectedIndex
+        # Cerrar marco inferior
+        Write-MenuLine ($menuY + 4 + $optionMeta.Count) $bottom $BorderColor $TextBackgroundColor
 
+        # Indicaciones
+        [Console]::SetCursorPosition($menuX, $menuY + 6 + $optionMeta.Count)
+        Write-Host "Use flechas, ENTER, números o hotkeys." -ForegroundColor Gray
+
+        # TECLAS
         $key = [Console]::ReadKey($true)
 
         switch ($key.Key) {
-            'UpArrow' { $selectedIndex = ($selectedIndex - 1); if ($selectedIndex -lt 0) { $selectedIndex = $optionLines.Count - 1 } }
-            'DownArrow' { $selectedIndex = ($selectedIndex + 1); if ($selectedIndex -ge $optionLines.Count) { $selectedIndex = 0 } }
-            'Enter' {
-                $lineSel = $optionLines[$selectedIndex]
-                if ($lineSel -match '^\s*(\d+)\s*:') {
-                    Clear-Host  # Limpiar solo al salir del menú
-                    return [int]$matches[1]
-                }
-            }
-            default {
-                $ch = $key.KeyChar
-                if ($ch -match '^\d$') {
-                    $num = [int]::Parse($ch)
+            'UpArrow' { $selected = ($selected - 1 + $optionMeta.Count) % $optionMeta.Count }
+            'DownArrow' { $selected = ($selected + 1) % $optionMeta.Count }
+            'Enter' { return $optionMeta[$selected].Value }
+
+            Default {
+                # Números directos
+                if ($key.KeyChar -match '^\d$') {
+                    $parsed = [int]$key.KeyChar
                     foreach ($m in $optionMeta) {
-                        if ($m.Value -eq $num) {
-                            Clear-Host  # Limpiar solo al salir del menú
-                            return $num
+                        if ($m.Value -eq $parsed) {
+                            return $parsed
                         }
                     }
                 }
-                elseif ($ch -match '^[A-Za-z0-9]$') {
-                    $upperCh = ([string]$ch).ToUpper()
-                    foreach ($m in $optionMeta) {
-                        if ($m.HotkeyChar) {
-                            $mKey = ([string]$m.HotkeyChar).ToUpper()
-                            if ($mKey -eq $upperCh) {
-                                Clear-Host  # Limpiar solo al salir del menú
-                                return [int]$m.Value
-                            }
+
+                # Hotkeys
+                $pressed = ([string]$key.KeyChar).ToUpper()
+                foreach ($m in $optionMeta) {
+                    if ($m.HotkeyChar) {
+                        if ($pressed -eq ([string]$m.HotkeyChar).ToUpper()) {
+                            return $m.Value
                         }
                     }
                 }
@@ -344,6 +274,8 @@ function Show-DosMenu {
         }
     }
 }
+
+
 
 function Show-ConsolePopup {
     <#
@@ -510,7 +442,7 @@ function Show-ConsolePopup {
 
     while ($true) {
         # Dibujar fondo solo la primera vez
-        if ($needsFullRedraw) {
+        if ($needsFullRedraw) {            
             for ($row = 0; $row -lt ($msgLines.Count + 6); $row++) {
                 [console]::SetCursorPosition($boxLeft, $boxTop + $row)
                 Write-Host (" " * $boxWidth) -NoNewline -BackgroundColor $BorderBackgroundColor
@@ -553,6 +485,10 @@ function Show-ConsolePopup {
             # linea separadora antes de opciones
             [console]::SetCursorPosition($boxLeft, $boxTop + 3 + $msgLines.Count)
             Write-Host $dividerLine -ForegroundColor $BorderColor -BackgroundColor $BorderBackgroundColor
+            
+            # Dibujar bottom al final del dibujado inicial
+            [console]::SetCursorPosition($boxLeft, $boxTop + 5 + $msgLines.Count)
+            Write-Host $bottomLine -ForegroundColor $BorderColor -BackgroundColor $BorderBackgroundColor
             
             $needsFullRedraw = $false
         }
@@ -629,12 +565,6 @@ function Show-ConsolePopup {
             Write-Host "║" -ForegroundColor $BorderColor -BackgroundColor $TextBackgroundColor
             
             $previousSelected = $selected
-        }
-
-        # Dibujar bottom solo la primera vez
-        if ($previousSelected -eq -1 -or ($previousSelected -ne $selected -and $previousSelected -eq -1)) {
-            [console]::SetCursorPosition($boxLeft, $boxTop + 5 + $msgLines.Count)
-            Write-Host $bottomLine -ForegroundColor $BorderColor -BackgroundColor $BorderBackgroundColor
         }
 
         # leer tecla

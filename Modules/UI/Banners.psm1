@@ -1,7 +1,10 @@
-# ============================================================================ #
+﻿# ============================================================================ #
 # Archivo: Q:\Utilidad\LLevar\Modules\UI\Banners.psm1
 # Descripción: Funciones para mostrar banners, logos ASCII y mensajes de bienvenida
 # ============================================================================ #
+
+# Importar módulo de ProgressBar para Show-AsciiLogo
+Import-Module "$PSScriptRoot\ProgressBar.psm1" -Force
 
 function Show-Banner {
     <#
@@ -54,86 +57,112 @@ function Show-Banner {
         [int]$Y = -1
     )
     
-    # Convertir texto a array si es string único
-    if ($Message -is [string]) {
-        $Message = @($Message)
+    # === ASEGURAR CODIFICACIÓN UTF-8 PARA CARACTERES ESPECIALES ===
+    $originalOutputEncoding = [Console]::OutputEncoding
+    try {
+        [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
     }
-    
-    # Calcular ancho máximo del texto
-    $maxLength = 0
-    foreach ($line in $Message) {
-        if ($line.Length -gt $maxLength) {
-            $maxLength = $line.Length
-        }
+    catch {
+        # Si falla, continuar con la codificación actual
     }
-    
-    # Ancho total del banner (texto + padding a ambos lados)
-    $bannerWidth = $maxLength + ($Padding * 2)
-    
-    # Crear líneas de borde con caracteres box-drawing
-    $topBorder = "╔" + ("═" * $bannerWidth) + "╗"
-    $bottomBorder = "╚" + ("═" * $bannerWidth) + "╝"
-    
-    # Si se especificó posición, mover el cursor
-    if ($X -ge 0 -and $Y -ge 0) {
-        try {
-            [Console]::SetCursorPosition($X, $Y)
-        }
-        catch {
-            # Si falla, continuar con posición actual
-        }
-    }
-    
-    # Línea en blanco antes del banner
-    Write-Host ""
-    
-    # Guardar colores originales
-    $originalForeground = [Console]::ForegroundColor
-    $originalBackground = [Console]::BackgroundColor
     
     try {
-        # Mostrar borde superior
-        [Console]::ForegroundColor = $BorderColor
-        [Console]::BackgroundColor = $BackgroundColor
-        Write-Host $topBorder
-        
-        # Mostrar cada línea de texto centrada con bordes laterales
-        foreach ($line in $Message) {
-            $spaces = $bannerWidth - $line.Length
-            
-            # Siempre centrar
-            $leftPad = [Math]::Floor($spaces / 2)
-            $rightPad = $spaces - $leftPad
-            
-            # Mostrar borde lateral izquierdo
-            [Console]::ForegroundColor = $BorderColor
-            [Console]::BackgroundColor = $BackgroundColor
-            Write-Host -NoNewline "║"
-            
-            # Mostrar contenido de texto centrado
-            [Console]::ForegroundColor = $TextColor
-            [Console]::BackgroundColor = $BackgroundColor
-            Write-Host -NoNewline ((' ' * $leftPad) + $line + (' ' * $rightPad))
-            
-            # Mostrar borde lateral derecho
-            [Console]::ForegroundColor = $BorderColor
-            [Console]::BackgroundColor = $BackgroundColor
-            Write-Host "║"
+        # Convertir texto a array si es string único
+        if ($Message -is [string]) {
+            $Message = @($Message)
         }
         
-        # Mostrar borde inferior
-        [Console]::ForegroundColor = $BorderColor
-        [Console]::BackgroundColor = $BackgroundColor
-        Write-Host $bottomBorder
+        # Calcular ancho máximo del texto
+        $maxLength = 0
+        foreach ($line in $Message) {
+            $lineLength = $line.Length
+            if ($lineLength -gt $maxLength) {
+                $maxLength = $lineLength
+            }
+        }
+        
+        # Ancho total del banner (texto + padding a ambos lados)
+        $bannerWidth = $maxLength + ($Padding * 2)
+        
+        # Crear líneas de borde con caracteres box-drawing UTF-8
+        $topBorder = "╔" + ("═" * $bannerWidth) + "╗"
+        $bottomBorder = "╚" + ("═" * $bannerWidth) + "╝"
+        
+        # Si se especificó posición, mover el cursor
+        if ($X -ge 0 -and $Y -ge 0) {
+            try {
+                [Console]::SetCursorPosition($X, $Y)
+            }
+            catch {
+                # Si falla, continuar con posición actual
+            }
+        }
+        
+        # Línea en blanco antes del banner
+        Write-Host ""
+        
+        # Guardar colores originales
+        $originalForeground = [Console]::ForegroundColor
+        $originalBackground = [Console]::BackgroundColor
+        
+        try {
+            # Mostrar borde superior
+            [Console]::ForegroundColor = $BorderColor
+            [Console]::BackgroundColor = $BackgroundColor
+            Write-Host $topBorder
+            
+            # Mostrar cada línea de texto centrada con bordes laterales
+            foreach ($line in $Message) {
+                $lineLength = $line.Length
+                $spaces = $bannerWidth - $lineLength
+                
+                # Calcular padding para centrar el texto
+                $leftPad = [Math]::Floor($spaces / 2)
+                $rightPad = $spaces - $leftPad
+                
+                # Construir la línea completa
+                $leftSpace = ' ' * $leftPad
+                $rightSpace = ' ' * $rightPad
+                
+                # Mostrar borde lateral izquierdo
+                [Console]::ForegroundColor = $BorderColor
+                [Console]::BackgroundColor = $BackgroundColor
+                Write-Host -NoNewline "║"
+                
+                # Mostrar contenido de texto centrado
+                [Console]::ForegroundColor = $TextColor
+                [Console]::BackgroundColor = $BackgroundColor
+                Write-Host -NoNewline ($leftSpace + $line + $rightSpace)
+                
+                # Mostrar borde lateral derecho
+                [Console]::ForegroundColor = $BorderColor
+                [Console]::BackgroundColor = $BackgroundColor
+                Write-Host "║"
+            }
+            
+            # Mostrar borde inferior
+            [Console]::ForegroundColor = $BorderColor
+            [Console]::BackgroundColor = $BackgroundColor
+            Write-Host $bottomBorder
+        }
+        finally {
+            # Restaurar colores originales
+            [Console]::ForegroundColor = $originalForeground
+            [Console]::BackgroundColor = $originalBackground
+        }
+        
+        # Línea en blanco después del banner
+        Write-Host ""
     }
     finally {
-        # Restaurar colores originales
-        [Console]::ForegroundColor = $originalForeground
-        [Console]::BackgroundColor = $originalBackground
+        # Restaurar codificación original
+        try {
+            [Console]::OutputEncoding = $originalOutputEncoding
+        }
+        catch {
+            # Ignorar errores al restaurar
+        }
     }
-    
-    # Línea en blanco después del banner
-    Write-Host ""
 }
 
 function Show-WelcomeMessage {
@@ -280,9 +309,9 @@ function Show-AsciiLogo {
         [ConsoleColor]$BackgroundColor = [ConsoleColor]::Black,
         [int]$FinalDelaySeconds = 3,
         [bool]$AutoSizeConsole = $true,
-        [ConsoleColor]$BarForegroundColor = [ConsoleColor]::Gray,
-        [ConsoleColor]$BarBackgroundColor = [ConsoleColor]::DarkGray,
-        [ConsoleColor]$OverlayTextColor = [ConsoleColor]::Blue,
+        [ConsoleColor]$BarForegroundColor = [ConsoleColor]::Cyan,
+        [ConsoleColor]$BarBackgroundColor = [ConsoleColor]::DarkBlue,
+        [ConsoleColor]$OverlayTextColor = [ConsoleColor]::Yellow,
         [ConsoleColor]$OverlayBackgroundColor = [ConsoleColor]::Black,
         [bool]$PlaySound = $true
     )

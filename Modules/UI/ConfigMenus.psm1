@@ -187,7 +187,7 @@ function Show-OrigenMenu {
         0 { return $Config }
         1 {
             $Config.Origen.Tipo = "Local"
-            $selected = Select-FolderDOS-Llevar "Seleccione carpeta de ORIGEN"
+            $selected = Select-LlevarFolder "Seleccione carpeta de ORIGEN"
             if ($selected) {
                 $Config.Origen.Path = $selected
                 $Config.Origen.LocalPath = $selected
@@ -314,7 +314,7 @@ function Show-DestinoMenu {
         0 { return $Config }
         1 {
             $Config.Destino.Tipo = "Local"
-            $selected = Select-FolderDOS-Llevar "Seleccione carpeta de DESTINO"
+            $selected = Select-LlevarFolder "Seleccione carpeta de DESTINO"
             if ($selected) {
                 $Config.Destino.Path = $selected
                 $Config.Destino.LocalPath = $selected

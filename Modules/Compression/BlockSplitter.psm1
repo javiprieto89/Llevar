@@ -134,7 +134,7 @@ function Request-NextUnit {
     return "$($usb.DriveLetter):\"
 }
 
-function Gather-AllBlocks {
+function Get-AllBlocks {
     <#
     .SYNOPSIS
         Recopila todos los bloques de múltiples unidades USB
@@ -227,5 +227,5 @@ Export-ModuleMember -Function @(
     'Join-FromBlocks',
     'Get-BlocksFromUnit',
     'Request-NextUnit',
-    'Gather-AllBlocks'
+    'Get-AllBlocks'
 )

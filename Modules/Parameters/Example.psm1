@@ -13,9 +13,9 @@ function Invoke-ExampleParameter {
         Write-Host ""
         
         switch ($TipoEjemplo) {
-            "local" { Execute-LocalExample }
-            "iso-cd" { Execute-IsoExample -IsoType "cd" }
-            "iso-dvd" { Execute-IsoExample -IsoType "dvd" }
+            "local" { Invoke-LocalExample }
+            "iso-cd" { Invoke-IsoExample -IsoType "cd" }
+            "iso-dvd" { Invoke-IsoExample -IsoType "dvd" }
             default { 
                 Write-Host "Tipo no implementado: $TipoEjemplo" -ForegroundColor Yellow
                 Write-Host "Presione ENTER..." -ForegroundColor Gray
@@ -30,7 +30,7 @@ function Invoke-ExampleParameter {
     }
 }
 
-function Execute-LocalExample {
+function Invoke-LocalExample {
     Write-Host "Demostración LOCAL a LOCAL (simulando USB)" -ForegroundColor Gray
     Write-Host "Presione ENTER para continuar..." -ForegroundColor Yellow
     Read-Host
@@ -58,7 +58,7 @@ function Execute-LocalExample {
     Write-Host "V Datos generados" -ForegroundColor Green
     Write-Host ""
     
-    $sevenZ = Get-7z-Llevar
+    $sevenZ = Get-SevenZipLlevar
     if (-not $sevenZ) {
         Write-Host "? No se pudo obtener 7-Zip" -ForegroundColor Red
         return
@@ -114,7 +114,7 @@ function Execute-LocalExample {
     Write-Host "V Listo" -ForegroundColor Green
 }
 
-function Execute-IsoExample {
+function Invoke-IsoExample {
     param([string]$IsoType = "dvd")
     
     Write-Host "Ejemplo ISO-$($IsoType.ToUpper()) no implementado" -ForegroundColor Yellow

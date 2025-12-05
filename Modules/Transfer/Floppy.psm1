@@ -205,7 +205,7 @@ function Test-FloppyArchiveIntegrity {
         
         # Verificar con 7-Zip
         if ($CompressionTool -eq "7z") {
-            $sevenZ = Get-7z-Llevar
+            $sevenZ = Get-SevenZipLlevar
             
             if ($sevenZ -and $sevenZ -ne "NATIVE_ZIP") {
                 $testProcess = Start-Process -FilePath $sevenZ -ArgumentList "t", "`"$ArchivePath`"" -Wait -NoNewWindow -PassThru -RedirectStandardOutput (Join-Path $env:TEMP "7z_test.log")
@@ -301,7 +301,7 @@ function Copy-ToFloppyDisks {
     try {
         # Determinar herramienta de compresión
         if (-not $SevenZPath) {
-            $SevenZPath = Get-7z-Llevar
+            $SevenZPath = Get-SevenZipLlevar
         }
         
         $blocks = @()
@@ -461,7 +461,7 @@ function Copy-ToFloppyDisks {
         Write-Host ""
         $null = Read-Host "Presione ENTER cuando esté listo"
         
-        $installerContent = Generate-FloppyInstallerScript -TotalDisks $blocks.Count -ArchiveBaseName "LLEVAR_FLP"
+        $installerContent = New-FloppyInstallerScript -TotalDisks $blocks.Count -ArchiveBaseName "LLEVAR_FLP"
         $installerPath = Join-Path $Script:FloppyDrive "INSTALAR.BAT"
         
         try {
@@ -536,7 +536,7 @@ function Copy-ToFloppyDisks {
 #                    GENERACIÓN DE INSTALADOR                                #
 # ========================================================================== #
 
-function Generate-FloppyInstallerScript {
+function New-FloppyInstallerScript {
     <#
     .SYNOPSIS
         Genera un script BAT de instalación para diskettes

@@ -4,9 +4,9 @@
 # Propósito: Operaciones del sistema de archivos y validación de rutas
 # Funciones:
 #   - Test-PathWritable: Verifica si una ruta es escribible
-#   - Get-PathOrPrompt: Obtiene o solicita ruta al usuario
-#   - Test-VolumeWritable: Verifica si un volumen es escribible
-#   - Get-TargetVolume: Obtiene volumen removible adecuado
+#   - Format-FileSize: Formatea tamaño de archivo en unidades legibles
+#   - Get-DirectorySize: Calcula tamaño recursivo de directorio
+#   - Get-DirectoryItems: Obtiene lista de elementos de directorio con caché
 # ========================================================================== #
 
 function Test-PathWritable {
@@ -70,146 +70,211 @@ function Test-PathWritable {
     }
 }
 
-function Get-PathOrPrompt {
+# ========================================================================== #
+#                       FUNCIONES DE ANÁLISIS DE ARCHIVOS                    #
+# ========================================================================== #
+
+function Format-FileSize {
     <#
     .SYNOPSIS
-        Obtiene ruta o la solicita si no está definida
+        Formatea un tamaño de archivo en el formato más apropiado
     .DESCRIPTION
-        Si $Path está vacío, solicita al usuario seleccionar una carpeta.
-        Si la ruta no existe, vuelve a solicitarla hasta obtener una válida.
-    .PARAMETER Path
-        Ruta opcional previa
-    .PARAMETER Tipo
-        Tipo de ruta (Origen/Destino) para mensajes
+        Convierte un tamaño en bytes al formato más legible (B, KB, MB, GB, TB)
+    .PARAMETER Size
+        Tamaño en bytes
     .OUTPUTS
-        String con la ruta validada
+        String con el tamaño formateado
+    .EXAMPLE
+        Format-FileSize -Size 1048576
+        # Retorna: "1.00 MB"
     #>
-    param([string]$Path, [string]$Tipo)
-
-    if (-not $Path) {
-        $Path = Select-FolderDOS-Llevar "Seleccione carpeta de $Tipo"
+    param([long]$Size)
+    
+    if ($Size -ge 1TB) {
+        return "{0:N2} TB" -f ($Size / 1TB)
     }
-
-    while (-not (Test-Path $Path)) {
-        Write-Host "Ruta no válida: $Path" -ForegroundColor Yellow
-        $Path = Select-FolderDOS-Llevar "Seleccione carpeta de $Tipo"
+    elseif ($Size -ge 1GB) {
+        return "{0:N2} GB" -f ($Size / 1GB)
     }
-
-    return $Path
+    elseif ($Size -ge 1MB) {
+        return "{0:N2} MB" -f ($Size / 1MB)
+    }
+    elseif ($Size -ge 1KB) {
+        return "{0:N2} KB" -f ($Size / 1KB)
+    }
+    else {
+        return "$Size B"
+    }
 }
 
-function Test-VolumeWritable {
+function Get-DirectorySize {
     <#
     .SYNOPSIS
-        Verifica si un volumen es escribible y tiene espacio suficiente
+        Calcula el tamaño de un directorio recursivamente con opción de cancelar
     .DESCRIPTION
-        Valida que el volumen sea removible, tenga espacio disponible,
-        y sea escribible mediante prueba de archivo temporal.
-    .PARAMETER Volume
-        Objeto Volume a verificar
-    .PARAMETER RequiredBytes
-        Bytes requeridos (opcional)
+        Recorre un directorio y todos sus subdirectorios calculando el tamaño total,
+        cantidad de archivos y subdirectorios. Permite cancelación mediante variable de referencia.
+    .PARAMETER Path
+        Ruta del directorio a analizar
+    .PARAMETER Cancelled
+        Variable de referencia [ref] para indicar cancelación
     .OUTPUTS
-        Boolean - $true si es escribible, $false en caso contrario
+        Hashtable con Size, FileCount y DirCount
+    .EXAMPLE
+        $cancelled = [ref]$false
+        $result = Get-DirectorySize -Path "C:\Temp" -Cancelled $cancelled
+        Write-Host "Tamaño: $($result.Size) bytes, Archivos: $($result.FileCount)"
     #>
     param(
-        [Parameter(Mandatory = $true)] $Volume,
-        [long]$RequiredBytes = 0
+        [Parameter(Mandatory = $true)]
+        [string]$Path,
+        
+        [Parameter(Mandatory = $true)]
+        [ref]$Cancelled
     )
-
-    if ($Volume.DriveType -ne 'Removable') {
-        Write-Host "La unidad $($Volume.DriveLetter): no es removible." -ForegroundColor Yellow
-        return $false
-    }
-
-    if ($RequiredBytes -gt 0 -and $Volume.SizeRemaining -lt $RequiredBytes) {
-        Write-Host "La unidad $($Volume.DriveLetter): no tiene espacio suficiente." -ForegroundColor Yellow
-        return $false
-    }
-
-    $testPath = "$($Volume.DriveLetter):\__LLEVAR_TEST__.tmp"
+    
+    $totalSize = 0
+    $fileCount = 0
+    $dirCount = 0
+    
     try {
-        "test" | Out-File -FilePath $testPath -Encoding ASCII -ErrorAction Stop
-        Remove-Item $testPath -ErrorAction SilentlyContinue
-        return $true
+        # Obtener archivos en el directorio actual
+        $files = Get-ChildItem -Path $Path -File -ErrorAction SilentlyContinue
+        foreach ($file in $files) {
+            if ($Cancelled.Value) { break }
+            $totalSize += $file.Length
+            $fileCount++
+        }
+        
+        # Obtener subdirectorios y calcular recursivamente
+        $dirs = Get-ChildItem -Path $Path -Directory -ErrorAction SilentlyContinue
+        foreach ($dir in $dirs) {
+            if ($Cancelled.Value) { break }
+            $dirCount++
+            $subResult = Get-DirectorySize -Path $dir.FullName -Cancelled $Cancelled
+            $totalSize += $subResult.Size
+            $fileCount += $subResult.FileCount
+            $dirCount += $subResult.DirCount
+        }
     }
     catch {
-        Write-Host "No se pudo escribir en la unidad $($Volume.DriveLetter):" -ForegroundColor Yellow
-        return $false
+        # Ignorar errores de acceso
+    }
+    
+    return @{
+        Size      = $totalSize
+        FileCount = $fileCount
+        DirCount  = $dirCount
     }
 }
 
-function Get-TargetVolume {
+function Get-DirectoryItems {
     <#
     .SYNOPSIS
-        Obtiene volumen removible adecuado para copia
+        Obtiene los items (archivos y carpetas) de un directorio
     .DESCRIPTION
-        Busca volúmenes removibles y valida que sean escribibles.
-        Si se especifica letra de unidad previa, intenta reutilizarla
-        o solicita confirmación para cambiar.
-    .PARAMETER CurrentLetter
-        Letra de unidad previa (opcional)
-    .PARAMETER RequiredBytes
-        Bytes mínimos requeridos
+        Lista el contenido de un directorio con información adicional para navegadores.
+        Incluye soporte para caché de tamaños calculados.
+    .PARAMETER Path
+        Ruta del directorio
+    .PARAMETER AllowFiles
+        Si es $true, incluye archivos en el resultado
+    .PARAMETER SizeCache
+        Hashtable con caché de tamaños calculados previamente
     .OUTPUTS
-        Objeto Volume adecuado para escritura
+        Array de objetos PSCustomObject con información de cada item
     #>
     param(
-        [string]$CurrentLetter,
-        [long]$RequiredBytes
+        [Parameter(Mandatory = $true)]
+        [string]$Path,
+        
+        [bool]$AllowFiles = $false,
+        
+        [hashtable]$SizeCache = @{}
     )
-
-    while ($true) {
-        $volumes = Get-Volume | Where-Object { $_.DriveType -eq 'Removable' }
-        if (-not $volumes) {
-            Write-Host "No se detecta ninguna unidad removible." -ForegroundColor Yellow
-            Start-Sleep 2
-            continue
+    
+    $items = @()
+    
+    try {
+        # Detectar si estamos en la raíz de una unidad (C:\, D:\, etc.)
+        $isRootDrive = $Path -match '^[A-Za-z]:\\$'
+        
+        if ($isRootDrive) {
+            # En raíz: agregar "..." para ir al selector de unidades
+            $items += [PSCustomObject]@{
+                Name            = "..."
+                FullName        = ""
+                IsDirectory     = $true
+                IsParent        = $false
+                IsDriveSelector = $true
+                Size            = ""
+                Icon            = "💾"
+            }
         }
-
-        if ($CurrentLetter) {
-            $target = $volumes | Where-Object { $_.DriveLetter -eq $CurrentLetter } | Select-Object -First 1
-            if ($target -and (Test-VolumeWritable -Volume $target -RequiredBytes $RequiredBytes)) {
-                return $target
+        elseif ($Path -ne "") {
+            # No estamos en raíz: agregar ".." para subir
+            $items += [PSCustomObject]@{
+                Name            = ".."
+                FullName        = Split-Path $Path -Parent
+                IsDirectory     = $true
+                IsParent        = $true
+                IsDriveSelector = $false
+                Size            = ""
+                Icon            = "▲"
             }
-
-            $other = $volumes | Where-Object { $_.DriveLetter -ne $CurrentLetter } | Select-Object -First 1
-            if ($other) {
-                Write-Host ""
-                Write-Host ("La unidad original era {0}:. Ahora se detecta {1}:." -f $CurrentLetter, $other.DriveLetter) -ForegroundColor Yellow
-                $ans = Read-Host "¿Usar $($other.DriveLetter): como nuevo destino? (S/N)"
-                if ($ans -match '^[sS]') {
-                    if (Test-VolumeWritable -Volume $other -RequiredBytes $RequiredBytes) {
-                        return $other
-                    }
-                }
-                else {
-                    Write-Host ("Reinserte la unidad {0}: y presione ENTER..." -f $CurrentLetter) -ForegroundColor Yellow
-                    Read-Host | Out-Null
-                    continue
-                }
-            }
-
-            Write-Host "No se encontró ninguna unidad adecuada." -ForegroundColor Yellow
-            Start-Sleep 2
-            continue
         }
-        else {
-            $candidate = $volumes | Select-Object -First 1
-            if (Test-VolumeWritable -Volume $candidate -RequiredBytes $RequiredBytes) {
-                return $candidate
+        
+        # Obtener directorios
+        $dirs = Get-ChildItem -Path $Path -Directory -ErrorAction SilentlyContinue | Sort-Object Name
+        foreach ($dir in $dirs) {
+            # Verificar si ya calculamos el tamaño de este directorio
+            $sizeDisplay = "<DIR>"
+            if ($SizeCache.ContainsKey($dir.FullName)) {
+                $cachedSize = $SizeCache[$dir.FullName]
+                $sizeDisplay = (Format-FileSize -Size $cachedSize) + " <DIR>"
             }
-
-            Write-Host "La unidad $($candidate.DriveLetter): no es adecuada. Inserte otra y presione ENTER..." -ForegroundColor Yellow
-            Read-Host | Out-Null
+            
+            $items += [PSCustomObject]@{
+                Name            = $dir.Name
+                FullName        = $dir.FullName
+                IsDirectory     = $true
+                IsParent        = $false
+                IsDriveSelector = $false
+                Size            = $sizeDisplay
+                Icon            = "📁"
+                CalculatedSize  = ($SizeCache.ContainsKey($dir.FullName))
+            }
+        }
+        
+        # Obtener archivos si está permitido
+        if ($AllowFiles) {
+            $files = Get-ChildItem -Path $Path -File -ErrorAction SilentlyContinue | Sort-Object Name
+            foreach ($file in $files) {
+                $sizeDisplay = Format-FileSize -Size $file.Length
+                $items += [PSCustomObject]@{
+                    Name            = $file.Name
+                    FullName        = $file.FullName
+                    IsDirectory     = $false
+                    IsParent        = $false
+                    IsDriveSelector = $false
+                    Size            = $sizeDisplay
+                    Icon            = "📄"
+                    CalculatedSize  = $true
+                }
+            }
         }
     }
+    catch {
+        # Si hay error accediendo al directorio, volver atrás
+    }
+    
+    return $items
 }
 
 # Exportar funciones
 Export-ModuleMember -Function @(
     'Test-PathWritable',
-    'Get-PathOrPrompt',
-    'Test-VolumeWritable',
-    'Get-TargetVolume'
+    'Format-FileSize',
+    'Get-DirectorySize',
+    'Get-DirectoryItems'
 )

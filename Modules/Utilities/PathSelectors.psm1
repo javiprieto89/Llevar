@@ -3,11 +3,11 @@
 # ========================================================================== #
 # Propósito: Funciones para seleccionar carpetas y rutas
 # Funciones:
-#   - Select-FolderDOS-Llevar: Selector de carpetas simplificado
+#   - Select-LlevarFolder: Selector de carpetas simplificado
 #   - Get-PathOrPrompt: Obtiene o solicita ruta según parámetro
 # ========================================================================== #
 
-function Select-FolderDOS-Llevar {
+function Select-LlevarFolder {
     <#
     .SYNOPSIS
         Selector de carpetas simplificado usando Select-PathNavigator
@@ -40,12 +40,12 @@ function Get-PathOrPrompt {
     param([string]$Path, [string]$Tipo)
 
     if (-not $Path) {
-        $Path = Select-FolderDOS-Llevar "Seleccione carpeta de $Tipo"
+        $Path = Select-LlevarFolder "Seleccione carpeta de $Tipo"
     }
 
     while (-not (Test-Path $Path)) {
         Write-Host "Ruta no válida: $Path" -ForegroundColor Yellow
-        $Path = Select-FolderDOS-Llevar "Seleccione carpeta de $Tipo"
+        $Path = Select-LlevarFolder "Seleccione carpeta de $Tipo"
     }
 
     return $Path
@@ -53,6 +53,6 @@ function Get-PathOrPrompt {
 
 # Exportar funciones
 Export-ModuleMember -Function @(
-    'Select-FolderDOS-Llevar',
+    'Select-LlevarFolder',
     'Get-PathOrPrompt'
 )

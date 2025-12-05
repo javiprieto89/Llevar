@@ -105,7 +105,7 @@ function Test-UncPathAccess {
             
             # Intentar montar con credenciales
             $netUseCmd = "net use `"$UncPath`" /user:$username $password 2>&1"
-            $result = Invoke-Expression $netUseCmd
+            Invoke-Expression $netUseCmd | Out-Null
             
             if ($LASTEXITCODE -eq 0) {
                 # Verificar acceso real
@@ -451,6 +451,61 @@ function Mount-LlevarNetworkPath {
     }
 }
 
+function Get-NetworkShares {
+    <#
+    .SYNOPSIS
+        Obtiene recursos compartidos en la red para el navegador
+    .DESCRIPTION
+        Busca recursos compartidos disponibles en la red local,
+        retornando objetos formateados para su uso en el navegador
+    .OUTPUTS
+        Array de objetos PSCustomObject con información de recursos de red
+    #>
+    
+    $shares = @()
+    
+    try {
+        Write-Host "`nBuscando recursos compartidos en la red..." -ForegroundColor Cyan
+        Write-Host "Esto puede tardar unos segundos..." -ForegroundColor Gray
+        
+        # Buscar en la red local usando net view
+        $netView = net view /all 2>$null
+        foreach ($line in $netView) {
+            if ($line -match '\\\\(.+?)\s') {
+                $computerName = $matches[1]
+                $shares += [PSCustomObject]@{
+                    Name            = "\\\\$computerName"
+                    FullName        = "\\\\$computerName"
+                    IsDirectory     = $true
+                    IsParent        = $false
+                    IsDriveSelector = $false
+                    IsNetworkShare  = $true
+                    Size            = "<RED>"
+                    Icon            = "🌐"
+                }
+            }
+        }
+    }
+    catch {
+        # Silenciar errores
+    }
+    
+    if ($shares.Count -eq 0) {
+        $shares += [PSCustomObject]@{
+            Name            = "(No se encontraron recursos compartidos)"
+            FullName        = ""
+            IsDirectory     = $false
+            IsParent        = $false
+            IsDriveSelector = $false
+            IsNetworkShare  = $false
+            Size            = ""
+            Icon            = "⚠"
+        }
+    }
+    
+    return $shares
+}
+
 # Exportar funciones
 Export-ModuleMember -Function @(
     'Get-NetworkComputers',
@@ -458,5 +513,6 @@ Export-ModuleMember -Function @(
     'Get-ComputerShares',
     'Select-NetworkPath',
     'Split-UncRootAndPath',
-    'Mount-LlevarNetworkPath'
+    'Mount-LlevarNetworkPath',
+    'Get-NetworkShares'
 )

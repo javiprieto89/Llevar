@@ -6,6 +6,10 @@
 #   - New-InstallerScript: Genera INSTALAR.ps1 personalizado
 # ========================================================================== #
 
+# Importar dependencias
+$ModulesPath = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
+Import-Module (Join-Path $ModulesPath "Modules\Compression\BlockSplitter.psm1") -Force -Global
+
 # ========================================================================== #
 #                    PLANTILLA DEL INSTALADOR (EMBUTIDA)                     #
 # ========================================================================== #
@@ -115,133 +119,13 @@ function Select-FolderDOS {
 
 # Compress-WithNativeZip ahora está en Modules/Compression/NativeZip.psm1
 
-# Get-7z ahora está en Modules/Compression/SevenZip.psm1
-
-# ========================================================================== #
-#                      FUNCIONES DE DETECCIÓN DE BLOQUES                     #
-# ========================================================================== #
-
-function Get-BlocksFromUnit {
-    param([string]$Path)
-
-    Get-ChildItem $Path -File |
-    Where-Object {
-        $_.Name -match '\.7z($|\.)' -or $_.Name -match '\.\d{3}$' -or $_.Name -match '\.alx\d{4}$' -or $_.Name -match '\.zip$'
-    } |
-    Sort-Object Name |
-    Select-Object -ExpandProperty FullName
-}
-
-function Request-NextUnit {
-    param([string]$ExpectedBlock)
-
-    Write-Host ""
-    Write-Host "Falta el bloque: $ExpectedBlock" -ForegroundColor Yellow
-    Write-Host "Inserte la unidad que lo contiene."
-    Read-Host "ENTER cuando esté lista"
-
-    $usb = $null
-    while (-not $usb) {
-        $usb = Get-Volume |
-        Where-Object { $_.DriveType -eq 'Removable' } |
-        Select-Object -First 1
-        if (-not $usb) {
-            Write-Host "No se detecta USB." -ForegroundColor Yellow
-            Start-Sleep 2
-        }
-    }
-
-    return "$($usb.DriveLetter):\"
-}
-
-function Gather-AllBlocks {
-    param($InitialPath)
-
-    $blocks = @{}
-    $unit = $InitialPath
-
-    while ($true) {
-
-        $current = Get-BlocksFromUnit $unit
-        foreach ($c in $current) {
-            $name = Split-Path $c -Leaf
-            $blocks[$name] = $c
-        }
-
-        # ¿Está __EOF__ aquí?
-        if (Test-Path (Join-Path $unit "__EOF__")) {
-            break
-        }
-
-        # Determinar el siguiente bloque esperado
-        $sortedKeys = $blocks.Keys | Sort-Object
-        if ($sortedKeys.Count -eq 0) {
-            Write-Host "No se encontraron bloques en la unidad actual." -ForegroundColor Yellow
-            $unit = Request-NextUnit "primer bloque"
-            continue
-        }
-
-        $lastBlock = $sortedKeys[-1]
-        
-        # Inferir el siguiente bloque esperado basado en el patrón
-        if ($lastBlock -match '\.alx(\d{4})$') {
-            $num = [int]$matches[1]
-            $nextNum = $num + 1
-            $nextBlock = $lastBlock -replace '\.alx\d{4}$', ('.alx{0:D4}' -f $nextNum)
-        }
-        elseif ($lastBlock -match '\.7z\.(\d{3})$') {
-            $num = [int]$matches[1]
-            $nextNum = $num + 1
-            $nextBlock = $lastBlock -replace '\.7z\.\d{3}$', ('.7z.{0:D3}' -f $nextNum)
-        }
-        elseif ($lastBlock -match '\.(\d{3})$') {
-            $num = [int]$matches[1]
-            $nextNum = $num + 1
-            $nextBlock = $lastBlock -replace '\.\d{3}$', ('.{0:D3}' -f $nextNum)
-        }
-        else {
-            # No se puede determinar el patrón, asumir que está completo
-            break
-        }
-
-        # Verificar si el siguiente bloque esperado existe en la unidad actual
-        $nextBlockPath = Join-Path $unit $nextBlock
-        if (Test-Path $nextBlockPath) {
-            # El bloque existe pero no fue detectado, agregarlo
-            $blocks[$nextBlock] = $nextBlockPath
-            continue
-        }
-        
-        # Si estamos en una carpeta local (no USB), no hay más bloques
-        # Detectar si es carpeta local verificando si no es unidad removible
-        try {
-            $driveLetter = Split-Path $unit -Qualifier
-            if ($driveLetter) {
-                $volume = Get-Volume -DriveLetter $driveLetter.Replace(":", "") -ErrorAction SilentlyContinue
-                if (-not $volume -or $volume.DriveType -ne 'Removable') {
-                    # Es carpeta local, no hay más bloques
-                    Write-Host "Todos los bloques detectados ($($blocks.Count))" -ForegroundColor Green
-                    break
-                }
-            }
-        }
-        catch {
-            # Error al detectar tipo de unidad, asumir local
-            break
-        }
-        
-        # Solicitar siguiente unidad (solo para medios removibles)
-        $unit = Request-NextUnit $nextBlock
-    }
-
-    return $blocks
-}
+# Get-SevenZip ahora está en Modules/Compression/SevenZip.psm1
 
 # ========================================================================== #
 #                          RECONSTRUIR ARCHIVO .7Z                           #
 # ========================================================================== #
 
-function Rebuild-7z {
+function Restore-7z {
     param($Blocks, $Temp)
 
     # Para volúmenes nativos de 7-Zip no hay que reconstruir nada;
@@ -254,7 +138,7 @@ function Rebuild-7z {
 #                                DESCOMPRIMIR                                #
 # ========================================================================== #
 
-function Extract-7z {
+function Expand-7z {
     param($SevenZ, $Destino, $7z)
 
     Write-Host "Descomprimiendo..." -ForegroundColor Cyan
@@ -262,7 +146,7 @@ function Extract-7z {
     Write-Host "Completado." -ForegroundColor Green
 }
 
-function Extract-NativeZip {
+function Expand-NativeZip {
     param($ZipFile, $Destino)
 
     Write-Host "Descomprimiendo con ZIP nativo de Windows..." -ForegroundColor Cyan
@@ -282,7 +166,7 @@ function Extract-NativeZip {
 #                     RECONSTRUIR ZIP DESDE BLOQUES .alx                     #
 # ========================================================================== #
 
-function Rebuild-ZipFromBlocks {
+function Restore-ZipFromBlocks {
     param($blocks, $Temp)
 
     Write-Host "Reconstruyendo archivo ZIP desde bloques..." -ForegroundColor Cyan
@@ -335,7 +219,7 @@ function Rebuild-ZipFromBlocks {
 #                         MANEJAR CARPETA EXISTENTE                          #
 # ========================================================================== #
 
-function Handle-ExistingFolder {
+function Resolve-ExistingFolder {
     param($Destino, $FolderName)
 
     $target = Join-Path $Destino $FolderName
@@ -371,7 +255,7 @@ try {
     $myPath = $PSScriptRoot + "\"
     Write-Host "Buscando bloques en $myPath"
 
-    $blocks = Gather-AllBlocks $myPath
+    $blocks = Get-AllBlocks $myPath
 
     if ($blocks.Count -eq 0) { throw "No hay bloques de archivo comprimido." }
 
@@ -393,7 +277,7 @@ try {
     }
 
     # Manejar carpeta existente
-    $Destino = Handle-ExistingFolder $Destino $FolderName
+    $Destino = Resolve-ExistingFolder $Destino $FolderName
 
     # Crear temporales
     $Temp = Join-Path $env:TEMP "INSTALAR_TEMP"
@@ -412,21 +296,21 @@ try {
         Write-Host "Procesando archivo comprimido con ZIP nativo de Windows..." -ForegroundColor Cyan
         
         # Reconstruir ZIP desde bloques .alx
-        $zipFull = Rebuild-ZipFromBlocks $blocks $Temp
+        $zipFull = Restore-ZipFromBlocks $blocks $Temp
         
         # Descomprimir con ZIP nativo
-        Extract-NativeZip $zipFull $Destino
+        Expand-NativeZip $zipFull $Destino
     }
     else {
         # Flujo para 7-Zip (por defecto)
         # Reconstruir 7z
-        $SevenZFull = Rebuild-7z $blocks $Temp
+        $SevenZFull = Restore-7z $blocks $Temp
 
         # Detectar 7z
         $7z = Get-7z
 
         # Descomprimir
-        Extract-7z $SevenZFull $Destino $7z
+        Expand-7z $SevenZFull $Destino $7z
     }
 
     # Limpieza
@@ -448,7 +332,7 @@ function New-InstallerScript {
         Toma el template $InstallerBaseScript y lo modifica para incluir:
         - Destino predeterminado
         - Tipo de compresión (7ZIP o NATIVE_ZIP)
-        - Función Get-7z mejorada
+        - Función Get-SevenZip mejorada
     .PARAMETER Destino
         Ruta de destino predeterminada para la instalación
     .PARAMETER Temp
@@ -518,11 +402,11 @@ function New-InstallerScript {
     $compressionLine = "`$script:CompressionType = '$CompressionType'"
     $newLines = $newLines[0..($insertIndex)] + $compressionLine + $newLines[($insertIndex + 1)..($newLines.Count - 1)]
     
-    # Inyectar función Get-7z ANTES de las funciones que la usan
-    # Buscar la línea "# Get-7z ahora está en Modules..." para insertar después
+    # Inyectar función Get-SevenZip ANTES de las funciones que la usan
+    # Buscar la línea "# Get-SevenZip ahora está en Modules..." para insertar después
     $get7zInsertIndex = -1
     for ($i = 0; $i -lt $newLines.Count; $i++) {
-        if ($newLines[$i] -match "# Get-7z ahora está en Modules") {
+        if ($newLines[$i] -match "# Get-SevenZip ahora está en Modules") {
             $get7zInsertIndex = $i + 1
             break
         }
@@ -532,9 +416,9 @@ function New-InstallerScript {
         $get7zPatch = @'
 
 # ========================================================================== #
-#                   FUNCIÓN Get-7z MEJORADA (INYECTADA)                      #
+#                 FUNCIÓN Get-SevenZip MEJORADA (INYECTADA)                 #
 # ========================================================================== #
-function Get-7z {
+function Get-SevenZip {
     <#
     .SYNOPSIS
         Busca 7-Zip en múltiples ubicaciones o lo descarga si es necesario
@@ -615,7 +499,7 @@ function Get-7z {
 }
 '@ -split "`r?`n"
     
-        # Agregar función Get-7z justo después del comentario (dividir en líneas)
+        # Agregar función Get-SevenZip justo después del comentario (dividir en líneas)
         $get7zLines = $get7zPatch -split "`r?`n"
         $before = $newLines[0..($get7zInsertIndex - 1)]
         $after = $newLines[$get7zInsertIndex..($newLines.Count - 1)]

@@ -116,6 +116,8 @@ param(
     [switch]$Instalar,
     [Alias('h')]
     [switch]$Ayuda,
+    [ValidateSet("Navigator", "FTP", "OneDrive", "Dropbox", "Compression", "Robocopy", "UNC", "USB", "ISO")]
+    [string]$Test,
     [switch]$OnedriveOrigen,
     [switch]$OnedriveDestino,
     [switch]$DropboxOrigen,
@@ -125,225 +127,366 @@ param(
 )
 
 # ========================================================================== #
-#                        IMPORTAR TODOS LOS MÓDULOS                          #
+#                    INICIALIZACIÓN TEMPRANA DE LOGGING                      #
 # ========================================================================== #
 
-$ModulesPath = Join-Path $PSScriptRoot "Modules"
-
-# Módulos Core
-Import-Module (Join-Path $ModulesPath "Core\Validation.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "Core\Logger.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "Core\Config.psm1") -Force -Global
-
-# Módulos UI
-Import-Module (Join-Path $ModulesPath "UI\Console.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "UI\Banners.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "UI\ProgressBar.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "UI\Navigator.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "UI\Menus.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "UI\ConfigMenus.psm1") -Force -Global
-
-# Módulos de Compresión
-Import-Module (Join-Path $ModulesPath "Compression\SevenZip.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "Compression\NativeZip.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "Compression\BlockSplitter.psm1") -Force -Global
-
-# Módulos de Transferencia
-Import-Module (Join-Path $ModulesPath "Transfer\Local.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "Transfer\FTP.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "Transfer\UNC.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "Transfer\OneDrive.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "Transfer\Dropbox.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "Transfer\Floppy.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "Transfer\Unified.psm1") -Force -Global
-
-# Módulos de Instalación
-Import-Module (Join-Path $ModulesPath "Installation\SystemInstall.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "Installation\Installer.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "Installation\ISO.psm1") -Force -Global
-
-# Módulos de Utilidades
-Import-Module (Join-Path $ModulesPath "Utilities\Installation.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "Utilities\Examples.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "Utilities\Help.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "Utilities\PathSelectors.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "Utilities\VolumeManagement.psm1") -Force -Global
-
-# Módulos del Sistema
-Import-Module (Join-Path $ModulesPath "System\Audio.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "System\FileSystem.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "System\Robocopy.psm1") -Force -Global
-
-# Módulos de Parámetros
-Import-Module (Join-Path $ModulesPath "Parameters\Help.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "Parameters\Install.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "Parameters\Example.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "Parameters\Robocopy.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "Parameters\InteractiveMenu.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "Parameters\InstallationCheck.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "Parameters\NormalMode.psm1") -Force -Global
-
-# ========================================================================== #
-#                 VERIFICACIÓN DE PERMISOS DE ADMINISTRADOR                  #
-# ========================================================================== #
-
-# Verificar si se está ejecutando como administrador
-$currentPrincipal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
-$isAdmin = $currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-
-# Detectar si estamos en VS Code, ISE, u otro IDE usando la función del módulo
-$isInIDE = Test-IsRunningInIDE
-
-# Si estamos en IDE, activar verbose automáticamente (sin pasarlo como parámetro)
-if ($isInIDE -and -not $Verbose) {
-    $Verbose = $true
-    Write-Host "[DEBUG/IDE] Verbose activado automáticamente" -ForegroundColor DarkGray
+# Crear carpeta de logs si no existe
+$Global:ScriptDir = $PSScriptRoot
+$Global:LogsDir = Join-Path $Global:ScriptDir "Logs"
+if (-not (Test-Path $Global:LogsDir)) {
+    New-Item -Path $Global:LogsDir -ItemType Directory -Force | Out-Null
 }
 
-# Solo pedir elevación si NO es administrador Y NO está en IDE
-$needsElevation = -not $isAdmin -and -not $isInIDE
+# Nombre del log con fecha, hora y minuto
+$timestamp = Get-Date -Format "yyyy-MM-dd_HH-mm"
+$Global:LogFile = Join-Path $Global:LogsDir "LLEVAR_$timestamp.log"
 
-if ($needsElevation) {
-    Write-Host "⚠ Se requieren permisos de administrador para redimensionar la consola." -ForegroundColor Yellow
-    Write-Host "Elevando a administrador..." -ForegroundColor Cyan
-    
-    # Construir argumentos para relanzar el script
-    $scriptPath = $MyInvocation.MyCommand.Path
-    $arguments = @("-NoExit", "-ExecutionPolicy", "Bypass", "-File", "`"$scriptPath`"")
-    
-    # Agregar parámetros pasados originalmente
-    if ($Origen) { $arguments += "-Origen", "`"$Origen`"" }
-    if ($Destino) { $arguments += "-Destino", "`"$Destino`"" }
-    if ($BlockSizeMB -ne 10) { $arguments += "-BlockSizeMB", $BlockSizeMB }
-    if ($Clave) { $arguments += "-Clave", "`"$Clave`"" }
-    if ($Iso) { $arguments += "-Iso" }
-    if ($IsoDestino -ne "dvd") { $arguments += "-IsoDestino", $IsoDestino }
-    if ($UseNativeZip) { $arguments += "-UseNativeZip" }
-    if ($Ejemplo) { $arguments += "-Ejemplo" }
-    if ($Ayuda) { $arguments += "-Ayuda" }
-    if ($Verbose) { $arguments += "-Verbose" }
-    
-    # Relanzar con privilegios de administrador
-    Start-Process pwsh.exe -Verb RunAs -ArgumentList $arguments
-    exit
+# Iniciar transcript para capturar TODA la salida (incluyendo warnings de importación)
+$TranscriptFile = Join-Path $Global:LogsDir "LLEVAR_TRANSCRIPT_$timestamp.log"
+try {
+    Start-Transcript -Path $TranscriptFile -Force | Out-Null
+}
+catch {
+    # Transcript no disponible en algunos contextos (ISE)
+    $TranscriptFile = $null
 }
 
-# ========================================================================== #
-#                            INICIALIZACIÓN                                  #
-# ========================================================================== #
-
-# Inicializar sistema de logs
-Initialize-LogFile -Verbose:$Verbose
-
-# Inicializar consola si es necesario
-$hostName = $host.Name -ilike '*consolehost*'
-#Write-Host $hostName
-#Pause
-if ($hostName) {
-    $host.UI.RawUI.BackgroundColor = 'Black'
-    $host.UI.RawUI.ForegroundColor = 'White'
-    Clear-Host
-}
+# Log inicial básico
+$initLog = @"
+========================================
+Iniciando LLEVAR.PS1
+Fecha/Hora: $(Get-Date -Format "yyyy-MM-dd HH:mm:ss")
+Usuario: $env:USERNAME
+Computadora: $env:COMPUTERNAME
+PowerShell: $($PSVersionTable.PSVersion)
+Modo Verbose: $Verbose
+Transcript: $(if ($TranscriptFile) { "Activo" } else { "No disponible" })
+========================================
+"@
+Add-Content -Path $Global:LogFile -Value $initLog -Encoding UTF8
 
 # ========================================================================== #
-# ========================================================================== #
-#                     ⬇⬇⬇ EJECUCIÓN PRINCIPAL ⬇⬇⬇                           #
-#                          FLUJO PRINCIPAL (LLEVAR)                          #
-# ========================================================================== #
+#                   WRAPPER DE MANEJO DE ERRORES GLOBAL                      #
 # ========================================================================== #
 
-# Verificar si hay parámetros de ejecución directa
-$hasExecutionParams = ($Origen -or $Destino -or $RobocopyMirror -or $Ejemplo -or $Ayuda -or $Instalar)
+try {
+    # Configurar preferencias de error para capturar todo
+    $ErrorActionPreference = 'Continue'
 
-# Mostrar logo ASCII si existe (solo si NO está en IDE y NO hay parámetros de ejecución)
-if (-not $isInIDE -and -not $hasExecutionParams) {
-    $logoPath = Join-Path $PSScriptRoot "Data\alexsoft.txt"
-    if (Test-Path $logoPath) {
-        # Usar Show-AsciiLogo como renderer unificado para el logo con sonidos estilo DOS    
-        Show-AsciiLogo -Path $logoPath -DelayMs 30 -ShowProgress $true -Label "Cargando..." -ForegroundColor Gray -PlaySound $true
-        # Limpiar pantalla después de cargar el logo
+    # ========================================================================== #
+    #                        IMPORTAR TODOS LOS MÓDULOS                          #
+    # ========================================================================== #
+
+    $ModulesPath = Join-Path $PSScriptRoot "Modules"
+
+    # Redirigir warnings durante importación de módulos
+    $oldWarningPref = $WarningPreference
+    $WarningPreference = 'Continue'
+
+    # Módulos Core
+    Import-Module (Join-Path $ModulesPath "Core\Validation.psm1") -Force -Global -WarningVariable +importWarnings
+    Import-Module (Join-Path $ModulesPath "Core\Logger.psm1") -Force -Global -WarningVariable +importWarnings
+    Import-Module (Join-Path $ModulesPath "Core\Config.psm1") -Force -Global -WarningVariable +importWarnings
+
+    # Módulos UI
+    Import-Module (Join-Path $ModulesPath "UI\Console.psm1") -Force -Global -WarningVariable +importWarnings
+    Import-Module (Join-Path $ModulesPath "UI\ProgressBar.psm1") -Force -Global -WarningVariable +importWarnings
+    Import-Module (Join-Path $ModulesPath "UI\Banners.psm1") -Force -Global -WarningVariable +importWarnings
+    Import-Module (Join-Path $ModulesPath "UI\Navigator.psm1") -Force -Global -WarningVariable +importWarnings
+    Import-Module (Join-Path $ModulesPath "UI\Menus.psm1") -Force -Global -WarningVariable +importWarnings
+    Import-Module (Join-Path $ModulesPath "UI\ConfigMenus.psm1") -Force -Global -WarningVariable +importWarnings
+
+    # Módulos de Compresión
+    Import-Module (Join-Path $ModulesPath "Compression\SevenZip.psm1") -Force -Global -WarningVariable +importWarnings
+    Import-Module (Join-Path $ModulesPath "Compression\NativeZip.psm1") -Force -Global -WarningVariable +importWarnings
+    Import-Module (Join-Path $ModulesPath "Compression\BlockSplitter.psm1") -Force -Global -WarningVariable +importWarnings
+
+    # Módulos de Transferencia
+    Import-Module (Join-Path $ModulesPath "Transfer\Local.psm1") -Force -Global -WarningVariable +importWarnings
+    Import-Module (Join-Path $ModulesPath "Transfer\FTP.psm1") -Force -Global -WarningVariable +importWarnings
+    Import-Module (Join-Path $ModulesPath "Transfer\UNC.psm1") -Force -Global -WarningVariable +importWarnings
+    Import-Module (Join-Path $ModulesPath "Transfer\OneDrive.psm1") -Force -Global -WarningVariable +importWarnings
+    Import-Module (Join-Path $ModulesPath "Transfer\Dropbox.psm1") -Force -Global -WarningVariable +importWarnings
+    Import-Module (Join-Path $ModulesPath "Transfer\Floppy.psm1") -Force -Global -WarningVariable +importWarnings
+    Import-Module (Join-Path $ModulesPath "Transfer\Unified.psm1") -Force -Global -WarningVariable +importWarnings
+
+    # Módulos de Instalación
+    Import-Module (Join-Path $ModulesPath "Installation\SystemInstall.psm1") -Force -Global -WarningVariable +importWarnings
+    Import-Module (Join-Path $ModulesPath "Installation\Installer.psm1") -Force -Global -WarningVariable +importWarnings
+    Import-Module (Join-Path $ModulesPath "Installation\ISO.psm1") -Force -Global -WarningVariable +importWarnings
+
+    # Módulos de Utilidades
+    Import-Module (Join-Path $ModulesPath "Utilities\Installation.psm1") -Force -Global -WarningVariable +importWarnings
+    Import-Module (Join-Path $ModulesPath "Utilities\Examples.psm1") -Force -Global -WarningVariable +importWarnings
+    Import-Module (Join-Path $ModulesPath "Utilities\Help.psm1") -Force -Global -WarningVariable +importWarnings
+    Import-Module (Join-Path $ModulesPath "Utilities\PathSelectors.psm1") -Force -Global -WarningVariable +importWarnings
+    Import-Module (Join-Path $ModulesPath "Utilities\VolumeManagement.psm1") -Force -Global -WarningVariable +importWarnings
+
+    # Módulos del Sistema
+    Import-Module (Join-Path $ModulesPath "System\Audio.psm1") -Force -Global -WarningVariable +importWarnings
+    Import-Module (Join-Path $ModulesPath "System\FileSystem.psm1") -Force -Global -WarningVariable +importWarnings
+    Import-Module (Join-Path $ModulesPath "System\Robocopy.psm1") -Force -Global -WarningVariable +importWarnings
+
+    # Módulos de Parámetros
+    Import-Module (Join-Path $ModulesPath "Parameters\Help.psm1") -Force -Global -WarningVariable +importWarnings
+    Import-Module (Join-Path $ModulesPath "Parameters\Install.psm1") -Force -Global -WarningVariable +importWarnings
+    Import-Module (Join-Path $ModulesPath "Parameters\Example.psm1") -Force -Global -WarningVariable +importWarnings
+    Import-Module (Join-Path $ModulesPath "Parameters\Test.psm1") -Force -Global -WarningVariable +importWarnings
+    Import-Module (Join-Path $ModulesPath "Parameters\Robocopy.psm1") -Force -Global -WarningVariable +importWarnings
+    Import-Module (Join-Path $ModulesPath "Parameters\InteractiveMenu.psm1") -Force -Global -WarningVariable +importWarnings
+    Import-Module (Join-Path $ModulesPath "Parameters\InstallationCheck.psm1") -Force -Global -WarningVariable +importWarnings
+    Import-Module (Join-Path $ModulesPath "Parameters\NormalMode.psm1") -Force -Global -WarningVariable +importWarnings
+
+    # Restaurar preferencia de warnings
+    $WarningPreference = $oldWarningPref
+
+    # Registrar warnings de importacion en el log
+    if ($importWarnings -and $importWarnings.Count -gt 0) {
+        $warningLog = "`n[WARNINGS DURANTE IMPORTACION DE MODULOS]`n"
+        foreach ($warning in $importWarnings) {
+            $warningLog += "  - $warning`n"
+        }
+        Add-Content -Path $Global:LogFile -Value $warningLog -Encoding UTF8
+    }
+
+    # ========================================================================== #
+    #                 VERIFICACIÓN DE PERMISOS DE ADMINISTRADOR                  #
+    # ========================================================================== #
+
+    # Verificar si se está ejecutando como administrador
+    $currentPrincipal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
+    $isAdmin = $currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+
+    # Detectar si estamos en VS Code, ISE, u otro IDE usando la función del módulo
+    $isInIDE = Test-IsRunningInIDE
+
+    # Si estamos en IDE, activar verbose automáticamente (sin pasarlo como parámetro)
+    if ($isInIDE -and -not $Verbose) {
+        $Verbose = $true
+        Write-Host "[DEBUG/IDE] Verbose activado automáticamente" -ForegroundColor DarkGray
+    }
+
+    # Solo pedir elevación si NO es administrador Y NO está en IDE
+    $needsElevation = -not $isAdmin -and -not $isInIDE
+
+    if ($needsElevation) {
+        Write-Host "⚠ Se requieren permisos de administrador para redimensionar la consola." -ForegroundColor Yellow
+        Write-Host "Elevando a administrador..." -ForegroundColor Cyan
+    
+        # Construir argumentos para relanzar el script
+        $scriptPath = $MyInvocation.MyCommand.Path
+        $arguments = @("-NoExit", "-ExecutionPolicy", "Bypass", "-File", "`"$scriptPath`"")
+    
+        # Agregar parámetros pasados originalmente
+        if ($Origen) { $arguments += "-Origen", "`"$Origen`"" }
+        if ($Destino) { $arguments += "-Destino", "`"$Destino`"" }
+        if ($BlockSizeMB -ne 10) { $arguments += "-BlockSizeMB", $BlockSizeMB }
+        if ($Clave) { $arguments += "-Clave", "`"$Clave`"" }
+        if ($Iso) { $arguments += "-Iso" }
+        if ($IsoDestino -ne "dvd") { $arguments += "-IsoDestino", $IsoDestino }
+        if ($UseNativeZip) { $arguments += "-UseNativeZip" }
+        if ($Ejemplo) { $arguments += "-Ejemplo" }
+        if ($Ayuda) { $arguments += "-Ayuda" }
+        if ($Verbose) { $arguments += "-Verbose" }
+    
+        # Relanzar con privilegios de administrador
+        Start-Process pwsh.exe -Verb RunAs -ArgumentList $arguments
+        exit
+    }
+
+    # ========================================================================== #
+    #                            INICIALIZACIÓN                                  #
+    # ========================================================================== #
+
+    # Inicializar sistema de logs
+    Initialize-LogFile -Verbose:$Verbose
+
+    # Inicializar consola si es necesario
+    $hostName = $host.Name -ilike '*consolehost*'
+    #Write-Host $hostName
+    #Pause
+    if ($hostName) {
+        $host.UI.RawUI.BackgroundColor = 'Black'
+        $host.UI.RawUI.ForegroundColor = 'White'
         Clear-Host
-        
-        # Mostrar mensaje de bienvenida personalizado parpadeante
-        Show-WelcomeMessage -BlinkCount 3 -VisibleDelayMs 450 -TextColor Cyan
-        
-        # Limpiar para mostrar el menú
-        Clear-Host
     }
-}
 
-# ========================================================================== #
-#                        VERIFICACIÓN DE INSTALACIÓN                         #
-# ========================================================================== #
+    # ========================================================================== #
+    # ========================================================================== #
+    #                     ⬇⬇⬇ EJECUCIÓN PRINCIPAL ⬇⬇⬇                           #
+    #                          FLUJO PRINCIPAL (LLEVAR)                          #
+    # ========================================================================== #
+    # ========================================================================== #
 
-# Verificar instalación solo si NO hay parámetros de ejecución directa
-if (-not $hasExecutionParams) {
-    Invoke-InstallationCheck -Ejemplo:$Ejemplo -Ayuda:$Ayuda -IsAdmin $isAdmin -IsInIDE $isInIDE -ScriptPath $MyInvocation.MyCommand.Path
-}
+    # Verificar si hay parámetros de ejecución directa
+    $hasExecutionParams = ($Origen -or $Destino -or $RobocopyMirror -or $Ejemplo -or $Ayuda -or $Instalar -or $Test)
 
-# ========================================================================== #
-#                   PROCESAMIENTO DE PARÁMETROS DE EJECUCIÓN                 #
-# ========================================================================== #
+    # Mostrar logo ASCII si existe (solo si NO está en IDE y NO hay parámetros de ejecución)
+    if (-not $isInIDE -and -not $hasExecutionParams) {
+        $logoPath = Join-Path $PSScriptRoot "Data\alexsoft.txt"
+        if (Test-Path $logoPath) {
+            # Usar Show-AsciiLogo como renderer unificado para el logo con sonidos estilo DOS    
+            Show-AsciiLogo -Path $logoPath -DelayMs 30 -ShowProgress $true -Label "Cargando..." -ForegroundColor Gray -PlaySound $true
+            # Limpiar pantalla después de cargar el logo
+            Clear-Host
+        
+            # Mostrar mensaje de bienvenida personalizado parpadeante
+            Show-WelcomeMessage -BlinkCount 3 -VisibleDelayMs 450 -TextColor Cyan
+        
+            # Limpiar para mostrar el menú
+            Clear-Host
+        }
+    }
 
-# 1. Verificar parámetro -Ayuda
-Invoke-HelpParameter -Ayuda:$Ayuda
+    # ========================================================================== #
+    #                        VERIFICACIÓN DE INSTALACIÓN                         #
+    # ========================================================================== #
 
-# 2. Verificar parámetro -Instalar
-Invoke-InstallParameter -Instalar:$Instalar -IsAdmin $isAdmin -IsInIDE $isInIDE -ScriptPath $MyInvocation.MyCommand.Path
+    # Verificar instalación solo si NO hay parámetros de ejecución directa
+    if (-not $hasExecutionParams) {
+        Invoke-InstallationCheck -Ejemplo:$Ejemplo -Ayuda:$Ayuda -IsAdmin $isAdmin -IsInIDE $isInIDE -ScriptPath $MyInvocation.MyCommand.Path
+    }
 
-# 3. Verificar parámetro -RobocopyMirror
-Invoke-RobocopyParameter -RobocopyMirror:$RobocopyMirror -Origen $Origen -Destino $Destino
+    # ========================================================================== #
+    #                   PROCESAMIENTO DE PARÁMETROS DE EJECUCIÓN                 #
+    # ========================================================================== #
 
-# 4. Verificar parámetro -Ejemplo (modo completamente automático)
-$ejemploExecuted = Invoke-ExampleParameter -Ejemplo:$Ejemplo -TipoEjemplo $TipoEjemplo
-if ($ejemploExecuted) {
-    exit
-}
+    # 1. Verificar parámetro -Ayuda
+    Invoke-HelpParameter -Ayuda:$Ayuda
 
-# 5. Verificar si no hay parámetros (modo interactivo)
-$menuConfig = Invoke-InteractiveMenu -Ayuda:$Ayuda -Instalar:$Instalar -RobocopyMirror:$RobocopyMirror -Ejemplo:$Ejemplo -Origen $Origen -Destino $Destino -Iso:$Iso
+    # 2. Verificar parámetro -Instalar
+    Invoke-InstallParameter -Instalar:$Instalar -IsAdmin $isAdmin -IsInIDE $isInIDE -ScriptPath $MyInvocation.MyCommand.Path
 
-# Si el menú interactivo devolvió configuración, mapearla a las variables
-if ($null -ne $menuConfig) {
-    $Origen = $menuConfig.Origen
-    $Destino = $menuConfig.Destino
-    $BlockSizeMB = $menuConfig.BlockSizeMB
-    $Clave = $menuConfig.Clave
-    $UseNativeZip = $menuConfig.UseNativeZip
-    $Iso = $menuConfig.Iso
-    $IsoDestino = $menuConfig.IsoDestino
-    $RobocopyMirror = $menuConfig.RobocopyMirror
+    # 3. Verificar parámetro -RobocopyMirror
+    Invoke-RobocopyParameter -RobocopyMirror:$RobocopyMirror -Origen $Origen -Destino $Destino
+
+    # 4. Verificar parámetro -Ejemplo (modo completamente automático)
+    $ejemploExecuted = Invoke-ExampleParameter -Ejemplo:$Ejemplo -TipoEjemplo $TipoEjemplo
+    if ($ejemploExecuted) {
+        exit
+    }
+
+    # 5. Verificar parámetro -Test (modo pruebas individuales)
+    if ($Test) {
+        $testExecuted = Invoke-TestParameter -Test $Test
+        if ($testExecuted) {
+            exit
+        }
+    }
+
+    # 6. Verificar si no hay parámetros (modo interactivo)
+    $menuConfig = Invoke-InteractiveMenu -Ayuda:$Ayuda -Instalar:$Instalar -RobocopyMirror:$RobocopyMirror -Ejemplo:$Ejemplo -Origen $Origen -Destino $Destino -Iso:$Iso
+
+    # Si el menú interactivo devolvió configuración, mapearla a las variables
+    if ($null -ne $menuConfig) {
+        $Origen = $menuConfig.Origen
+        $Destino = $menuConfig.Destino
+        $BlockSizeMB = $menuConfig.BlockSizeMB
+        $Clave = $menuConfig.Clave
+        $UseNativeZip = $menuConfig.UseNativeZip
+        $Iso = $menuConfig.Iso
+        $IsoDestino = $menuConfig.IsoDestino
+        $RobocopyMirror = $menuConfig.RobocopyMirror
     
-    # Mapear variables de FTP/UNC si existen
-    if ($menuConfig.ContainsKey('FtpSourceServer')) {
-        $script:FtpSourceServer = $menuConfig.FtpSourceServer
-        $script:FtpSourcePort = $menuConfig.FtpSourcePort
-        $script:FtpSourceUser = $menuConfig.FtpSourceUser
-        $script:FtpSourcePassword = $menuConfig.FtpSourcePassword
+        # Mapear variables de FTP/UNC si existen
+        if ($menuConfig.ContainsKey('FtpSourceServer')) {
+            $script:FtpSourceServer = $menuConfig.FtpSourceServer
+            $script:FtpSourcePort = $menuConfig.FtpSourcePort
+            $script:FtpSourceUser = $menuConfig.FtpSourceUser
+            $script:FtpSourcePassword = $menuConfig.FtpSourcePassword
+        }
+        if ($menuConfig.ContainsKey('FtpDestinationServer')) {
+            $script:FtpDestinationServer = $menuConfig.FtpDestinationServer
+            $script:FtpDestinationPort = $menuConfig.FtpDestinationPort
+            $script:FtpDestinationUser = $menuConfig.FtpDestinationUser
+            $script:FtpDestinationPassword = $menuConfig.FtpDestinationPassword
+        }
+        if ($menuConfig.ContainsKey('UncSourceCredentials')) {
+            $script:UncSourceCredentials = $menuConfig.UncSourceCredentials
+        }
+        if ($menuConfig.ContainsKey('UncDestinationCredentials')) {
+            $script:UncDestinationCredentials = $menuConfig.UncDestinationCredentials
+        }
     }
-    if ($menuConfig.ContainsKey('FtpDestinationServer')) {
-        $script:FtpDestinationServer = $menuConfig.FtpDestinationServer
-        $script:FtpDestinationPort = $menuConfig.FtpDestinationPort
-        $script:FtpDestinationUser = $menuConfig.FtpDestinationUser
-        $script:FtpDestinationPassword = $menuConfig.FtpDestinationPassword
+
+    # ========================================================================== #
+    #                     MODO NORMAL - EJECUCIÓN PRINCIPAL                      #
+    # ========================================================================== #
+
+    # Invocar modo normal con toda la lógica de transferencia
+    Invoke-NormalMode -Origen $Origen -Destino $Destino -BlockSizeMB $BlockSizeMB `
+        -Clave $Clave -UseNativeZip:$UseNativeZip -Iso:$Iso -IsoDestino $IsoDestino `
+        -MenuConfig $menuConfig -SourceCredentials $SourceCredentials `
+        -DestinationCredentials $DestinationCredentials `
+        -OnedriveOrigen:$OnedriveOrigen -OnedriveDestino:$OnedriveDestino `
+        -DropboxOrigen:$DropboxOrigen -DropboxDestino:$DropboxDestino `
+        -RobocopyMirror:$RobocopyMirror
+
+    # ========================================================================== #
+    #                         FINALIZACIÓN Y LIMPIEZA                            #
+    # ========================================================================== #
+
+    # Registrar finalización en el log
+    $endTime = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    Add-Content -Path $Global:LogFile -Value "`n========================================" -Encoding UTF8
+    Add-Content -Path $Global:LogFile -Value "Finalización: $endTime" -Encoding UTF8
+    Add-Content -Path $Global:LogFile -Value "========================================" -Encoding UTF8
+
+}
+catch {
+    # Capturar cualquier error no manejado
+    $errorTime = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    $errorLog = @"
+
+========================================
+ERROR CRÍTICO NO MANEJADO
+Fecha/Hora: $errorTime
+========================================
+Mensaje: $($_.Exception.Message)
+Tipo: $($_.Exception.GetType().FullName)
+Línea: $($_.InvocationInfo.ScriptLineNumber)
+Comando: $($_.InvocationInfo.Line)
+
+Stack Trace:
+$($_.ScriptStackTrace)
+
+Detalle completo:
+$($_ | Out-String)
+========================================
+"@
+    
+    Add-Content -Path $Global:LogFile -Value $errorLog -Encoding UTF8
+    
+    # Mostrar error en consola
+    Write-Host "`n❌ ERROR CRÍTICO:" -ForegroundColor Red
+    Write-Host $_.Exception.Message -ForegroundColor Yellow
+    Write-Host "`nDetalles guardados en: $Global:LogFile" -ForegroundColor Gray
+    
+    # Detener transcript si está activo
+    try { Stop-Transcript | Out-Null } catch { }
+    
+    # Re-lanzar el error para que el usuario lo vea
+    throw
+}
+finally {
+    # Siempre ejecutar limpieza
+
+    # Detener transcript
+    try {
+        if ($TranscriptFile) {
+            Stop-Transcript | Out-Null
+        }
     }
-    if ($menuConfig.ContainsKey('UncSourceCredentials')) {
-        $script:UncSourceCredentials = $menuConfig.UncSourceCredentials
+    catch {
+        # Transcript puede no estar activo en algunos contextos
     }
-    if ($menuConfig.ContainsKey('UncDestinationCredentials')) {
-        $script:UncDestinationCredentials = $menuConfig.UncDestinationCredentials
+
+    # Mostrar ubicación de logs si el modo verbose está activo
+    if ($Verbose) {
+        Write-Host "`nLogs guardados en:" -ForegroundColor Cyan
+        Write-Host "  - Log principal: $Global:LogFile" -ForegroundColor Gray
+        if ($TranscriptFile) {
+            Write-Host "  - Transcript: $TranscriptFile" -ForegroundColor Gray
+        }
     }
 }
-
-# ========================================================================== #
-#                     MODO NORMAL - EJECUCIÓN PRINCIPAL                      #
-# ========================================================================== #
-
-# Invocar modo normal con toda la lógica de transferencia
-Invoke-NormalMode -Origen $Origen -Destino $Destino -BlockSizeMB $BlockSizeMB `
-    -Clave $Clave -UseNativeZip:$UseNativeZip -Iso:$Iso -IsoDestino $IsoDestino `
-    -MenuConfig $menuConfig -SourceCredentials $SourceCredentials `
-    -DestinationCredentials $DestinationCredentials `
-    -OnedriveOrigen:$OnedriveOrigen -OnedriveDestino:$OnedriveDestino `
-    -DropboxOrigen:$DropboxOrigen -DropboxDestino:$DropboxDestino `
-    -RobocopyMirror:$RobocopyMirror

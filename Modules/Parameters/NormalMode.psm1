@@ -13,6 +13,10 @@
     - Limpieza de temporales
 #>
 
+# Importar dependencias
+$ModulesPath = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
+Import-Module (Join-Path $ModulesPath "Modules\Utilities\PathSelectors.psm1") -Force -Global
+
 function Invoke-NormalMode {
     <#
     .SYNOPSIS
@@ -258,7 +262,7 @@ Nota: Si elige comprimir, los archivos temporales se eliminarán automáticament
             $SevenZ = "NATIVE_ZIP"
         }
         else {
-            $SevenZ = Get-7z-Llevar
+            $SevenZ = Get-SevenZipLlevar
         }
 
         $Temp = Join-Path $env:TEMP "LLEVAR_TEMP"
@@ -269,38 +273,38 @@ Nota: Si elige comprimir, los archivos temporales se eliminarán automáticament
         # Validar que el destino sea escribible
         if (-not (Test-PathWritable -Path $destinoMontado)) {
             Write-Host "Destino no es escribible. Cancelando." -ForegroundColor Red
-            Cleanup-TransferPaths -OrigenDrive $origenDrive -DestinoDrive $destinoDrive
+            Clear-TransferPaths -OrigenDrive $origenDrive -DestinoDrive $destinoDrive
             return
         }
 
         # Modo ISO
         if ($Iso) {
             New-LlevarIsoMain -Origen $origenMontado -Destino $destinoMontado -Temp $Temp -SevenZ $SevenZ -BlockSizeMB $BlockSizeMB -Clave $Clave
-            Cleanup-TransferPaths -OrigenDrive $origenDrive -DestinoDrive $destinoDrive
+            Clear-TransferPaths -OrigenDrive $origenDrive -DestinoDrive $destinoDrive
             return
         }
 
         # Ejecutar transferencia según el modo seleccionado
         if ($TransferMode -eq "Direct") {
-            Execute-DirectTransfer -OrigenMontado $origenMontado -DestinoMontado $destinoMontado `
+            Invoke-DirectTransfer -OrigenMontado $origenMontado -DestinoMontado $destinoMontado `
                 -MenuConfig $MenuConfig -RobocopyMirror $RobocopyMirror `
                 -OrigenEsFtp $origenEsFtp -DestinoEsFtp $destinoEsFtp `
                 -OrigenEsOneDrive $origenEsOneDrive -DestinoEsOneDrive $destinoEsOneDrive `
                 -OrigenEsDropbox $origenEsDropbox -DestinoEsDropbox $destinoEsDropbox
             
-            Cleanup-TransferPaths -OrigenDrive $origenDrive -DestinoDrive $destinoDrive
+            Clear-TransferPaths -OrigenDrive $origenDrive -DestinoDrive $destinoDrive
             Write-Host "`n✓ Finalizado (Modo Directo)."
             return
         }
 
         # Modo Compresión y Transferencia
-        Execute-CompressedTransfer -OrigenMontado $origenMontado -DestinoMontado $destinoMontado `
+        Invoke-CompressedTransfer -OrigenMontado $origenMontado -DestinoMontado $destinoMontado `
             -Temp $Temp -SevenZ $SevenZ -Clave $Clave -BlockSizeMB $BlockSizeMB `
             -OrigenEsOneDrive $origenEsOneDrive -DestinoEsOneDrive $destinoEsOneDrive `
             -OrigenEsDropbox $origenEsDropbox -DestinoEsDropbox $destinoEsDropbox `
             -DestinoEsFtp $destinoEsFtp -MenuConfig $MenuConfig
         
-        Cleanup-TransferPaths -OrigenDrive $origenDrive -DestinoDrive $destinoDrive -TempDir $Temp
+        Clear-TransferPaths -OrigenDrive $origenDrive -DestinoDrive $destinoDrive -TempDir $Temp
         Write-Host "`n✓ Finalizado (Modo Comprimido)."
     }
     catch {
@@ -414,7 +418,7 @@ function Initialize-TransferPaths {
 }
 
 # Función auxiliar para transferencia directa
-function Execute-DirectTransfer {
+function Invoke-DirectTransfer {
     param($OrigenMontado, $DestinoMontado, $MenuConfig, $RobocopyMirror,
         $OrigenEsFtp, $DestinoEsFtp, $OrigenEsOneDrive, $DestinoEsOneDrive,
         $OrigenEsDropbox, $DestinoEsDropbox)
@@ -468,7 +472,7 @@ function Execute-DirectTransfer {
 }
 
 # Función auxiliar para transferencia comprimida
-function Execute-CompressedTransfer {
+function Invoke-CompressedTransfer {
     param($OrigenMontado, $DestinoMontado, $Temp, $SevenZ, $Clave, $BlockSizeMB,
         $OrigenEsOneDrive, $DestinoEsOneDrive, $OrigenEsDropbox, $DestinoEsDropbox,
         $DestinoEsFtp, $MenuConfig)
@@ -511,11 +515,11 @@ function Execute-CompressedTransfer {
 
     # Si destino es OneDrive o Dropbox, subir bloques
     if ($DestinoEsOneDrive) {
-        Upload-ToOneDrive -Blocks $blocks -InstallerScript $installerScript -SevenZ $SevenZ `
+        Send-ToOneDrive -Blocks $blocks -InstallerScript $installerScript -SevenZ $SevenZ `
             -CompressionType $compressionType -DestinoMontado $DestinoMontado
     }
     elseif ($DestinoEsDropbox) {
-        Upload-ToDropbox -Blocks $blocks -InstallerScript $installerScript -SevenZ $SevenZ `
+        Send-ToDropbox -Blocks $blocks -InstallerScript $installerScript -SevenZ $SevenZ `
             -CompressionType $compressionType -DestinoMontado $DestinoMontado
     }
     elseif ($MenuConfig -and $MenuConfig.Destino -and $MenuConfig.Destino.Tipo -eq "Floppy") {
@@ -571,7 +575,7 @@ function Build-TransferConfig {
 }
 
 # Función auxiliar para subir a OneDrive
-function Upload-ToOneDrive {
+function Send-ToOneDrive {
     param($Blocks, $InstallerScript, $SevenZ, $CompressionType, $DestinoMontado)
     
     Write-Host "`nSubiendo bloques a OneDrive..." -ForegroundColor Cyan
@@ -600,7 +604,7 @@ function Upload-ToOneDrive {
 }
 
 # Función auxiliar para subir a Dropbox
-function Upload-ToDropbox {
+function Send-ToDropbox {
     param($Blocks, $InstallerScript, $SevenZ, $CompressionType, $DestinoMontado)
     
     Write-Host "`nSubiendo bloques a Dropbox..." -ForegroundColor Cyan
@@ -633,7 +637,7 @@ function Upload-ToDropbox {
 }
 
 # Función auxiliar para limpiar rutas y temporales
-function Cleanup-TransferPaths {
+function Clear-TransferPaths {
     param($OrigenDrive, $DestinoDrive, $TempDir)
     
     if ($OrigenDrive -and (Get-PSDrive -Name $OrigenDrive -ErrorAction SilentlyContinue)) {

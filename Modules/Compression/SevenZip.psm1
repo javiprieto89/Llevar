@@ -3,7 +3,7 @@
 # Descripción: Funciones para localizar y usar 7-Zip para compresión/descompresión
 # ============================================================================ #
 
-function Get-7z-Llevar {
+function Get-SevenZipLlevar {
     <#
     .SYNOPSIS
         Localiza o descarga 7-Zip para usar en compresión
@@ -88,10 +88,10 @@ function Get-7z-Llevar {
     throw "7-Zip no encontrado ni descargado. No se puede continuar."
 }
 
-function Get-7z {
+function Get-SevenZip {
     <#
     .SYNOPSIS
-        Versión simplificada de Get-7z-Llevar para usar en instaladores
+        Versión simplificada de Get-SevenZipLlevar para usar en instaladores
     #>
     
     # 1) Intentar ejecutar 7z desde el PATH (puede estar en variables de entorno)
@@ -229,7 +229,7 @@ function Compress-Folder {
 
 # Exportar funciones
 Export-ModuleMember -Function @(
-    'Get-7z-Llevar',
-    'Get-7z',
+    'Get-SevenZipLlevar',
+    'Get-SevenZip',
     'Compress-Folder'
 )
