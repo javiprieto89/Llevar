@@ -27,37 +27,30 @@ function Test-IsRunningInIDE {
         'Default Host'  # Host genérico usado por muchos IDEs
     )
 
-    $previousErrorActionPreference = $ErrorActionPreference
-    $previousWarningPreference = $WarningPreference
+    # Verificar variables de entorno de VSCode (aplica incluso en terminal integrado)
+    if ($env:VSCODE_PID -or $env:TERM_PROGRAM -eq 'vscode') {
+        return $true
+    }
 
+    # Verificar por nombre de host
+    foreach ($ide in $ideHosts) {
+        if ($hostName -like "*$ide*") {
+            return $true
+        }
+    }
+    
+    # Si estamos en un host de consola estándar, tratarlo como sesión normal
+    if ($hostName -like '*ConsoleHost*') {
+        return $false
+    }
+
+    # Verificar si está en modo debug
+    if ($PSDebugContext) {
+        return $true
+    }
+    
+    # Verificar proceso padre (VSCode, Code.exe)
     try {
-        # Forzar que errores y advertencias se detengan para poder mostrarlos y pausar
-        $ErrorActionPreference = 'Stop'
-        $WarningPreference = 'Stop'
-
-        # Verificar variables de entorno de VSCode (aplica incluso en terminal integrado)
-        if ($env:VSCODE_PID -or $env:TERM_PROGRAM -eq 'vscode') {
-            return $true
-        }
-
-        # Verificar por nombre de host
-        foreach ($ide in $ideHosts) {
-            if ($hostName -like "*$ide*") {
-                return $true
-            }
-        }
-
-        # Si estamos en un host de consola estándar, tratarlo como sesión normal
-        if ($hostName -like '*ConsoleHost*') {
-            return $false
-        }
-
-        # Verificar si está en modo debug
-        if ($PSDebugContext) {
-            return $true
-        }
-
-        # Verificar proceso padre (VSCode, Code.exe)
         $parentProcess = (Get-Process -Id $PID -ErrorAction Stop).Parent
         if ($parentProcess) {
             $parentName = $parentProcess.ProcessName
@@ -67,28 +60,12 @@ function Test-IsRunningInIDE {
         }
     }
     catch {
-        Write-Host "[ERROR] No se pudo detectar si se ejecuta en un IDE: $($_.Exception.Message)" -ForegroundColor Red
+        Write-Host "[ERROR] No se pudo obtener el proceso padre para detectar si es IDE: $($_.Exception.Message)" -ForegroundColor Red
 
-        try {
-            if ($host.UI -and $host.UI.RawUI) {
-                Write-Host "Presiona cualquier tecla para continuar..." -ForegroundColor Yellow
-                $null = $host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
-            }
-            else {
-                Write-Host "Presiona cualquier tecla para continuar..." -ForegroundColor Yellow
-                try {
-                    [void][System.Console]::ReadKey($true)
-                }
-                catch {
-                    Start-Sleep -Seconds 5
-                }
-            }
+        if ($host.UI -and $host.UI.RawUI) {
+            Write-Host "Presiona cualquier tecla para continuar..." -ForegroundColor Yellow
+            $null = $host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
         }
-        catch {
-            Start-Sleep -Seconds 5
-        }
-
-        return $false
     }
     finally {
         $ErrorActionPreference = $previousErrorActionPreference
