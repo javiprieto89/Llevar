@@ -67,10 +67,6 @@ function Test-IsRunningInIDE {
             $null = $host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
         }
     }
-    finally {
-        $ErrorActionPreference = $previousErrorActionPreference
-        $WarningPreference = $previousWarningPreference
-    }
 
     return $false
 }
