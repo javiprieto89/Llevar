@@ -23,7 +23,7 @@ function Show-Help {
     Write-Host "USO:" -ForegroundColor Yellow
     Write-Host "  .\Llevar.ps1 [-Origen <ruta>] [-Destino <ruta>] [-BlockSizeMB <n>] [opciones]"
     Write-Host ""
-    Write-Host "PARÁMETROS PRINCIPALES:" -ForegroundColor Yellow
+    Write-Host "PAR�METROS PRINCIPALES:" -ForegroundColor Yellow
     Write-Host "  -Origen <ruta>       Carpeta que se desea transportar (se comprime completa)"
     Write-Host "                       Si no se especifica, se solicitará interactivamente"
     Write-Host ""
@@ -82,7 +82,7 @@ function Show-Help {
     Write-Host ""
     Write-Host "FLUJO DE TRABAJO:" -ForegroundColor Yellow
     Write-Host ""
-    Write-Host "  [MÁQUINA ORIGEN]" -ForegroundColor Green
+    Write-Host "  [M�QUINA ORIGEN]" -ForegroundColor Green
     Write-Host "  1. Ejecutar: .\Llevar.ps1 -Origen C:\MiCarpeta -Destino D:\Restaurar"
     Write-Host "  2. El programa comprime la carpeta (7-Zip o ZIP nativo)"
     Write-Host "  3. Divide en bloques: MiCarpeta.alx0001, .alx0002, .alx0003, etc."
@@ -90,7 +90,7 @@ function Show-Help {
     Write-Host "  5. Genera INSTALAR.ps1 en la primera USB"
     Write-Host "  6. Marca la última USB con __EOF__"
     Write-Host ""
-    Write-Host "  [MÁQUINA DESTINO]" -ForegroundColor Green
+    Write-Host "  [M�QUINA DESTINO]" -ForegroundColor Green
     Write-Host "  1. Insertar primera USB (la que tiene INSTALAR.ps1)"
     Write-Host "  2. Ejecutar: .\INSTALAR.ps1"
     Write-Host "  3. El instalador pide los demás USBs automáticamente"

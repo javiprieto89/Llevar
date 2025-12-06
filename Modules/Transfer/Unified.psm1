@@ -29,10 +29,10 @@ function Copy-LlevarFiles {
     #>
     param(
         [Parameter(Mandatory = $true)]
-        [hashtable]$SourceConfig,
+        [psobject]$SourceConfig,
         
         [Parameter(Mandatory = $true)]
-        [hashtable]$DestinationConfig,
+        [psobject]$DestinationConfig,
         
         [Parameter(Mandatory = $false)]
         [string]$SourcePath,
@@ -148,6 +148,31 @@ function Copy-LlevarFiles {
         elseif ($SourceConfig.Tipo -eq "FTP" -and $DestinationConfig.Tipo -in @("Local", "UNC")) {
             Copy-LlevarFtpToLocal -FtpConfig $SourceConfig -DestinationPath $DestinationConfig.Path `
                 -StartTime $startTime -ShowProgress $ShowProgress -ProgressTop $ProgressTop
+        }
+
+        # FTP → FTP (vía carpeta temporal local)
+        elseif ($SourceConfig.Tipo -eq "FTP" -and $DestinationConfig.Tipo -eq "FTP") {
+            $tempPath = Join-Path $env:TEMP "LlevarFtpBridge_$(Get-Date -Format 'yyyyMMddHHmmss')"
+            New-Item -ItemType Directory -Path $tempPath -Force | Out-Null
+            try {
+                if ($ShowProgress) {
+                    Write-LlevarProgressBar -Percent 10 -StartTime $startTime -Label "Descargando FTP origen..." -Top $ProgressTop -Width 50
+                }
+                Copy-LlevarFtpToLocal -FtpConfig $SourceConfig -DestinationPath $tempPath `
+                    -StartTime $startTime -ShowProgress $false -ProgressTop $ProgressTop
+                $files = Get-ChildItem -Path $tempPath -Recurse -File
+                $fileCount = $files.Count
+                $totalBytes = ($files | Measure-Object -Property Length -Sum).Sum
+                if ($ShowProgress) {
+                    Write-LlevarProgressBar -Percent 60 -StartTime $startTime -Label "Subiendo a FTP destino..." -Top $ProgressTop -Width 50
+                }
+                Copy-LlevarLocalToFtp -SourcePath $tempPath -FtpConfig $DestinationConfig `
+                    -TotalBytes $totalBytes -FileCount $fileCount -StartTime $startTime `
+                    -ShowProgress $ShowProgress -ProgressTop $ProgressTop
+            }
+            finally {
+                Remove-Item -Path $tempPath -Recurse -Force -ErrorAction SilentlyContinue
+            }
         }
         
         # ONEDRIVE → LOCAL

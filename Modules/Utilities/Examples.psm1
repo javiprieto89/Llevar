@@ -84,7 +84,7 @@ function Invoke-ExampleMode {
     .OUTPUTS
         Hashtable con configuración del ejemplo (Origen, Destino, etc.)
     #>
-    Show-Banner -Message "MODO EJEMPLO AUTOMÁTICO" -BorderColor Cyan -TextColor Cyan
+    Show-Banner -Message "MODO EJEMPLO AUTOM�TICO" -BorderColor Cyan -TextColor Cyan
     Write-Host "Este modo creará automáticamente:" -ForegroundColor Yellow
     Write-Host "  • Una carpeta EJEMPLO con un archivo EJEMPLO.TMP de 50 MB"
     Write-Host "  • Ejecutará el proceso completo de compresión y división"
@@ -184,7 +184,7 @@ function Invoke-ExampleMode {
     }
     
     # Mostrar parámetros de ejecución
-    Show-Banner "PARÁMETROS DE EJECUCIÓN" -BorderColor Cyan -TextColor Cyan
+    Show-Banner "PAR�METROS DE EJECUCIÓN" -BorderColor Cyan -TextColor Cyan
     Write-Host "  Origen:           $origenEjemplo" -ForegroundColor White
     Write-Host "  Destino:          $destinoEjemplo" -ForegroundColor White
     Write-Host "  Tipo Destino:     $tipoDestino" -ForegroundColor White

@@ -1,3 +1,6 @@
+# Importar clases de TransferConfig (using module DEBE estar al INICIO del archivo)
+using module "Q:\Utilidad\LLevar\Modules\Core\TransferConfig.psm1"
+
 # *********************************************************************************************
 # SE MANTIENE POR COMPATIBILIDAD CON LA TERCERA EDAD LO VIEJO SIRVE JUAN ehhhhhh ALEJANDRO xD #
 # ********************************************************************************************* 
@@ -155,12 +158,12 @@ catch {
 $initLog = @"
 ========================================
 Iniciando LLEVAR.PS1
-Fecha/Hora: $(Get-Date -Format "yyyy-MM-dd HH:mm:ss")
+Fecha/Hora: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
 Usuario: $env:USERNAME
 Computadora: $env:COMPUTERNAME
 PowerShell: $($PSVersionTable.PSVersion)
 Modo Verbose: $Verbose
-Transcript: $(if ($TranscriptFile) { "Activo" } else { "No disponible" })
+Transcript: $(if ($TranscriptFile) { 'Activo' } else { 'No disponible' })
 ========================================
 "@
 Add-Content -Path $Global:LogFile -Value $initLog -Encoding UTF8
@@ -187,6 +190,7 @@ try {
     Import-Module (Join-Path $ModulesPath "Core\Validation.psm1") -Force -Global -WarningVariable +importWarnings
     Import-Module (Join-Path $ModulesPath "Core\Logger.psm1") -Force -Global -WarningVariable +importWarnings
     Import-Module (Join-Path $ModulesPath "Core\Config.psm1") -Force -Global -WarningVariable +importWarnings
+    # TransferConfig.psm1 ya importado con "using module" al inicio del archivo
 
     # Módulos UI
     Import-Module (Join-Path $ModulesPath "UI\Console.psm1") -Force -Global -WarningVariable +importWarnings
@@ -236,17 +240,22 @@ try {
     Import-Module (Join-Path $ModulesPath "Parameters\InteractiveMenu.psm1") -Force -Global -WarningVariable +importWarnings
     Import-Module (Join-Path $ModulesPath "Parameters\InstallationCheck.psm1") -Force -Global -WarningVariable +importWarnings
     Import-Module (Join-Path $ModulesPath "Parameters\NormalMode.psm1") -Force -Global -WarningVariable +importWarnings
-
+    
     # Restaurar preferencia de warnings
     $WarningPreference = $oldWarningPref
-
-    # Registrar warnings de importacion en el log
+    
+    # Registrar warnings de importacion en el log (sin mostrar en consola)
     if ($importWarnings -and $importWarnings.Count -gt 0) {
         $warningLog = "`n[WARNINGS DURANTE IMPORTACION DE MODULOS]`n"
         foreach ($warning in $importWarnings) {
             $warningLog += "  - $warning`n"
         }
         Add-Content -Path $Global:LogFile -Value $warningLog -Encoding UTF8
+        
+        # Solo mostrar en verbose
+        if ($Verbose) {
+            Write-Host "[DEBUG] Se registraron $($importWarnings.Count) advertencias de módulos en el log" -ForegroundColor DarkGray
+        }
     }
 
     # ========================================================================== #
@@ -256,7 +265,7 @@ try {
     # Verificar si se está ejecutando como administrador
     $currentPrincipal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
     $isAdmin = $currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-
+    
     # Detectar si estamos en VS Code, ISE, u otro IDE usando la función del módulo
     $isInIDE = Test-IsRunningInIDE
 
@@ -301,14 +310,20 @@ try {
     # Inicializar sistema de logs
     Initialize-LogFile -Verbose:$Verbose
 
-    # Inicializar consola si es necesario
-    $hostName = $host.Name -ilike '*consolehost*'
-    #Write-Host $hostName
-    #Pause
-    if ($hostName) {
-        $host.UI.RawUI.BackgroundColor = 'Black'
-        $host.UI.RawUI.ForegroundColor = 'White'
-        Clear-Host
+    # Inicializar consola si es necesario (solo si hay consola válida)
+    $hostName = $host.Name
+    if ($hostName -and ($hostName -ilike '*consolehost*' -or $hostName -ilike '*visual studio code host*')) {
+        try {
+            $rawUI = $host.UI.RawUI
+            if ($rawUI) {
+                $rawUI.BackgroundColor = 'Black'
+                $rawUI.ForegroundColor = 'White'
+                Clear-Host
+            }
+        }
+        catch {
+            # Si no hay consola válida (por ejemplo, en algunos hosts embebidos), continuar sin fallar
+        }
     }
 
     # ========================================================================== #
@@ -317,24 +332,40 @@ try {
     #                          FLUJO PRINCIPAL (LLEVAR)                          #
     # ========================================================================== #
     # ========================================================================== #
-
+    
     # Verificar si hay parámetros de ejecución directa
     $hasExecutionParams = ($Origen -or $Destino -or $RobocopyMirror -or $Ejemplo -or $Ayuda -or $Instalar -or $Test)
 
+    # ========================================================================== #
+    #                        LOGO Y MENSAJE DE BIENVENIDA                        #
+    # ========================================================================== #
+    
+    # Variable para rastrear si se mostró el logo
+    $script:LogoWasShown = $false
+    
     # Mostrar logo ASCII si existe (solo si NO está en IDE y NO hay parámetros de ejecución)
     if (-not $isInIDE -and -not $hasExecutionParams) {
         $logoPath = Join-Path $PSScriptRoot "Data\alexsoft.txt"
         if (Test-Path $logoPath) {
-            # Usar Show-AsciiLogo como renderer unificado para el logo con sonidos estilo DOS    
-            Show-AsciiLogo -Path $logoPath -DelayMs 30 -ShowProgress $true -Label "Cargando..." -ForegroundColor Gray -PlaySound $true
-            # Limpiar pantalla después de cargar el logo
-            Clear-Host
-        
-            # Mostrar mensaje de bienvenida personalizado parpadeante
-            Show-WelcomeMessage -BlinkCount 3 -VisibleDelayMs 450 -TextColor Cyan
-        
-            # Limpiar para mostrar el menú
-            Clear-Host
+            try {
+                # Usar Show-AsciiLogo como renderer unificado para el logo con sonidos estilo DOS    
+                Show-AsciiLogo -Path $logoPath -DelayMs 30 -ShowProgress $true -Label "Cargando..." -ForegroundColor Gray -PlaySound $true
+                $script:LogoWasShown = $true
+                    
+                # Limpiar pantalla después de cargar el logo
+                Clear-Host
+                
+                # Mostrar mensaje de bienvenida personalizado parpadeante
+                Show-WelcomeMessage -BlinkCount 3 -VisibleDelayMs 450 -TextColor Cyan
+                
+                # Limpiar para mostrar el menú
+                Clear-Host
+            }
+            catch {
+                # Si hay error en el logo, simplemente continuar
+                Write-Log "Error mostrando logo ASCII: $($_.Exception.Message)" "WARNING"
+                Clear-Host
+            }
         }
     }
 
@@ -344,7 +375,7 @@ try {
 
     # Verificar instalación solo si NO hay parámetros de ejecución directa
     if (-not $hasExecutionParams) {
-        Invoke-InstallationCheck -Ejemplo:$Ejemplo -Ayuda:$Ayuda -IsAdmin $isAdmin -IsInIDE $isInIDE -ScriptPath $MyInvocation.MyCommand.Path
+        Invoke-InstallationCheck -Ejemplo:$Ejemplo -Ayuda:$Ayuda -IsAdmin $isAdmin -IsInIDE $isInIDE -ScriptPath $MyInvocation.MyCommand.Path -LogoWasShown $script:LogoWasShown
     }
 
     # ========================================================================== #
@@ -377,50 +408,159 @@ try {
     # 6. Verificar si no hay parámetros (modo interactivo)
     $menuConfig = Invoke-InteractiveMenu -Ayuda:$Ayuda -Instalar:$Instalar -RobocopyMirror:$RobocopyMirror -Ejemplo:$Ejemplo -Origen $Origen -Destino $Destino -Iso:$Iso
 
-    # Si el menú interactivo devolvió configuración, mapearla a las variables
+    # Variable para almacenar el TransferConfig (tipada)
+    [TransferConfig]$transferConfig = $null
+
+    # Si el menú interactivo devolvió configuración, extraerla
     if ($null -ne $menuConfig) {
-        $Origen = $menuConfig.Origen
-        $Destino = $menuConfig.Destino
-        $BlockSizeMB = $menuConfig.BlockSizeMB
-        $Clave = $menuConfig.Clave
-        $UseNativeZip = $menuConfig.UseNativeZip
-        $Iso = $menuConfig.Iso
-        $IsoDestino = $menuConfig.IsoDestino
-        $RobocopyMirror = $menuConfig.RobocopyMirror
-    
-        # Mapear variables de FTP/UNC si existen
-        if ($menuConfig.ContainsKey('FtpSourceServer')) {
-            $script:FtpSourceServer = $menuConfig.FtpSourceServer
-            $script:FtpSourcePort = $menuConfig.FtpSourcePort
-            $script:FtpSourceUser = $menuConfig.FtpSourceUser
-            $script:FtpSourcePassword = $menuConfig.FtpSourcePassword
+        # Verificar si es modo ejemplo o ayuda (sin TransferConfig)
+        if ($menuConfig.Action -eq "Example") {
+            $Ejemplo = $menuConfig.Ejemplo
         }
-        if ($menuConfig.ContainsKey('FtpDestinationServer')) {
-            $script:FtpDestinationServer = $menuConfig.FtpDestinationServer
-            $script:FtpDestinationPort = $menuConfig.FtpDestinationPort
-            $script:FtpDestinationUser = $menuConfig.FtpDestinationUser
-            $script:FtpDestinationPassword = $menuConfig.FtpDestinationPassword
+        elseif ($menuConfig.Action -eq "Execute" -and $menuConfig.ContainsKey('TransferConfig')) {
+            # Usar TransferConfig del menú interactivo (ya viene configurado)
+            $transferConfig = [TransferConfig]$menuConfig.TransferConfig
         }
-        if ($menuConfig.ContainsKey('UncSourceCredentials')) {
-            $script:UncSourceCredentials = $menuConfig.UncSourceCredentials
+    }
+
+    # Si no hay TransferConfig del menú y hay parámetros, crear TransferConfig
+    # Detectar tipo automáticamente según parámetros disponibles
+    if (-not $transferConfig -and ($Origen -or $Destino -or $OnedriveOrigen -or $OnedriveDestino -or $DropboxOrigen -or $DropboxDestino)) {
+        $transferConfig = [TransferConfig](New-TransferConfig)
+        
+        # ===== DETECTAR Y CONFIGURAR ORIGEN =====
+        if ($Origen) {
+            # Detectar tipo de origen según formato del path
+            if ($Origen -match '^ftp(s)?://') {
+                # Es FTP - parsear URL
+                if ($Origen -match '^(ftp(s)?)://([^:/]+):?(\d+)?(/.*)?$') {
+                    $ftpScheme = $matches[1]
+                    $ftpServer = $matches[3]
+                    $ftpPort = if ($matches[4]) { [int]$matches[4] } else { 21 }
+                    $ftpDirectory = if ($matches[5]) { $matches[5] } else { "/" }
+                    
+                    # Extraer credenciales si existen
+                    $ftpUser = if ($SourceCredentials) { $SourceCredentials.UserName } else { "" }
+                    $ftpPass = if ($SourceCredentials) { $SourceCredentials.GetNetworkCredential().Password } else { "" }
+                    
+                    Set-TransferConfigOrigen -Config $transferConfig -Tipo "FTP" -Parametros @{
+                        Server    = $ftpServer
+                        Port      = $ftpPort
+                        User      = $ftpUser
+                        Password  = $ftpPass
+                        UseSsl    = ($ftpScheme -eq "ftps")
+                        Directory = $ftpDirectory
+                    }
+                }
+            }
+            elseif ($Origen -match '^\\\\') {
+                # Es UNC - ruta de red
+                Set-TransferConfigOrigen -Config $transferConfig -Tipo "UNC" -Parametros @{
+                    Path        = $Origen
+                    Credentials = $SourceCredentials
+                }
+            }
+            elseif ($OnedriveOrigen) {
+                # OneDrive especificado por parámetro
+                Set-TransferConfigOrigen -Config $transferConfig -Tipo "OneDrive" -Parametros @{
+                    Path = $Origen
+                }
+            }
+            elseif ($DropboxOrigen) {
+                # Dropbox especificado por parámetro
+                Set-TransferConfigOrigen -Config $transferConfig -Tipo "Dropbox" -Parametros @{
+                    Path = $Origen
+                }
+            }
+            else {
+                # Es Local por defecto
+                Set-TransferConfigOrigen -Config $transferConfig -Tipo "Local" -Parametros @{ 
+                    Path = $Origen 
+                }
+            }
         }
-        if ($menuConfig.ContainsKey('UncDestinationCredentials')) {
-            $script:UncDestinationCredentials = $menuConfig.UncDestinationCredentials
+        
+        # ===== DETECTAR Y CONFIGURAR DESTINO =====
+        if ($Destino) {
+            # Detectar tipo de destino según formato y parámetros
+            if ($Iso) {
+                # ISO especificado explícitamente
+                Set-TransferConfigDestino -Config $transferConfig -Tipo "ISO" -Parametros @{ 
+                    OutputPath = $Destino
+                    Size       = $IsoDestino
+                }
+            }
+            elseif ($Destino -match '^ftp(s)?://') {
+                # Es FTP - parsear URL
+                if ($Destino -match '^(ftp(s)?)://([^:/]+):?(\d+)?(/.*)?$') {
+                    $ftpScheme = $matches[1]
+                    $ftpServer = $matches[3]
+                    $ftpPort = if ($matches[4]) { [int]$matches[4] } else { 21 }
+                    $ftpDirectory = if ($matches[5]) { $matches[5] } else { "/" }
+                    
+                    # Extraer credenciales si existen
+                    $ftpUser = if ($DestinationCredentials) { $DestinationCredentials.UserName } else { "" }
+                    $ftpPass = if ($DestinationCredentials) { $DestinationCredentials.GetNetworkCredential().Password } else { "" }
+                    
+                    Set-TransferConfigDestino -Config $transferConfig -Tipo "FTP" -Parametros @{
+                        Server    = $ftpServer
+                        Port      = $ftpPort
+                        User      = $ftpUser
+                        Password  = $ftpPass
+                        UseSsl    = ($ftpScheme -eq "ftps")
+                        Directory = $ftpDirectory
+                    }
+                }
+            }
+            elseif ($Destino -match '^\\\\') {
+                # Es UNC - ruta de red
+                Set-TransferConfigDestino -Config $transferConfig -Tipo "UNC" -Parametros @{
+                    Path        = $Destino
+                    Credentials = $DestinationCredentials
+                }
+            }
+            elseif ($OnedriveDestino) {
+                # OneDrive especificado por parámetro
+                Set-TransferConfigDestino -Config $transferConfig -Tipo "OneDrive" -Parametros @{
+                    Path = $Destino
+                }
+            }
+            elseif ($DropboxDestino) {
+                # Dropbox especificado por parámetro
+                Set-TransferConfigDestino -Config $transferConfig -Tipo "Dropbox" -Parametros @{
+                    Path = $Destino
+                }
+            }
+            elseif ($Destino -ieq "FLOPPY") {
+                # Diskette especificado
+                Set-TransferConfigDestino -Config $transferConfig -Tipo "Diskette" -Parametros @{
+                    OutputPath = $env:TEMP
+                    MaxDisks   = 30
+                }
+            }
+            else {
+                # Es Local por defecto
+                Set-TransferConfigDestino -Config $transferConfig -Tipo "Local" -Parametros @{ 
+                    Path = $Destino 
+                }
+            }
         }
+        
+        # Configurar opciones generales
+        $transferConfig.Opciones.BlockSizeMB = $BlockSizeMB
+        $transferConfig.Opciones.Clave = $Clave
+        $transferConfig.Opciones.UseNativeZip = $UseNativeZip
+        $transferConfig.Opciones.RobocopyMirror = $RobocopyMirror
     }
 
     # ========================================================================== #
     #                     MODO NORMAL - EJECUCIÓN PRINCIPAL                      #
     # ========================================================================== #
 
-    # Invocar modo normal con toda la lógica de transferencia
-    Invoke-NormalMode -Origen $Origen -Destino $Destino -BlockSizeMB $BlockSizeMB `
-        -Clave $Clave -UseNativeZip:$UseNativeZip -Iso:$Iso -IsoDestino $IsoDestino `
-        -MenuConfig $menuConfig -SourceCredentials $SourceCredentials `
-        -DestinationCredentials $DestinationCredentials `
-        -OnedriveOrigen:$OnedriveOrigen -OnedriveDestino:$OnedriveDestino `
-        -DropboxOrigen:$DropboxOrigen -DropboxDestino:$DropboxDestino `
-        -RobocopyMirror:$RobocopyMirror
+    # Invocar modo normal con TransferConfig unificado
+    if ($transferConfig) {
+        Invoke-NormalMode -TransferConfig $transferConfig
+    }
 
     # ========================================================================== #
     #                         FINALIZACIÓN Y LIMPIEZA                            #
@@ -457,16 +597,30 @@ $($_ | Out-String)
     
     Add-Content -Path $Global:LogFile -Value $errorLog -Encoding UTF8
     
-    # Mostrar error en consola
-    Write-Host "`n❌ ERROR CRÍTICO:" -ForegroundColor Red
-    Write-Host $_.Exception.Message -ForegroundColor Yellow
-    Write-Host "`nDetalles guardados en: $Global:LogFile" -ForegroundColor Gray
+    # Mostrar error en consola con formato visible
+    Write-Host "`n" -ForegroundColor Red
+    Write-Host "╔══════════════════════════════════════╗" -ForegroundColor Red
+    Write-Host "║    ❌ ERROR CRÍTICO NO MANEJADO      ║" -ForegroundColor Red
+    Write-Host "╚══════════════════════════════════════╝" -ForegroundColor Red
+    Write-Host ""
+    Write-Host "Mensaje: " -NoNewline -ForegroundColor Yellow
+    Write-Host $_.Exception.Message -ForegroundColor White
+    Write-Host ""
+    Write-Host "Línea: " -NoNewline -ForegroundColor Yellow
+    Write-Host $_.InvocationInfo.ScriptLineNumber -ForegroundColor White
+    Write-Host ""
+    Write-Host "Comando: " -NoNewline -ForegroundColor Yellow
+    Write-Host $_.InvocationInfo.Line -ForegroundColor Gray
+    Write-Host ""
+    Write-Host "Detalles completos guardados en:" -ForegroundColor Cyan
+    Write-Host "  $Global:LogFile" -ForegroundColor Gray
+    Write-Host ""
     
     # Detener transcript si está activo
     try { Stop-Transcript | Out-Null } catch { }
     
-    # Re-lanzar el error para que el usuario lo vea
-    throw
+    # Pausar para que el usuario vea el error
+    Read-Host "Presione ENTER para salir"
 }
 finally {
     # Siempre ejecutar limpieza

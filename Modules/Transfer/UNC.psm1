@@ -481,7 +481,7 @@ function Get-NetworkShares {
                     IsDriveSelector = $false
                     IsNetworkShare  = $true
                     Size            = "<RED>"
-                    Icon            = "ğŸŒ"
+                    Icon            = "ğŸŒ"
                 }
             }
         }

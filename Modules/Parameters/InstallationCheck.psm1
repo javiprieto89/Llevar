@@ -30,8 +30,11 @@ function Invoke-InstallationCheck {
     .PARAMETER ScriptPath
         Ruta completa del script principal.
     
+    .PARAMETER LogoWasShown
+        Indica si ya se mostró el logo ASCII (para no borrar la pantalla innecesariamente).
+    
     .EXAMPLE
-        Invoke-InstallationCheck -Ejemplo:$Ejemplo -Ayuda:$Ayuda -IsAdmin $isAdmin -IsInIDE $isInIDE -ScriptPath $MyInvocation.MyCommand.Path
+        Invoke-InstallationCheck -Ejemplo:$Ejemplo -Ayuda:$Ayuda -IsAdmin $isAdmin -IsInIDE $isInIDE -ScriptPath $MyInvocation.MyCommand.Path -LogoWasShown $script:LogoWasShown
     #>
     [CmdletBinding()]
     param(
@@ -48,7 +51,10 @@ function Invoke-InstallationCheck {
         [bool]$IsInIDE,
         
         [Parameter(Mandatory = $true)]
-        [string]$ScriptPath
+        [string]$ScriptPath,
+        
+        [Parameter(Mandatory = $false)]
+        [bool]$LogoWasShown = $false
     )
     
     # Verificar si NO está ejecutándose desde C:\Llevar (excepto si es -Ejemplo o -Ayuda)
@@ -59,7 +65,7 @@ function Invoke-InstallationCheck {
             $wantsInstall = Show-InstallationPrompt
             
             if ($wantsInstall) {
-                # Usuario dijo SÍ - proceder con instalación
+                # Usuario dijo S� - proceder con instalación
                 
                 if ($IsInIDE) {
                     Write-Host "`n[DEBUG/IDE] Omitiendo verificación de permisos de administrador" -ForegroundColor Cyan

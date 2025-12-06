@@ -1,5 +1,5 @@
 # ========================================================================== #
-#                   MÓDULO: CREACIÓN DE IMÁGENES ISO                         #
+#                   MÓDULO: CREACIÓN DE IM�GENES ISO                         #
 # ========================================================================== #
 # Propósito: Crear imágenes ISO para distribución en CD/DVD/USB
 # Funciones:
@@ -204,7 +204,9 @@ function New-LlevarIsoMain {
         
         [int]$BlockSizeMB,
         
-        [string]$Clave
+        [string]$Clave,
+        
+        [string]$IsoDestino = 'dvd'
     )
 
     # Determinar capacidad del medio

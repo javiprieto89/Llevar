@@ -3,6 +3,13 @@
 # Descripción: Funciones para localizar y usar 7-Zip para compresión/descompresión
 # ============================================================================ #
 
+# Asegurar dependencias UI (barra de progreso)
+$modulesRoot = Split-Path $PSScriptRoot -Parent
+$progressModule = Join-Path $modulesRoot "UI\ProgressBar.psm1"
+if (-not (Get-Command Write-LlevarProgressBar -ErrorAction SilentlyContinue)) {
+    Import-Module $progressModule -Force -Global -ErrorAction SilentlyContinue
+}
+
 function Get-SevenZipLlevar {
     <#
     .SYNOPSIS

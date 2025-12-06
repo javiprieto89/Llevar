@@ -71,7 +71,7 @@ function Test-PathWritable {
 }
 
 # ========================================================================== #
-#                       FUNCIONES DE AN√ÅLISIS DE ARCHIVOS                    #
+#                       FUNCIONES DE AN√LISIS DE ARCHIVOS                    #
 # ========================================================================== #
 
 function Format-FileSize {
@@ -241,7 +241,7 @@ function Get-DirectoryItems {
                 IsParent        = $false
                 IsDriveSelector = $false
                 Size            = $sizeDisplay
-                Icon            = "üìÅ"
+                Icon            = "üì"
                 CalculatedSize  = ($SizeCache.ContainsKey($dir.FullName))
             }
         }

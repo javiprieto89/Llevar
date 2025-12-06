@@ -85,8 +85,8 @@ function Show-Banner {
         $bannerWidth = $maxLength + ($Padding * 2)
         
         # Crear líneas de borde con caracteres box-drawing UTF-8
-        $topBorder = "╔" + ("═" * $bannerWidth) + "╗"
-        $bottomBorder = "╚" + ("═" * $bannerWidth) + "╝"
+        $topBorder = "╔" + ("�" * $bannerWidth) + "╗"
+        $bottomBorder = "╚" + ("�" * $bannerWidth) + "�"
         
         # Si se especificó posición, mover el cursor
         if ($X -ge 0 -and $Y -ge 0) {
@@ -442,7 +442,7 @@ function Show-AsciiLogo {
         } 
         catch { continue }
 
-        # === ESCRIBIR LÍNEA ===
+        # === ESCRIBIR L�NEA ===
         Write-Host $line -ForegroundColor $ForegroundColor -BackgroundColor $BackgroundColor -NoNewline
         
         # === REPRODUCIR SONIDO ESTILO DOS ===

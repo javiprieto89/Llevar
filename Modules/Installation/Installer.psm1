@@ -59,7 +59,7 @@ function Write-ErrorLog {
 }
 
 # ========================================================================== #
-#                           EXPLORADOR DOS CL√ÅSICO                           #
+#                           EXPLORADOR DOS CL√SICO                           #
 # ========================================================================== #
 
 function Select-FolderDOS {

@@ -60,9 +60,9 @@ function Invoke-TestParameter {
     
     # Mostrar header de pruebas (sin logo ASCII)
     Write-Host ""
-    Write-Host "═══════════════════════════════════════════════════════════════" -ForegroundColor Cyan
+    Write-Host "���������������������������������������������������������������" -ForegroundColor Cyan
     Write-Host "                    MODO PRUEBAS - LLEVAR" -ForegroundColor Yellow
-    Write-Host "═══════════════════════════════════════════════════════════════" -ForegroundColor Cyan
+    Write-Host "���������������������������������������������������������������" -ForegroundColor Cyan
     Write-Host ""
     Write-Host "  Probando: " -NoNewline -ForegroundColor Gray
     Write-Host $Test -ForegroundColor White
@@ -222,16 +222,20 @@ function Test-FTPComponent {
     Write-Host "Probando conexión..." -ForegroundColor Yellow
     Write-Host ""
     
-    # Crear objeto de credenciales
-    $credentials = [PSCredential]::new($ftpUser, $ftpPassSecure)
-    
-    # Intentar conectar y listar directorio
+        
+    # Prueba completa: conectar, listar, subir, descargar
     try {
         $ftpUri = "ftp://${ftpHost}:${ftpPort}${ftpPath}"
         
-        Write-Host "  → Conectando a: $ftpUri" -ForegroundColor Gray
+        Write-Host "`n╔��������������������������������������╗" -ForegroundColor Cyan
+        Write-Host "║  PRUEBA DE CONEXIÓN Y OPERACIONES   ║" -ForegroundColor Cyan
+        Write-Host "╚���������������������������������������" -ForegroundColor Cyan
+        Write-Host ""
         
-        # Crear solicitud FTP para listar directorio
+        # 1. CONECTAR Y LISTAR
+        Write-Host "[1/3] Conectando y listando directorio..." -ForegroundColor Yellow
+        Write-Host "  → Servidor: ftp://${ftpHost}:${ftpPort}${ftpPath}" -ForegroundColor Gray
+        
         $request = [System.Net.FtpWebRequest]::Create($ftpUri)
         $request.Method = [System.Net.WebRequestMethods+Ftp]::ListDirectory
         $request.Credentials = New-Object System.Net.NetworkCredential($ftpUser, $ftpPass)
@@ -248,32 +252,117 @@ function Test-FTPComponent {
         $stream.Close()
         $response.Close()
         
-        # Éxito
-        Show-Banner "CONEXION FTP EXITOSA" -BorderColor Green -TextColor White
-        Write-Host ""
-        Write-Host "  [OK] Servidor: " -NoNewline -ForegroundColor Gray
-        Write-Host $ftpHost -ForegroundColor White
-        Write-Host "  [OK] Puerto: " -NoNewline -ForegroundColor Gray
-        Write-Host $ftpPort -ForegroundColor White
-        Write-Host "  [OK] Usuario: " -NoNewline -ForegroundColor Gray
-        Write-Host $ftpUser -ForegroundColor White
-        Write-Host "  [OK] Ruta: " -NoNewline -ForegroundColor Gray
-        Write-Host $ftpPath -ForegroundColor White
-        Write-Host ""
+        Write-Host "✓ Conexión exitosa" -ForegroundColor Green
         
         if ($content) {
             $files = $content -split "`n" | Where-Object { $_ }
-            Write-Host "  Archivos encontrados: " -NoNewline -ForegroundColor Gray
-            Write-Host $files.Count -ForegroundColor Cyan
+            Write-Host "✓ Archivos encontrados: $($files.Count)" -ForegroundColor Green
             
-            if ($files.Count -gt 0 -and $files.Count -le 10) {
-                Write-Host ""
-                Write-Host "  Contenido del directorio:" -ForegroundColor Gray
-                foreach ($file in $files) {
-                    Write-Host "    • $file" -ForegroundColor DarkGray
+            if ($files.Count -gt 0) {
+                foreach ($file in $files | Select-Object -First 10) {
+                    Write-Host "  📄 $file" -ForegroundColor Gray
+                }
+                if ($files.Count -gt 10) {
+                    Write-Host "  ... y $($files.Count - 10) más" -ForegroundColor DarkGray
                 }
             }
         }
+        
+        # 2. CREAR Y SUBIR ARCHIVO
+        Write-Host "`n[2/3] Creando y subiendo archivo de prueba..." -ForegroundColor Yellow
+        
+        $testFileName = "LLEVAR_Test_$(Get-Date -Format 'yyyyMMdd_HHmmss').txt"
+        $tempFile = Join-Path $env:TEMP $testFileName
+        $testContent = @"
+╔����������������������������������������╗
+║     ARCHIVO DE PRUEBA - LLEVAR         ║
+╚�����������������������������������������
+
+Fecha: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
+Usuario: $ftpUser@$ftpHost
+Sistema: $env:COMPUTERNAME
+
+Este archivo fue creado automáticamente
+para probar la conexión FTP.
+
+✓ Subida exitosa
+"@
+        
+        [System.IO.File]::WriteAllText($tempFile, $testContent, [System.Text.Encoding]::UTF8)
+        Write-Host "  Archivo temporal creado: $testFileName" -ForegroundColor Gray
+        
+        # Subir archivo
+        $uploadUri = $ftpUri.TrimEnd('/') + "/$testFileName"
+        $uploadRequest = [System.Net.FtpWebRequest]::Create($uploadUri)
+        $uploadRequest.Method = [System.Net.WebRequestMethods+Ftp]::UploadFile
+        $uploadRequest.Credentials = New-Object System.Net.NetworkCredential($ftpUser, $ftpPass)
+        $uploadRequest.UsePassive = $true
+        $uploadRequest.UseBinary = $true
+        $uploadRequest.KeepAlive = $false
+        
+        $fileContent = [System.IO.File]::ReadAllBytes($tempFile)
+        $uploadRequest.ContentLength = $fileContent.Length
+        
+        $uploadStream = $uploadRequest.GetRequestStream()
+        $uploadStream.Write($fileContent, 0, $fileContent.Length)
+        $uploadStream.Close()
+        
+        $uploadResponse = $uploadRequest.GetResponse()
+        $uploadResponse.Close()
+        
+        Write-Host "✓ Archivo subido al FTP: $testFileName" -ForegroundColor Green
+        
+        # 3. DESCARGAR ARCHIVO
+        Write-Host "`n[3/3] Descargando archivo desde FTP..." -ForegroundColor Yellow
+        
+        $downloadPath = "C:\Temp"
+        if (-not (Test-Path $downloadPath)) {
+            New-Item -ItemType Directory -Path $downloadPath -Force | Out-Null
+        }
+        
+        $downloadFile = Join-Path $downloadPath $testFileName
+        
+        $downloadRequest = [System.Net.FtpWebRequest]::Create($uploadUri)
+        $downloadRequest.Method = [System.Net.WebRequestMethods+Ftp]::DownloadFile
+        $downloadRequest.Credentials = New-Object System.Net.NetworkCredential($ftpUser, $ftpPass)
+        $downloadRequest.UsePassive = $true
+        $downloadRequest.UseBinary = $true
+        $downloadRequest.KeepAlive = $false
+        
+        $downloadResponse = $downloadRequest.GetResponse()
+        $downloadStream = $downloadResponse.GetResponseStream()
+        $fileStream = [System.IO.File]::Create($downloadFile)
+        
+        $buffer = New-Object byte[] 1024
+        $bytesRead = 0
+        do {
+            $bytesRead = $downloadStream.Read($buffer, 0, $buffer.Length)
+            $fileStream.Write($buffer, 0, $bytesRead)
+        } while ($bytesRead -gt 0)
+        
+        $fileStream.Close()
+        $downloadStream.Close()
+        $downloadResponse.Close()
+        
+        if (Test-Path $downloadFile) {
+            Write-Host "✓ Archivo descargado correctamente" -ForegroundColor Green
+            Write-Host "  Ubicación: $downloadFile" -ForegroundColor Gray
+            
+            # Mostrar contenido
+            Write-Host "  Contenido del archivo descargado:" -ForegroundColor Cyan
+            Get-Content $downloadFile | ForEach-Object {
+                Write-Host "  $_" -ForegroundColor White
+            }
+        }
+        
+        # Limpiar archivo temporal
+        if (Test-Path $tempFile) {
+            Remove-Item $tempFile -Force
+        }
+        
+        Write-Host ""
+        Write-Host "📌 Archivo de prueba en FTP: $testFileName" -ForegroundColor Cyan
+        Write-Host "📂 Archivo descargado localmente: $downloadFile" -ForegroundColor Cyan
         
         Write-Host ""
         Show-Banner "PRUEBA COMPLETADA" -BorderColor Green -TextColor White
@@ -756,12 +845,12 @@ function Test-USBComponent {
                 $usedGB = $sizeGB - $freeGB
                 $percentUsed = if ($sizeGB -gt 0) { [math]::Round(($usedGB / $sizeGB) * 100, 1) } else { 0 }
                 
-                Write-Host "  ╔════════════════════════════════════════════════════╗" -ForegroundColor DarkCyan
+                Write-Host "  ╔����������������������������������������������������╗" -ForegroundColor DarkCyan
                 Write-Host "  ║ " -NoNewline -ForegroundColor DarkCyan
                 Write-Host "USB: $drive" -NoNewline -ForegroundColor White
                 Write-Host (" " * (47 - $drive.Length)) -NoNewline
                 Write-Host "║" -ForegroundColor DarkCyan
-                Write-Host "  ╠════════════════════════════════════════════════════╣" -ForegroundColor DarkCyan
+                Write-Host "  ╠����������������������������������������������������╣" -ForegroundColor DarkCyan
                 
                 Write-Host "  ║ " -NoNewline -ForegroundColor DarkCyan
                 Write-Host "Etiqueta: " -NoNewline -ForegroundColor Gray
@@ -794,7 +883,7 @@ function Test-USBComponent {
                 Write-Host (" " * (39 - $usb.FileSystem.Length)) -NoNewline
                 Write-Host "║" -ForegroundColor DarkCyan
                 
-                Write-Host "  ╚════════════════════════════════════════════════════╝" -ForegroundColor DarkCyan
+                Write-Host "  ╚�����������������������������������������������������" -ForegroundColor DarkCyan
                 Write-Host ""
             }
             

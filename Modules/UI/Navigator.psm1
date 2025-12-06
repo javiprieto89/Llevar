@@ -84,7 +84,7 @@ function Select-PathNavigator {
         
         # Evitar parpadeo usando SetCursorPosition en lugar de Clear-Host
         try {
-            [Console]::SetCursorPosition(0, 0)
+            if (System.Management.Automation.Internal.Host.InternalHost.Name -and (System.Management.Automation.Internal.Host.InternalHost.Name -ilike '*consolehost*' -or System.Management.Automation.Internal.Host.InternalHost.Name -ilike '*visual studio code host*')) { try { [Console]::SetCursorPosition(0, 0) } catch { Clear-Host } } else { Clear-Host }
         }
         catch {
             Clear-Host
@@ -440,7 +440,7 @@ function Select-PathNavigator {
                         else {
                             # Redibujar la interfaz con spinner (sin parpadeo)
                             try {
-                                [Console]::SetCursorPosition(0, 0)
+                                if (System.Management.Automation.Internal.Host.InternalHost.Name -and (System.Management.Automation.Internal.Host.InternalHost.Name -ilike '*consolehost*' -or System.Management.Automation.Internal.Host.InternalHost.Name -ilike '*visual studio code host*')) { try { [Console]::SetCursorPosition(0, 0) } catch { Clear-Host } } else { Clear-Host }
                             }
                             catch {
                                 Clear-Host
@@ -792,3 +792,8 @@ function Select-PathNavigator {
 Export-ModuleMember -Function @(
     'Select-PathNavigator'
 )
+
+
+
+
+

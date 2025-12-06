@@ -136,22 +136,24 @@ function Show-MainMenu {
                 # Validar configuración completa antes de ejecutar
                 $errores = @()
                 
-                if ($config.RobocopyMirror) {
-                    if (-not $config.Origen.Path -and -not $config.Origen.FtpServer -and -not $config.Origen.UncPath) { 
-                        $errores += "• Origen no configurado" 
-                    }
-                    if (-not $config.Destino.Path -and -not $config.Destino.FtpServer -and -not $config.Destino.UncPath) { 
-                        $errores += "• Destino no configurado" 
+                # Validación específica por tipo para evitar falsos negativos (FTP/UNC vs Local)
+                $validateEndpoint = {
+                    param($endpoint, $label)
+                    switch ($endpoint.Tipo) {
+                        'FTP' {
+                            if (-not $endpoint.FtpServer) { $errores += "• $label FTP sin servidor configurado" }
+                        }
+                        'UNC' {
+                            if (-not $endpoint.UncPath) { $errores += "• $label UNC sin ruta configurada" }
+                        }
+                        default {
+                            if (-not $endpoint.Path) { $errores += "• $label no configurado" }
+                        }
                     }
                 }
-                else {
-                    if (-not $config.Origen.Path -and -not $config.Origen.FtpServer -and -not $config.Origen.UncPath) { 
-                        $errores += "• Origen no configurado" 
-                    }
-                    if (-not $config.Destino.Path -and -not $config.Destino.FtpServer -and -not $config.Destino.UncPath) { 
-                        $errores += "• Destino no configurado" 
-                    }
-                }
+
+                & $validateEndpoint $config.Origen  "Origen"
+                & $validateEndpoint $config.Destino "Destino"
                 
                 if ($errores.Count -gt 0) {
                     $mensaje = "Faltan parámetros requeridos:`n`n" + ($errores -join "`n")

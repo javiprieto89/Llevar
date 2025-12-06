@@ -118,6 +118,33 @@ function Get-OneDriveAuth {
     }
 }
 
+function Close-BrowserWindow {
+    param([int]$BrowserPID)
+    
+    try {
+        $proc = Get-Process -Id $BrowserPID -ErrorAction SilentlyContinue
+        
+        if ($proc) {
+            # Intentar cerrar la ventana principal
+            $proc.CloseMainWindow() | Out-Null
+            
+            # Esperar a que cierre
+            $proc | Wait-Process -Timeout 3 -ErrorAction SilentlyContinue
+            
+            # Si sigue abierto, forzar cierre
+            if (-not $proc.HasExited) {
+                Stop-Process -Id $BrowserPID -Force -ErrorAction SilentlyContinue
+            }
+            
+            Write-Host "‚úì Navegador cerrado" -ForegroundColor Green
+            return $true
+        }
+    }
+    catch {}
+    
+    return $false
+}
+
 function Start-Browser {
     param(
         [string]$Url,
@@ -129,53 +156,109 @@ function Start-Browser {
     $edge = "$env:ProgramFiles(x86)\Microsoft\Edge\Application\msedge.exe"
     $firefox = "$env:ProgramFiles\Mozilla Firefox\firefox.exe"
 
-    if (-not $Incognito) {
-        Start-Process $Url
-        return
+    # Crear perfil temporal √∫nico para forzar nueva instancia
+    $tempProfile = Join-Path $env:TEMP "LlevarOAuth_$(Get-Random)"
+    
+    # Helper para Chromium (Chrome/Edge) con perfil temporal
+    function New-ChromiumArgs {
+        param(
+            [string]$Url,
+            [string]$TempProfile,
+            [switch]$Incognito
+        )
+
+        $browserArgs = @(
+            "--user-data-dir=`"$TempProfile`""
+            "--no-first-run"
+            "--no-default-browser-check"
+            "--new-window"
+        )
+
+        if ($Incognito) {
+            $browserArgs += "--incognito"
+        }
+
+        $browserArgs += "`"$Url`""
+
+        return $browserArgs
     }
 
+    # Chrome 64-bit
     if (Test-Path $chrome) {
-        Start-Process $chrome --incognito $Url
-        return
+        $browserArgs = New-ChromiumArgs -Url $Url -TempProfile $tempProfile -Incognito:$Incognito
+        return Start-Process $chrome -ArgumentList $browserArgs -PassThru
     }
+    # Chrome 32-bit
     elseif (Test-Path $chromeX86) {
-        Start-Process $chromeX86 --incognito $Url
-        return
+        $browserArgs = New-ChromiumArgs -Url $Url -TempProfile $tempProfile -Incognito:$Incognito
+        return Start-Process $chromeX86 -ArgumentList $browserArgs -PassThru
     }
+    # Edge (Chromium)
     elseif (Test-Path $edge) {
-        Start-Process $edge -inprivate $Url
-        return
+        $browserArgs = @(
+            "--user-data-dir=`"$tempProfile`""
+            "--no-first-run"
+            "--no-default-browser-check"
+            "--new-window"
+        )
+        if ($Incognito) {
+            $browserArgs += "-inprivate"
+        }
+        $browserArgs += "`"$Url`""
+        return Start-Process $edge -ArgumentList $browserArgs -PassThru
     }
+    # Firefox
     elseif (Test-Path $firefox) {
-        Start-Process $firefox -private-window $Url
-        return
+        $browserArgs = @()
+        if ($Incognito) {
+            $browserArgs += "-private-window"
+        }
+        else {
+            $browserArgs += "-new-window"
+        }
+        $browserArgs += "`"$Url`""
+        return Start-Process $firefox -ArgumentList $browserArgs -PassThru
     }
 
-    Start-Process $Url
+    # √öltimo recurso ‚Üí navegador predeterminado
+    return Start-Process $Url -PassThru
 }
 
 function Get-BrowserOAuthCode {
     param(
-        [string]$ExpectedPrefix = "https://login.microsoftonline.com/common/oauth2/nativeclient"
+        [string]$ExpectedPrefix = "https://login.microsoftonline.com/common/oauth2/nativeclient",
+        [int]$BrowserPID
     )
 
     Add-Type -AssemblyName UIAutomationClient
-
     Write-Host "Esperando redirecci√≥n del navegador..." -ForegroundColor Cyan
-    
-    $timeout = (Get-Date).AddMinutes(2)
+    Write-Host "  PID buscado: $BrowserPID" -ForegroundColor Gray
+
+    $timeout = (Get-Date).AddMinutes(2)    
+    $checkCount = 0
 
     while ((Get-Date) -lt $timeout) {
-        Start-Sleep -Milliseconds 300
+        Start-Sleep -Milliseconds 500
+        $checkCount++
 
-        $procs = Get-Process | Where-Object { $_.Name -in "msedge", "chrome", "firefox" }
+        # Buscar todas las ventanas de Chrome/Edge (pueden ser m√∫ltiples procesos)
+        $browsers = Get-Process | Where-Object { 
+            $_.ProcessName -match 'chrome|msedge' -and $_.MainWindowHandle -ne 0 
+        }
 
-        foreach ($p in $procs) {
+        foreach ($browser in $browsers) {
             try {
-                $ae = [System.Windows.Automation.AutomationElement]::FromHandle($p.MainWindowHandle)
+                $ae = [System.Windows.Automation.AutomationElement]::FromHandle($browser.MainWindowHandle)
                 if (-not $ae) { continue }
 
-                # Buscar barra de direcciones (Edit controls)
+                $windowTitle = $ae.Current.Name
+                
+                # Debug cada 10 iteraciones
+                if ($checkCount % 10 -eq 0) {
+                    Write-Host "  Escaneando ventana PID=$($browser.Id): $windowTitle" -ForegroundColor DarkGray
+                }
+
+                # Buscar controles Edit (barra de direcciones)
                 $cond = New-Object System.Windows.Automation.PropertyCondition(
                     [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
                     [System.Windows.Automation.ControlType]::Edit
@@ -188,22 +271,23 @@ function Get-BrowserOAuthCode {
                         $vp = $edit.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern)
                         $url = $vp.Current.Value
 
-                        # Buscar "code=" en la URL sin importar el prefijo exacto
-                        if ($url -and $url -match "code=([^&\s]+)") {
+                        # Buscar "code=" en cualquier parte del texto
+                        if ($url -and $url -match "code=([^&\s`"']+)") {
                             $code = $matches[1]
-                            Write-Host "`n‚úì C√≥digo capturado autom√°ticamente!" -ForegroundColor Green
+                            Write-Host "`n‚úì C√≥digo encontrado en PID $($browser.Id)" -ForegroundColor Green
+                            Write-Host "  Ventana: $windowTitle" -ForegroundColor Gray
+                            Write-Host "  C√≥digo: $code" -ForegroundColor Green
                             
-                            # Cerrar la pesta√±a/ventana del navegador
+                            # Cerrar esta ventana espec√≠fica
                             try {
-                                $window.Quit()
-                            }
-                            catch {
-                                # Si no se puede cerrar, intentar navegar a blank
-                                try {
-                                    $window.Navigate("about:blank")
+                                $browser.CloseMainWindow() | Out-Null
+                                Start-Sleep -Milliseconds 500
+                                if (-not $browser.HasExited) {
+                                    Stop-Process -Id $browser.Id -Force -ErrorAction SilentlyContinue
                                 }
-                                catch {}
+                                Write-Host "‚úì Navegador cerrado" -ForegroundColor Green
                             }
+                            catch {}
                             
                             return $code
                         }
@@ -215,10 +299,9 @@ function Get-BrowserOAuthCode {
         }
     }
 
-    Write-Host "‚úó No se pudo capturar autom√°ticamente el c√≥digo." -ForegroundColor Red
+    Write-Host "`n‚úó No se pudo capturar el c√≥digo (timeout despu√©s de $checkCount intentos)" -ForegroundColor Red
     return $null
 }
-
 
 function Get-OneDriveDeviceToken {
     <#
@@ -236,13 +319,13 @@ function Get-OneDriveDeviceToken {
     
     try {
         Write-Host ""
-        Write-Host "‚ïî‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïó" -ForegroundColor Cyan
+        Write-Host "‚ïî‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ïó" -ForegroundColor Cyan
         Write-Host "‚ïë        AUTENTICACI√ìN INTERACTIVA MICROSOFT ONEDRIVE            ‚ïë" -ForegroundColor Cyan
-        Write-Host "‚ï†‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ï£" -ForegroundColor Cyan
+        Write-Host "‚ï†‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï£" -ForegroundColor Cyan
         Write-Host "‚ïë  1. Se abrir√° el navegador para iniciar sesi√≥n                 ‚ïë" -ForegroundColor White
         Write-Host "‚ïë  2. Autoriza el acceso a OneDrive                              ‚ïë" -ForegroundColor White
         Write-Host "‚ïë  3. El c√≥digo se capturar√° autom√°ticamente                     ‚ïë" -ForegroundColor White
-        Write-Host "‚ïö‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïù" -ForegroundColor Cyan
+        Write-Host "‚ïö‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï" -ForegroundColor Cyan
         Write-Host ""
         
         $authUrl = "https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize"
@@ -260,14 +343,28 @@ function Get-OneDriveDeviceToken {
         $authUri = "$authUrl`?$queryString"
         
         Write-Host "Abriendo navegador para autenticaci√≥n..." -ForegroundColor Yellow
-        Start-Browser -Url $authUri
+        Write-Host "  (Usando perfil temporal para nueva instancia)" -ForegroundColor Gray
         
-        $code = Get-BrowserOAuthCode -ExpectedPrefix $redirectUri
+        $browserProc = Start-Browser -Url $authUri
         
+        if ($browserProc -and $browserProc.Id) {
+            $browserPID = $browserProc.Id
+            Write-Host "‚úì Navegador iniciado (PID: $browserPID)" -ForegroundColor Green
+            Start-Sleep -Seconds 3  # Dar tiempo a que cargue la ventana
+            
+            # Capturar c√≥digo (ahora busca en TODAS las ventanas de Chrome/Edge)
+            $code = Get-BrowserOAuthCode -BrowserPID $browserPID
+        }
+        else {
+            Write-Host "‚ö† No se pudo obtener el PID del navegador" -ForegroundColor Yellow
+            $code = $null
+        }
+        
+        # Si no se captur√≥ autom√°ticamente, pedir manualmente
         if (-not $code) {
-            Write-Host "`nPega manualmente el c√≥digo de la URL:" -ForegroundColor Yellow
-            Write-Host "Busca en la barra de direcciones: code=MC543_Bl2.2U..." -ForegroundColor Gray
-            $code = Read-Host "C√≥digo"
+            Write-Host "`n‚ö† No se captur√≥ autom√°ticamente. Por favor copia el c√≥digo:" -ForegroundColor Yellow
+            Write-Host "Busca en la barra de direcciones del navegador: code=..." -ForegroundColor Gray
+            $code = Read-Host "Pega el c√≥digo aqu√≠"
             
             if (-not $code) {
                 Write-Host "`n‚úó No se ingres√≥ c√≥digo" -ForegroundColor Red
@@ -276,7 +373,7 @@ function Get-OneDriveDeviceToken {
             
             $code = $code -replace '^code=', '' -replace '\s', ''
         }
-        
+
         if ($code.Length -lt 10) {
             Write-Host "`n‚úó C√≥digo inv√°lido (muy corto)" -ForegroundColor Red
             return $null
@@ -431,9 +528,9 @@ function Test-OneDriveConnection {
     param([hashtable]$OneDriveConfig)
     
     try {
-        Write-Host "`n‚ïî‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïó" -ForegroundColor Cyan
+        Write-Host "`n‚ïî‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ïó" -ForegroundColor Cyan
         Write-Host "‚ïë  PRUEBA DE CONEXI√ìN Y OPERACIONES   ‚ïë" -ForegroundColor Cyan
-        Write-Host "‚ïö‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïù" -ForegroundColor Cyan
+        Write-Host "‚ïö‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï" -ForegroundColor Cyan
         Write-Host ""
         
         $token = $OneDriveConfig.Token
@@ -445,7 +542,7 @@ function Test-OneDriveConnection {
         if ($files) {
             Write-Host "‚úì Archivos encontrados: $($files.Count)" -ForegroundColor Green
             foreach ($file in $files | Select-Object -First 10) {
-                $icon = if ($file.folder) { "üìÅ" } else { "üìÑ" }
+                $icon = if ($file.folder) { "üì" } else { "üìÑ" }
                 $size = if ($file.size) { " ($([Math]::Round($file.size/1KB, 2)) KB)" } else { "" }
                 Write-Host "  $icon $($file.name)$size" -ForegroundColor Gray
             }
@@ -464,9 +561,9 @@ function Test-OneDriveConnection {
         $testFileName = "LLEVAR_Test_$(Get-Date -Format 'yyyyMMdd_HHmmss').txt"
         $tempFile = Join-Path $env:TEMP $testFileName
         $testContent = @"
-‚ïî‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïó
+‚ïî‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ïó
 ‚ïë     ARCHIVO DE PRUEBA - LLEVAR         ‚ïë
-‚ïö‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïù
+‚ïö‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï‚ï
 
 Fecha: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
 Usuario: $($OneDriveConfig.Email)
@@ -542,6 +639,7 @@ Export-ModuleMember -Function @(
     'Test-IsOneDrivePath',
     'Get-OneDriveAuth',
     'Start-Browser',
+    'Close-BrowserWindow',
     'Get-BrowserOAuthCode',
     'Get-OneDriveFiles',
     'Send-OneDriveFile',

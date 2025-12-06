@@ -1,0 +1,24 @@
+{
+  "Origen": {
+    "Server": "192.168.7.107",
+    "Port": 21,
+    "Directory": "/Test",
+    "User": "FTPUser",
+    "Password": "Estroncio24",
+    "UseSsl": false
+  },
+  "Destino": {
+    "Server": "192.168.136.128",
+    "Port": 21,
+    "Directory": "/",
+    "User": "javierp",
+    "Password": "mw7oi12z88",
+    "UseSsl": false
+  },
+  "Opciones": {
+    "BlockSizeMB": 10,
+    "UseNativeZip": false,
+    "RobocopyMirror": false,
+    "TransferMode": "Direct"
+  }
+}

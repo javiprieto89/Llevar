@@ -8,7 +8,7 @@ function Invoke-ExampleParameter {
     if (-not $Ejemplo) { return $false }
     
     try {
-        Show-Banner "MODO EJEMPLO AUTOM√ÅTICO" -BorderColor Magenta -TextColor Yellow
+        Show-Banner "MODO EJEMPLO AUTOM√TICO" -BorderColor Magenta -TextColor Yellow
         Write-Host "Tipo: $($TipoEjemplo.ToUpper())" -ForegroundColor Cyan
         Write-Host ""
         

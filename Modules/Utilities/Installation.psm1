@@ -14,16 +14,30 @@ function Test-LlevarInstallation {
     .DESCRIPTION
         Compara la ruta actual del script con C:\Llevar para determinar
         si está instalado en el sistema o ejecutándose desde otra ubicación.
+        También verifica si el script está en el PATH del sistema.
     .OUTPUTS
-        Boolean - $true si está en C:\Llevar, $false en caso contrario
+        Boolean - $true si está en C:\Llevar o en PATH, $false en caso contrario
     #>
     $currentPath = $PSCommandPath
+    if (-not $currentPath) {
+        $currentPath = $PSScriptRoot
+    }
+    
     $expectedPath = "C:\Llevar"
     
-    # Normalizar rutas para comparación
-    $currentDir = Split-Path $currentPath -Parent
+    # Normalizar rutas para comparación (sin distinguir mayúsculas/minúsculas)
+    $currentDir = (Split-Path $currentPath -Parent).ToLower().TrimEnd('\')
+    $expectedPathNormalized = $expectedPath.ToLower().TrimEnd('\')
     
-    return ($currentDir -eq $expectedPath)
+    # Verificar si está en C:\Llevar
+    $isInLlevarDir = ($currentDir -eq $expectedPathNormalized)
+    
+    # Verificar si C:\Llevar está en el PATH del sistema
+    $systemPath = [Environment]::GetEnvironmentVariable("Path", "Machine")
+    $isInSystemPath = $systemPath -and ($systemPath.ToLower() -split ';' | Where-Object { $_.TrimEnd('\') -eq $expectedPathNormalized })
+    
+    # Considerar instalado si está en C:\Llevar O si C:\Llevar está en el PATH
+    return ($isInLlevarDir -or $isInSystemPath)
 }
 
 function Show-InstallationPrompt {
