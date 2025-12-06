@@ -16,7 +16,7 @@ function Test-IsRunningInIDE {
     #>
     
     $hostName = $host.Name
-    
+
     # Detectar IDEs conocidos
     $ideHosts = @(
         'Visual Studio Code Host',
@@ -26,7 +26,12 @@ function Test-IsRunningInIDE {
         'JetBrains Rider',
         'Default Host'  # Host genérico usado por muchos IDEs
     )
-    
+
+    # Verificar variables de entorno de VSCode (aplica incluso en terminal integrado)
+    if ($env:VSCODE_PID -or $env:TERM_PROGRAM -eq 'vscode') {
+        return $true
+    }
+
     # Verificar por nombre de host
     foreach ($ide in $ideHosts) {
         if ($hostName -like "*$ide*") {
@@ -34,11 +39,11 @@ function Test-IsRunningInIDE {
         }
     }
     
-    # Verificar variables de entorno de VSCode
-    if ($env:VSCODE_PID -or $env:TERM_PROGRAM -eq 'vscode') {
-        return $true
+    # Si estamos en un host de consola estándar, tratarlo como sesión normal
+    if ($hostName -like '*ConsoleHost*') {
+        return $false
     }
-    
+
     # Verificar si está en modo debug
     if ($PSDebugContext) {
         return $true
@@ -46,7 +51,7 @@ function Test-IsRunningInIDE {
     
     # Verificar proceso padre (VSCode, Code.exe)
     try {
-        $parentProcess = (Get-Process -Id $PID).Parent
+        $parentProcess = (Get-Process -Id $PID -ErrorAction Stop).Parent
         if ($parentProcess) {
             $parentName = $parentProcess.ProcessName
             if ($parentName -match 'code|devenv|rider|powershell_ise') {
@@ -55,7 +60,12 @@ function Test-IsRunningInIDE {
         }
     }
     catch {
-        # Ignorar errores al obtener proceso padre
+        Write-Host "[ERROR] No se pudo obtener el proceso padre para detectar si es IDE: $($_.Exception.Message)" -ForegroundColor Red
+
+        if ($host.UI -and $host.UI.RawUI) {
+            Write-Host "Presiona cualquier tecla para continuar..." -ForegroundColor Yellow
+            $null = $host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
+        }
     }
     
     return $false
