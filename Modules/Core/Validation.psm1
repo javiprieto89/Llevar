@@ -51,7 +51,7 @@ function Test-IsRunningInIDE {
     
     # Verificar proceso padre (VSCode, Code.exe)
     try {
-        $parentProcess = (Get-Process -Id $PID -ErrorAction Stop).Parent
+        $parentProcess = (Get-Process -Id $PID).Parent
         if ($parentProcess) {
             $parentName = $parentProcess.ProcessName
             if ($parentName -match 'code|devenv|rider|powershell_ise') {
@@ -67,7 +67,11 @@ function Test-IsRunningInIDE {
             $null = $host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
         }
     }
-    
+    finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+        $WarningPreference = $previousWarningPreference
+    }
+
     return $false
 }
 
