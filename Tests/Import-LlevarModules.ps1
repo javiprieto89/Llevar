@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Módulo común para importar todas las dependencias necesarias en los tests.
 
@@ -18,7 +18,7 @@ $ModulesPath = Join-Path $ProjectRoot "Modules"
 # Módulos Core
 Import-Module (Join-Path $ModulesPath "Core\Validation.psm1") -Force -Global -ErrorAction SilentlyContinue
 Import-Module (Join-Path $ModulesPath "Core\Logger.psm1") -Force -Global -ErrorAction SilentlyContinue
-Import-Module (Join-Path $ModulesPath "Core\Config.psm1") -Force -Global -ErrorAction SilentlyContinue
+Import-Module (Join-Path $ModulesPath "Core\TransferConfig.psm1") -Force -Global -ErrorAction SilentlyContinue
 
 # Módulos UI
 Import-Module (Join-Path $ModulesPath "UI\Console.psm1") -Force -Global -ErrorAction SilentlyContinue

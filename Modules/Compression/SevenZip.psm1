@@ -1,4 +1,4 @@
-# ============================================================================ #
+﻿# ============================================================================ #
 # Archivo: Q:\Utilidad\LLevar\Modules\Compression\SevenZip.psm1
 # Descripción: Funciones para localizar y usar 7-Zip para compresión/descompresión
 # ============================================================================ #

@@ -1,4 +1,4 @@
-# ========================================================================== #
+﻿# ========================================================================== #
 #                        MÓDULO: OPERACIONES DE RED UNC                      #
 # ========================================================================== #
 # Propósito: Descubrimiento, montaje y acceso a rutas UNC de red
@@ -10,6 +10,10 @@
 #   - Split-UncRootAndPath: Divide ruta UNC en raíz y subdirectorio
 #   - Mount-LlevarNetworkPath: Monta ruta UNC como PSDrive
 # ========================================================================== #
+
+# Imports necesarios
+$ModulesPath = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
+Import-Module (Join-Path $ModulesPath "Modules\Core\Logging.psm1") -Force -Global
 
 function Get-NetworkComputers {
     <#
@@ -481,7 +485,7 @@ function Get-NetworkShares {
                     IsDriveSelector = $false
                     IsNetworkShare  = $true
                     Size            = "<RED>"
-                    Icon            = "�"
+                    Icon            = "�"
                 }
             }
         }

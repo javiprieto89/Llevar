@@ -1,0 +1,447 @@
+﻿# ========================================================================== #
+#                       MÓDULO: OPERACIONES DROPBOX                          #
+# ========================================================================== #
+# Propósito: Autenticación y operaciones con Dropbox (local y API)
+# Funciones principales exportadas (12 funciones)
+# ========================================================================== #
+
+function Test-IsDropboxPath {
+    param([string]$Path)
+    return $Path -match '^dropbox://|^DROPBOX:'
+}
+
+function Get-DropboxAuth {
+    <#
+    .SYNOPSIS
+        Configura autenticación Dropbox con OAuth o ruta local
+    #>
+    param([switch]$ForceApi)
+    
+    Write-Log "Iniciando configuración Dropbox" "INFO"
+    Clear-Host
+    Show-Banner -Message "CONFIGURACIÓN DROPBOX" -BorderColor "Blue"
+    
+    # Buscar instalación local
+    $dropboxLocal = $null
+    if (-not $ForceApi) {
+        $possiblePaths = @("$env:USERPROFILE\Dropbox", "$env:LOCALAPPDATA\Dropbox", "$env:APPDATA\Dropbox")
+        
+        foreach ($path in $possiblePaths) {
+            if (Test-Path $path) {
+                $dropboxLocal = $path
+                Write-Log "Dropbox detectado: $path" "INFO"
+                break
+            }
+        }
+    }
+    
+    if ($dropboxLocal) {
+        Write-Host "`nDropbox detectado en: $dropboxLocal" -ForegroundColor Green
+        
+        $opcion = Show-ConsolePopup -Title "Dropbox Local" `
+            -Message "¿Usar local o API?" `
+            -Options @("*Usar Local", "Usar *API", "*Cancelar")
+        
+        if ($opcion -eq 0) {
+            return @{
+                Token     = $null
+                ApiUrl    = $null
+                LocalPath = $dropboxLocal
+                UseLocal  = $true
+            }
+        }
+        elseif ($opcion -eq 2) { return $null }
+    }
+    
+    # Configuración API con OAuth
+    Show-Banner "AUTENTICACIÓN DROPBOX API" -BorderColor Cyan -TextColor White
+    
+    try {
+        $token = Get-DropboxToken
+        
+        return @{
+            Token     = $token
+            ApiUrl    = "https://api.dropboxapi.com/2"
+            LocalPath = $null
+            UseLocal  = $false
+        }
+    }
+    catch {
+        Write-Host "`n✗ Error: $($_.Exception.Message)" -ForegroundColor Red
+        return $null
+    }
+}
+
+function Get-DropboxToken {
+    <#
+    .SYNOPSIS
+        Obtiene token OAuth2 de Dropbox con MFA
+    #>
+    
+    $appKey = "qf3ohh840jfse3j"
+    $redirectUri = "http://localhost:53682/"
+    $state = [Guid]::NewGuid().ToString()
+    $authUrl = "https://www.dropbox.com/oauth2/authorize?response_type=token&client_id=$appKey&redirect_uri=$redirectUri&state=$state"
+    
+    Write-Host "[*] Abriendo navegador para login..." -ForegroundColor Cyan
+    Start-Process $authUrl
+    
+    try {
+        $listener = New-Object System.Net.HttpListener
+        $listener.Prefixes.Add($redirectUri)
+        $listener.Start()
+        
+        Write-Host "[*] Esperando autenticación..." -ForegroundColor Yellow
+        
+        $context = $listener.GetContext()
+        $response = $context.Response
+        
+        $html = "<html><body><h1 style='color:green;font-family:Arial'>¡Listo! Cierra esta ventana.</h1></body></html>"
+        $buffer = [Text.Encoding]::UTF8.GetBytes($html)
+        $response.ContentLength64 = $buffer.Length
+        $response.OutputStream.Write($buffer, 0, $buffer.Length)
+        $response.OutputStream.Close()
+        $listener.Stop()
+        
+        $raw = $context.Request.RawUrl
+        
+        if ($raw -match "access_token=([^&]+)") {
+            Write-Host "[+] Token obtenido" -ForegroundColor Green
+            return $matches[1]
+        }
+        
+        throw "No se pudo obtener token"
+    }
+    catch {
+        Write-Host "[X] Error: $($_.Exception.Message)" -ForegroundColor Red
+        throw
+    }
+}
+
+function Connect-DropboxSession {
+    <#
+    .SYNOPSIS
+        Asegura token válido de Dropbox
+    #>
+    
+    if ($Global:DropboxToken) {
+        Write-Host "[+] Token activo" -ForegroundColor Green
+        return $true
+    }
+    
+    Write-Host "[*] Iniciando login..." -ForegroundColor Yellow
+    
+    try {
+        $Global:DropboxToken = Get-DropboxToken
+        return $true
+    }
+    catch {
+        Write-Host "[X] Error: $($_.Exception.Message)" -ForegroundColor Red
+        return $false
+    }
+}
+
+function Send-DropboxFile {
+    <#
+    .SYNOPSIS
+        Sube archivo a Dropbox
+    #>
+    param([string]$LocalPath, [string]$RemotePath, [string]$Token)
+    
+    if (-not (Test-Path $LocalPath)) {
+        throw "Archivo no existe: $LocalPath"
+    }
+    
+    if (-not $RemotePath.StartsWith('/')) {
+        $RemotePath = "/$RemotePath"
+    }
+    
+    Write-Host "[*] Subiendo: $RemotePath" -ForegroundColor Cyan
+    
+    try {
+        $fileSize = (Get-Item $LocalPath).Length
+        
+        if ($fileSize -gt 150MB) {
+            Send-DropboxFileLarge -LocalPath $LocalPath -RemotePath $RemotePath -Token $Token
+        }
+        else {
+            $bytes = [System.IO.File]::ReadAllBytes($LocalPath)
+            
+            $headers = @{
+                "Authorization"   = "Bearer $Token"
+                "Dropbox-API-Arg" = '{"path":"' + $RemotePath + '","mode":"overwrite"}'
+                "Content-Type"    = "application/octet-stream"
+            }
+            
+            Invoke-RestMethod `
+                -Uri "https://content.dropboxapi.com/2/files/upload" `
+                -Method Post `
+                -Headers $headers `
+                -Body $bytes | Out-Null
+        }
+        
+        Write-Host "[✓] Subido" -ForegroundColor Green
+    }
+    catch {
+        Write-Host "[X] Error: $($_.Exception.Message)" -ForegroundColor Red
+        throw
+    }
+}
+
+function Send-DropboxFileLarge {
+    <#
+    .SYNOPSIS
+        Sube archivo grande con sesiones
+    #>
+    param([string]$LocalPath, [string]$RemotePath, [string]$Token)
+    
+    $chunkSize = 8MB
+    $stream = [System.IO.File]::OpenRead($LocalPath)
+    $fileSize = $stream.Length
+    $uploaded = 0
+    $sessionId = $null
+    
+    try {
+        # Iniciar sesión
+        $buffer = New-Object byte[] $chunkSize
+        $bytesRead = $stream.Read($buffer, 0, $chunkSize)
+        $uploaded += $bytesRead
+        
+        $headers = @{
+            "Authorization" = "Bearer $Token"
+            "Content-Type"  = "application/octet-stream"
+        }
+        
+        $response = Invoke-RestMethod `
+            -Uri "https://content.dropboxapi.com/2/files/upload_session/start" `
+            -Method Post `
+            -Headers $headers `
+            -Body $buffer[0..($bytesRead - 1)]
+        
+        $sessionId = $response.session_id
+        
+        # Subir chunks
+        while ($uploaded -lt $fileSize) {
+            $bytesRead = $stream.Read($buffer, 0, $chunkSize)
+            if ($bytesRead -eq 0) { break }
+            
+            $cursor = @{
+                session_id = $sessionId
+                offset     = $uploaded
+            } | ConvertTo-Json -Compress
+            
+            $headers["Dropbox-API-Arg"] = $cursor
+            
+            Invoke-RestMethod `
+                -Uri "https://content.dropboxapi.com/2/files/upload_session/append_v2" `
+                -Method Post `
+                -Headers $headers `
+                -Body $buffer[0..($bytesRead - 1)] | Out-Null
+            
+            $uploaded += $bytesRead
+            $percent = [int](($uploaded * 100) / $fileSize)
+            Write-Host "`r  $percent%" -NoNewline -ForegroundColor Gray
+        }
+        
+        Write-Host ""
+        
+        # Finalizar
+        $finishArg = @{
+            cursor = @{
+                session_id = $sessionId
+                offset     = $uploaded
+            }
+            commit = @{
+                path = $RemotePath
+                mode = "overwrite"
+            }
+        } | ConvertTo-Json -Compress
+        
+        $headers["Dropbox-API-Arg"] = $finishArg
+        $headers["Content-Type"] = "application/octet-stream"
+        
+        Invoke-RestMethod `
+            -Uri "https://content.dropboxapi.com/2/files/upload_session/finish" `
+            -Method Post `
+            -Headers $headers `
+            -Body @() | Out-Null
+    }
+    finally {
+        $stream.Close()
+    }
+}
+
+function Receive-DropboxFile {
+    <#
+    .SYNOPSIS
+        Descarga archivo desde Dropbox
+    #>
+    param([string]$RemotePath, [string]$LocalPath, [string]$Token)
+    
+    if (-not $RemotePath.StartsWith('/')) {
+        $RemotePath = "/$RemotePath"
+    }
+    
+    Write-Host "[*] Descargando..." -ForegroundColor Cyan
+    
+    try {
+        $headers = @{
+            "Authorization"   = "Bearer $Token"
+            "Dropbox-API-Arg" = '{"path":"' + $RemotePath + '"}'
+        }
+        
+        $response = Invoke-WebRequest `
+            -Uri "https://content.dropboxapi.com/2/files/download" `
+            -Method Post `
+            -Headers $headers
+        
+        $folder = Split-Path $LocalPath
+        if (-not (Test-Path $folder)) {
+            New-Item -ItemType Directory -Path $folder | Out-Null
+        }
+        
+        [System.IO.File]::WriteAllBytes($LocalPath, $response.Content)
+        Write-Host "[✓] Descargado" -ForegroundColor Green
+    }
+    catch {
+        Write-Host "[X] Error: $($_.Exception.Message)" -ForegroundColor Red
+        throw
+    }
+}
+
+function Send-DropboxFolder {
+    <#
+    .SYNOPSIS
+        Sube carpeta completa
+    #>
+    param([string]$LocalFolder, [string]$RemotePath, [string]$Token)
+    
+    if (-not (Test-Path $LocalFolder)) {
+        throw "Carpeta no existe"
+    }
+    
+    if (-not $RemotePath.StartsWith('/')) {
+        $RemotePath = "/$RemotePath"
+    }
+    
+    Write-Host "[*] Subiendo carpeta..." -ForegroundColor Cyan
+    
+    $files = Get-ChildItem -Path $LocalFolder -File -Recurse
+    $total = $files.Count
+    $current = 0
+    
+    foreach ($file in $files) {
+        $current++
+        $relativePath = $file.FullName.Substring($LocalFolder.Length).TrimStart('\\', '/').Replace('\\', '/')
+        $targetPath = "$RemotePath/$relativePath".Replace('//', '/')
+        
+        Write-Host "[$current/$total] $relativePath" -ForegroundColor Gray
+        
+        try {
+            Send-DropboxFile -LocalPath $file.FullName -RemotePath $targetPath -Token $Token
+        }
+        catch {
+            Write-Host "  [X] Error" -ForegroundColor Red
+        }
+    }
+    
+    Write-Host "[✓] Carpeta subida" -ForegroundColor Green
+}
+
+function Receive-DropboxFolder {
+    <#
+    .SYNOPSIS
+        Descarga carpeta completa (implementación básica)
+    #>
+    param([string]$RemotePath, [string]$LocalFolder, [string]$Token)
+    
+    Write-Host "[*] Descargando carpeta..." -ForegroundColor Cyan
+    Write-Host "[!] Funcionalidad limitada - requiere listar archivos" -ForegroundColor Yellow
+    
+    # TODO: Implementar listado recursivo de Dropbox
+    throw "Receive-DropboxFolder requiere implementación de listado de carpetas"
+}
+
+function Copy-LlevarLocalToDropbox {
+    <#
+    .SYNOPSIS
+        Copia de local a Dropbox con progreso
+    #>
+    param(
+        [string]$SourcePath,
+        [hashtable]$DropboxConfig,
+        [long]$TotalBytes = 0,
+        [int]$FileCount = 0,
+        [datetime]$StartTime = (Get-Date),
+        [bool]$ShowProgress = $true,
+        [int]$ProgressTop = -1
+    )
+    
+    Write-Log "Copia Local → Dropbox: $SourcePath" "INFO"
+    
+    if ($DropboxConfig.UseLocal -and $DropboxConfig.LocalPath) {
+        Copy-LlevarLocalToLocal -SourcePath $SourcePath -DestinationPath $DropboxConfig.LocalPath `
+            -TotalBytes $TotalBytes -FileCount $FileCount -StartTime $StartTime `
+            -ShowProgress $ShowProgress -ProgressTop $ProgressTop
+    }
+    else {
+        if ($ShowProgress) {
+            Write-LlevarProgressBar -Percent 50 -StartTime $StartTime -Label "Subiendo a Dropbox API..." -Top $ProgressTop -Width 50
+        }
+        
+        throw "Dropbox API no completamente implementado"
+    }
+}
+
+function Copy-LlevarDropboxToLocal {
+    <#
+    .SYNOPSIS
+        Copia de Dropbox a local con progreso
+    #>
+    param(
+        [hashtable]$DropboxConfig,
+        [string]$DestinationPath,
+        [datetime]$StartTime = (Get-Date),
+        [bool]$ShowProgress = $true,
+        [int]$ProgressTop = -1
+    )
+    
+    Write-Log "Copia Dropbox → Local" "INFO"
+    
+    if ($DropboxConfig.UseLocal -and $DropboxConfig.LocalPath) {
+        $totalBytes = 0
+        $fileCount = 0
+        
+        if (Test-Path $DropboxConfig.LocalPath -PathType Container) {
+            $files = Get-ChildItem -Path $DropboxConfig.LocalPath -Recurse -File
+            $fileCount = $files.Count
+            $totalBytes = ($files | Measure-Object -Property Length -Sum).Sum
+        }
+        
+        Copy-LlevarLocalToLocal -SourcePath $DropboxConfig.LocalPath -DestinationPath $DestinationPath `
+            -TotalBytes $totalBytes -FileCount $fileCount -StartTime $StartTime `
+            -ShowProgress $ShowProgress -ProgressTop $ProgressTop
+    }
+    else {
+        if ($ShowProgress) {
+            Write-LlevarProgressBar -Percent 50 -StartTime $StartTime -Label "Descargando de Dropbox API..." -Top $ProgressTop -Width 50
+        }
+        
+        throw "Dropbox API no completamente implementado"
+    }
+}
+
+# Exportar funciones
+Export-ModuleMember -Function @(
+    'Test-IsDropboxPath',
+    'Get-DropboxAuth',
+    'Get-DropboxToken',
+    'Connect-DropboxSession',
+    'Send-DropboxFile',
+    'Send-DropboxFileLarge',
+    'Receive-DropboxFile',
+    'Send-DropboxFolder',
+    'Receive-DropboxFolder',
+    'Copy-LlevarLocalToDropbox',
+    'Copy-LlevarDropboxToLocal'
+)

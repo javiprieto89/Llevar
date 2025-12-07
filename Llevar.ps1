@@ -1,11 +1,11 @@
-# Importar clases de TransferConfig (using module DEBE estar al INICIO del archivo)
+﻿# Importar clases de TransferConfig (using module DEBE estar al INICIO del archivo)
 using module "Q:\Utilidad\LLevar\Modules\Core\TransferConfig.psm1"
 
 # *********************************************************************************************
 # SE MANTIENE POR COMPATIBILIDAD CON LA TERCERA EDAD LO VIEJO SIRVE JUAN ehhhhhh ALEJANDRO xD #
 # ********************************************************************************************* 
 # Con el mayor de los respetos, para alguien por el que siempre senti mucha admiración, a modo homenaje, 
-# espero que te guste esta loca vuelta de tuercaal mítico LLEVAR.BAT que tanto me ayudó en mis comienzos con 
+# espero que te guste esta loca vuelta de tuercaal mítico LLEVAR.BAT que tanto me ayudó en mis començos con 
 #MS-DOS y me guio por este hermoso camino que me  ha dado de comer por tanto tiempo
 
 
@@ -189,7 +189,6 @@ try {
     # Módulos Core
     Import-Module (Join-Path $ModulesPath "Core\Validation.psm1") -Force -Global -WarningVariable +importWarnings
     Import-Module (Join-Path $ModulesPath "Core\Logger.psm1") -Force -Global -WarningVariable +importWarnings
-    Import-Module (Join-Path $ModulesPath "Core\Config.psm1") -Force -Global -WarningVariable +importWarnings
     # TransferConfig.psm1 ya importado con "using module" al inicio del archivo
 
     # Módulos UI
@@ -426,7 +425,8 @@ try {
     # Si no hay TransferConfig del menú y hay parámetros, crear TransferConfig
     # Detectar tipo automáticamente según parámetros disponibles
     if (-not $transferConfig -and ($Origen -or $Destino -or $OnedriveOrigen -or $OnedriveDestino -or $DropboxOrigen -or $DropboxDestino)) {
-        $transferConfig = [TransferConfig](New-TransferConfig)
+        # ✅ CREAR INSTANCIA ÚNICA DE TRANSFERCONFIG
+        $transferConfig = [TransferConfig]::new()
         
         # ===== DETECTAR Y CONFIGURAR ORIGEN =====
         if ($Origen) {
@@ -439,44 +439,38 @@ try {
                     $ftpPort = if ($matches[4]) { [int]$matches[4] } else { 21 }
                     $ftpDirectory = if ($matches[5]) { $matches[5] } else { "/" }
                     
-                    # Extraer credenciales si existen
-                    $ftpUser = if ($SourceCredentials) { $SourceCredentials.UserName } else { "" }
-                    $ftpPass = if ($SourceCredentials) { $SourceCredentials.GetNetworkCredential().Password } else { "" }
+                    # ✅ ASIGNAR DIRECTAMENTE A $transferConfig
+                    $transferConfig.Origen.Tipo = "FTP"
+                    $transferConfig.Origen.FTP.Server = "$ftpScheme`://$ftpServer"
+                    $transferConfig.Origen.FTP.Port = $ftpPort
+                    $transferConfig.Origen.FTP.Directory = $ftpDirectory
+                    $transferConfig.Origen.FTP.UseSsl = ($ftpScheme -eq "ftps")
                     
-                    Set-TransferConfigOrigen -Config $transferConfig -Tipo "FTP" -Parametros @{
-                        Server    = $ftpServer
-                        Port      = $ftpPort
-                        User      = $ftpUser
-                        Password  = $ftpPass
-                        UseSsl    = ($ftpScheme -eq "ftps")
-                        Directory = $ftpDirectory
+                    if ($SourceCredentials) {
+                        $transferConfig.Origen.FTP.User = $SourceCredentials.UserName
+                        $transferConfig.Origen.FTP.Password = $SourceCredentials.GetNetworkCredential().Password
                     }
                 }
             }
             elseif ($Origen -match '^\\\\') {
                 # Es UNC - ruta de red
-                Set-TransferConfigOrigen -Config $transferConfig -Tipo "UNC" -Parametros @{
-                    Path        = $Origen
-                    Credentials = $SourceCredentials
-                }
+                $transferConfig.Origen.Tipo = "UNC"
+                $transferConfig.Origen.UNC.Path = $Origen
             }
             elseif ($OnedriveOrigen) {
                 # OneDrive especificado por parámetro
-                Set-TransferConfigOrigen -Config $transferConfig -Tipo "OneDrive" -Parametros @{
-                    Path = $Origen
-                }
+                $transferConfig.Origen.Tipo = "OneDrive"
+                $transferConfig.Origen.OneDrive.Path = $Origen
             }
             elseif ($DropboxOrigen) {
                 # Dropbox especificado por parámetro
-                Set-TransferConfigOrigen -Config $transferConfig -Tipo "Dropbox" -Parametros @{
-                    Path = $Origen
-                }
+                $transferConfig.Origen.Tipo = "Dropbox"
+                $transferConfig.Origen.Dropbox.Path = $Origen
             }
             else {
                 # Es Local por defecto
-                Set-TransferConfigOrigen -Config $transferConfig -Tipo "Local" -Parametros @{ 
-                    Path = $Origen 
-                }
+                $transferConfig.Origen.Tipo = "Local"
+                $transferConfig.Origen.Local.Path = $Origen
             }
         }
         
@@ -485,10 +479,9 @@ try {
             # Detectar tipo de destino según formato y parámetros
             if ($Iso) {
                 # ISO especificado explícitamente
-                Set-TransferConfigDestino -Config $transferConfig -Tipo "ISO" -Parametros @{ 
-                    OutputPath = $Destino
-                    Size       = $IsoDestino
-                }
+                $transferConfig.Destino.Tipo = "ISO"
+                $transferConfig.Destino.ISO.OutputPath = $Destino
+                $transferConfig.Destino.ISO.Size = $IsoDestino
             }
             elseif ($Destino -match '^ftp(s)?://') {
                 # Es FTP - parsear URL
@@ -498,55 +491,48 @@ try {
                     $ftpPort = if ($matches[4]) { [int]$matches[4] } else { 21 }
                     $ftpDirectory = if ($matches[5]) { $matches[5] } else { "/" }
                     
-                    # Extraer credenciales si existen
-                    $ftpUser = if ($DestinationCredentials) { $DestinationCredentials.UserName } else { "" }
-                    $ftpPass = if ($DestinationCredentials) { $DestinationCredentials.GetNetworkCredential().Password } else { "" }
+                    # ✅ ASIGNAR DIRECTAMENTE A $transferConfig
+                    $transferConfig.Destino.Tipo = "FTP"
+                    $transferConfig.Destino.FTP.Server = "$ftpScheme`://$ftpServer"
+                    $transferConfig.Destino.FTP.Port = $ftpPort
+                    $transferConfig.Destino.FTP.Directory = $ftpDirectory
+                    $transferConfig.Destino.FTP.UseSsl = ($ftpScheme -eq "ftps")
                     
-                    Set-TransferConfigDestino -Config $transferConfig -Tipo "FTP" -Parametros @{
-                        Server    = $ftpServer
-                        Port      = $ftpPort
-                        User      = $ftpUser
-                        Password  = $ftpPass
-                        UseSsl    = ($ftpScheme -eq "ftps")
-                        Directory = $ftpDirectory
+                    if ($DestinationCredentials) {
+                        $transferConfig.Destino.FTP.User = $DestinationCredentials.UserName
+                        $transferConfig.Destino.FTP.Password = $DestinationCredentials.GetNetworkCredential().Password
                     }
                 }
             }
             elseif ($Destino -match '^\\\\') {
                 # Es UNC - ruta de red
-                Set-TransferConfigDestino -Config $transferConfig -Tipo "UNC" -Parametros @{
-                    Path        = $Destino
-                    Credentials = $DestinationCredentials
-                }
+                $transferConfig.Destino.Tipo = "UNC"
+                $transferConfig.Destino.UNC.Path = $Destino
             }
             elseif ($OnedriveDestino) {
                 # OneDrive especificado por parámetro
-                Set-TransferConfigDestino -Config $transferConfig -Tipo "OneDrive" -Parametros @{
-                    Path = $Destino
-                }
+                $transferConfig.Destino.Tipo = "OneDrive"
+                $transferConfig.Destino.OneDrive.Path = $Destino
             }
             elseif ($DropboxDestino) {
                 # Dropbox especificado por parámetro
-                Set-TransferConfigDestino -Config $transferConfig -Tipo "Dropbox" -Parametros @{
-                    Path = $Destino
-                }
+                $transferConfig.Destino.Tipo = "Dropbox"
+                $transferConfig.Destino.Dropbox.Path = $Destino
             }
             elseif ($Destino -ieq "FLOPPY") {
                 # Diskette especificado
-                Set-TransferConfigDestino -Config $transferConfig -Tipo "Diskette" -Parametros @{
-                    OutputPath = $env:TEMP
-                    MaxDisks   = 30
-                }
+                $transferConfig.Destino.Tipo = "Diskette"
+                $transferConfig.Destino.Diskette.OutputPath = $env:TEMP
+                $transferConfig.Destino.Diskette.MaxDisks = 30
             }
             else {
                 # Es Local por defecto
-                Set-TransferConfigDestino -Config $transferConfig -Tipo "Local" -Parametros @{ 
-                    Path = $Destino 
-                }
+                $transferConfig.Destino.Tipo = "Local"
+                $transferConfig.Destino.Local.Path = $Destino
             }
         }
         
-        # Configurar opciones generales
+        # ✅ CONFIGURAR OPCIONES GENERALES (NO SE PISAN)
         $transferConfig.Opciones.BlockSizeMB = $BlockSizeMB
         $transferConfig.Opciones.Clave = $Clave
         $transferConfig.Opciones.UseNativeZip = $UseNativeZip
@@ -574,16 +560,16 @@ try {
 
 }
 catch {
-    # Capturar cualquier error no manejado
     $errorTime = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-    $errorLog = @"
+    $ex = $_.Exception
 
+    $errorLog = @"
 ========================================
 ERROR CRÍTICO NO MANEJADO
 Fecha/Hora: $errorTime
 ========================================
-Mensaje: $($_.Exception.Message)
-Tipo: $($_.Exception.GetType().FullName)
+Mensaje: $($ex.Message)
+Tipo: $($ex.GetType().FullName)
 Línea: $($_.InvocationInfo.ScriptLineNumber)
 Comando: $($_.InvocationInfo.Line)
 
@@ -594,17 +580,21 @@ Detalle completo:
 $($_ | Out-String)
 ========================================
 "@
-    
+
     Add-Content -Path $Global:LogFile -Value $errorLog -Encoding UTF8
-    
+
     # Mostrar error en consola con formato visible
-    Write-Host "`n" -ForegroundColor Red
-    Write-Host "╔══════════════════════════════════════╗" -ForegroundColor Red
-    Write-Host "║    ❌ ERROR CRÍTICO NO MANEJADO      ║" -ForegroundColor Red
-    Write-Host "╚══════════════════════════════════════╝" -ForegroundColor Red
+    try {
+        Show-Banner "❌ ERROR CRÍTICO NO MANEJADO" -BorderColor Red -TextColor White -Padding 2
+    } catch {
+        Write-Host "`n╔══════════════════════════════════════╗" -ForegroundColor Red
+        Write-Host "║    ❌ ERROR CRÍTICO NO MANEJADO      ║" -ForegroundColor Red
+        Write-Host "╚══════════════════════════════════════╝" -ForegroundColor Red
+    }
+
     Write-Host ""
     Write-Host "Mensaje: " -NoNewline -ForegroundColor Yellow
-    Write-Host $_.Exception.Message -ForegroundColor White
+    Write-Host $ex.Message -ForegroundColor White
     Write-Host ""
     Write-Host "Línea: " -NoNewline -ForegroundColor Yellow
     Write-Host $_.InvocationInfo.ScriptLineNumber -ForegroundColor White
@@ -615,24 +605,24 @@ $($_ | Out-String)
     Write-Host "Detalles completos guardados en:" -ForegroundColor Cyan
     Write-Host "  $Global:LogFile" -ForegroundColor Gray
     Write-Host ""
-    
+
     # Detener transcript si está activo
     try { Stop-Transcript | Out-Null } catch { }
-    
+
     # Pausar para que el usuario vea el error
     Read-Host "Presione ENTER para salir"
 }
 finally {
     # Siempre ejecutar limpieza
 
-    # Detener transcript
+    # Detener transcript (si no se ha detenido previamente)
     try {
         if ($TranscriptFile) {
             Stop-Transcript | Out-Null
         }
     }
     catch {
-        # Transcript puede no estar activo en algunos contextos
+        # Ignorar errores al detener transcript
     }
 
     # Mostrar ubicación de logs si el modo verbose está activo

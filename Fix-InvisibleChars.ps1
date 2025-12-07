@@ -1,4 +1,4 @@
-param (
+﻿param (
     [string]$Path = ".\Modules",
     [string]$BackupDir = ".\Backup-CleanModules"
 )

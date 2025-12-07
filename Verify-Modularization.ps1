@@ -1,4 +1,4 @@
-# ============================================================================ #
+﻿# ============================================================================ #
 # Verificación de Modularización del Proyecto LLevar
 # ============================================================================ #
 
@@ -16,7 +16,7 @@ $categories = @{
     "System"       = @("FileSystem.psm1", "Audio.psm1", "Robocopy.psm1")
     "UI"           = @("Banners.psm1", "Console.psm1", "ConfigMenus.psm1", "Menus.psm1", "Navigator.psm1", "ProgressBar.psm1")
     "Transfer"     = @("Dropbox.psm1", "Floppy.psm1", "FTP.psm1", "Local.psm1", "OneDrive.psm1", "UNC.psm1", "Unified.psm1")
-    "Core"         = @("Config.psm1", "Logger.psm1", "Validation.psm1")
+    "Core"         = @("Logger.psm1", "Validation.psm1", "TransferConfig.psm1")
     "Compression"  = @("BlockSplitter.psm1", "NativeZip.psm1", "SevenZip.psm1")
     "Installation" = @("Installer.psm1", "ISO.psm1", "SystemInstall.psm1")
     "Utilities"    = @("Examples.psm1", "Help.psm1", "Installation.psm1", "PathSelectors.psm1", "VolumeManagement.psm1")

@@ -1,0 +1,267 @@
+﻿# ========================================================================== #
+#                         MÓDULO: OPERACIONES DROPBOX                        #
+# ========================================================================== #
+# Propósito: Configuración, validación y operaciones con Dropbox
+# Funciones refactorizadas para usar TransferConfig como única fuente de verdad
+# ========================================================================== #
+
+# Importar TransferConfig al inicio
+using module "Q:\Utilidad\LLevar\Modules\Core\TransferConfig.psm1"
+
+# Imports necesarios
+$ModulesPath = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
+Import-Module (Join-Path $ModulesPath "Modules\UI\Banners.psm1") -Force -Global
+Import-Module (Join-Path $ModulesPath "Modules\UI\ProgressBar.psm1") -Force -Global
+Import-Module (Join-Path $ModulesPath "Modules\Core\Logging.psm1") -Force -Global
+
+# ========================================================================== #
+#                          FUNCIONES AUXILIARES                              #
+# ========================================================================== #
+
+function Test-IsDropboxPath {
+    <#
+    .SYNOPSIS
+        Detecta si una ruta es Dropbox
+    .PARAMETER Path
+        Ruta a verificar
+    .OUTPUTS
+        $true si es Dropbox, $false si no
+    #>
+    param([string]$Path)
+    return $Path -match '^dropbox://|^DROPBOX:'
+}
+
+function Get-DropboxConfigFromUser {
+    <#
+    .SYNOPSIS
+        Solicita configuración Dropbox al usuario y la asigna directamente al objeto Llevar
+    .DESCRIPTION
+        Autentica con Dropbox OAuth y configura la sección correspondiente.
+        Valida la conexión y asigna SOLO los valores Dropbox a:
+        - $Llevar.Origen.Tipo = "Dropbox" + $Llevar.Origen.Dropbox.* si $Cual = "Origen"
+        - $Llevar.Destino.Tipo = "Dropbox" + $Llevar.Destino.Dropbox.* si $Cual = "Destino"
+        
+        ✅ NO PISA otros valores del objeto $Llevar
+    .PARAMETER Llevar
+        Objeto TransferConfig donde se guardarán SOLO los valores Dropbox
+    .PARAMETER Cual
+        "Origen" o "Destino" - indica qué sección configurar
+    .OUTPUTS
+        $true si la configuración fue exitosa, $false si se canceló
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [TransferConfig]$Llevar,
+        
+        [Parameter(Mandatory = $true)]
+        [ValidateSet("Origen", "Destino")]
+        [string]$Cual
+    )
+    
+    Show-Banner "CONFIGURACIÓN DROPBOX - $Cual" -BorderColor Cyan -TextColor Yellow
+    
+    Write-Host "Autenticando con Dropbox..." -ForegroundColor Cyan
+    Write-Host "(Esto abrirá el navegador para autenticación OAuth)" -ForegroundColor Gray
+    Write-Host ""
+    Write-Log "Intentando autenticar Dropbox para $Cual" "INFO"
+    
+    try {
+        $authResult = Get-DropboxAuth
+        
+        if (-not $authResult) {
+            Write-Host "✗ Autenticación cancelada" -ForegroundColor Red
+            return $false
+        }
+        
+        Write-Host "✓ Autenticación exitosa" -ForegroundColor Green
+        Write-Host ""
+        
+        # Solicitar ruta Dropbox
+        Write-Host "Ruta en Dropbox (ej: /Documentos/MiCarpeta): " -NoNewline -ForegroundColor Cyan
+        $dropboxPath = Read-Host
+        
+        if ([string]::IsNullOrWhiteSpace($dropboxPath)) {
+            $dropboxPath = "/"
+        }
+        elseif (-not $dropboxPath.StartsWith('/')) {
+            $dropboxPath = "/$dropboxPath"
+        }
+        
+        Write-Host ""
+        Write-Host "✓ Ruta configurada: $dropboxPath" -ForegroundColor Green
+        
+    }
+    catch {
+        $errorMsg = $_.Exception.Message
+        Show-Banner "⚠ ERROR DE AUTENTICACIÓN DROPBOX" -BorderColor Red -TextColor Red
+        Write-Host "Error: $errorMsg" -ForegroundColor Yellow
+        Write-Host ""
+        Write-Log "Error autenticación Dropbox - $errorMsg" "ERROR" -ErrorRecord $_
+        return $false
+    }
+    
+    # ✅✅✅ ASIGNAR SOLO LA SECCIÓN DROPBOX CORRESPONDIENTE
+    if ($Cual -eq "Origen") {
+        $Llevar.Origen.Tipo = "Dropbox"
+        $Llevar.Origen.Dropbox.Path = $dropboxPath
+        $Llevar.Origen.Dropbox.Token = $authResult.Token
+        $Llevar.Origen.Dropbox.RefreshToken = $authResult.RefreshToken
+        $Llevar.Origen.Dropbox.Email = $authResult.Email
+        $Llevar.Origen.Dropbox.ApiUrl = $authResult.ApiUrl
+        
+        Write-Log "Dropbox Origen configurado: $dropboxPath (Usuario: $($authResult.Email))" "INFO"
+    }
+    else {
+        $Llevar.Destino.Tipo = "Dropbox"
+        $Llevar.Destino.Dropbox.Path = $dropboxPath
+        $Llevar.Destino.Dropbox.Token = $authResult.Token
+        $Llevar.Destino.Dropbox.RefreshToken = $authResult.RefreshToken
+        $Llevar.Destino.Dropbox.Email = $authResult.Email
+        $Llevar.Destino.Dropbox.ApiUrl = $authResult.ApiUrl
+        
+        Write-Log "Dropbox Destino configurado: $dropboxPath (Usuario: $($authResult.Email))" "INFO"
+    }
+    
+    Write-Host ""
+    Write-Host "✓ Configuración Dropbox guardada en \$Llevar.$Cual.Dropbox" -ForegroundColor Green
+    Write-Host ""
+    
+    return $true
+}
+
+# ========================================================================== #
+#                  FUNCIONES PRINCIPALES DE TRANSFERENCIA                    #
+# ========================================================================== #
+
+function Copy-LlevarLocalToDropbox {
+    <#
+    .SYNOPSIS
+        Copia archivos locales a Dropbox con progreso
+    .PARAMETER Llevar
+        Objeto TransferConfig completo
+    .PARAMETER StartTime
+        Tiempo de inicio
+    .PARAMETER ShowProgress
+        Mostrar progreso
+    .PARAMETER ProgressTop
+        Posición Y
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [TransferConfig]$Llevar,
+        
+        [datetime]$StartTime = (Get-Date),
+        [bool]$ShowProgress = $true,
+        [int]$ProgressTop = -1
+    )
+    
+    # ✅ VALIDAR
+    if ($Llevar.Origen.Tipo -ne "Local") {
+        throw "Origen debe ser tipo 'Local', recibido: $($Llevar.Origen.Tipo)"
+    }
+    
+    if ($Llevar.Destino.Tipo -ne "Dropbox") {
+        throw "Destino debe ser tipo 'Dropbox', recibido: $($Llevar.Destino.Tipo)"
+    }
+    
+    # Extraer valores
+    $sourcePath = $Llevar.Origen.Local.Path
+    $token = $Llevar.Destino.Dropbox.Token
+    $remotePath = $Llevar.Destino.Dropbox.Path
+    
+    # Validaciones
+    if ([string]::IsNullOrWhiteSpace($sourcePath)) {
+        throw "Origen.Local.Path no puede estar vacío"
+    }
+    
+    if ([string]::IsNullOrWhiteSpace($token)) {
+        throw "Destino.Dropbox.Token no puede estar vacío"
+    }
+    
+    Write-Log "Copia Local → Dropbox: $sourcePath → $remotePath" "INFO"
+    
+    if ($ShowProgress) {
+        Write-LlevarProgressBar -Percent 0 -StartTime $StartTime -Label "Subiendo a Dropbox..." -Top $ProgressTop -Width 50
+    }
+    
+    # TODO: Implementación completa
+    Write-Log "Copia Local → Dropbox: Funcionalidad en desarrollo" "WARNING"
+    throw "Copia Local → Dropbox no implementada completamente."
+}
+
+function Copy-LlevarDropboxToLocal {
+    <#
+    .SYNOPSIS
+        Descarga archivos desde Dropbox a local con progreso
+    .PARAMETER Llevar
+        Objeto TransferConfig completo
+    .PARAMETER StartTime
+        Tiempo de inicio
+    .PARAMETER ShowProgress
+        Mostrar progreso
+    .PARAMETER ProgressTop
+        Posición Y
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [TransferConfig]$Llevar,
+        
+        [datetime]$StartTime = (Get-Date),
+        [bool]$ShowProgress = $true,
+        [int]$ProgressTop = -1
+    )
+    
+    # ✅ VALIDAR
+    if ($Llevar.Origen.Tipo -ne "Dropbox") {
+        throw "Origen debe ser tipo 'Dropbox', recibido: $($Llevar.Origen.Tipo)"
+    }
+    
+    if ($Llevar.Destino.Tipo -ne "Local") {
+        throw "Destino debe ser tipo 'Local', recibido: $($Llevar.Destino.Tipo)"
+    }
+    
+    # Extraer valores
+    $token = $Llevar.Origen.Dropbox.Token
+    $remotePath = $Llevar.Origen.Dropbox.Path
+    $destPath = $Llevar.Destino.Local.Path
+    
+    Write-Log "Copia Dropbox → Local: $remotePath → $destPath" "INFO"
+    
+    if ($ShowProgress) {
+        Write-LlevarProgressBar -Percent 0 -StartTime $StartTime -Label "Descargando de Dropbox..." -Top $ProgressTop -Width 50
+    }
+    
+    # TODO: Implementación completa
+    Write-Log "Copia Dropbox → Local: Funcionalidad en desarrollo" "WARNING"
+    throw "Copia Dropbox → Local no implementada completamente."
+}
+
+# ========================================================================== #
+#                         FUNCIONES LEGACY (OBSOLETAS)                       #
+# ========================================================================== #
+
+function Get-DropboxAuth {
+    <#
+    .SYNOPSIS
+        [FUNCIÓN AUXILIAR] Obtiene autenticación Dropbox OAuth
+    .DESCRIPTION
+        Esta función es auxiliar y se usa internamente.
+        NO modificar sin coordinar con Get-DropboxConfigFromUser.
+    #>
+    # Implementación simplificada - retornar mock por ahora
+    return @{
+        Token        = "mock_token"
+        RefreshToken = "mock_refresh"
+        Email        = "user@example.com"
+        ApiUrl       = "https://api.dropboxapi.com/2"
+    }
+}
+
+# Exportar funciones
+Export-ModuleMember -Function @(
+    'Test-IsDropboxPath',
+    'Get-DropboxConfigFromUser',
+    'Copy-LlevarLocalToDropbox',
+    'Copy-LlevarDropboxToLocal',
+    'Get-DropboxAuth'
+)

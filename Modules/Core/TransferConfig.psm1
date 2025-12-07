@@ -1,4 +1,4 @@
-# ========================================================================== #
+﻿# ========================================================================== #
 #                  MÓDULO: CONFIGURACIÓN DE TRANSFERENCIA                    #
 # ========================================================================== #
 # Propósito: Objeto unificado para toda la configuración de transferencia
@@ -159,445 +159,305 @@ function New-TransferConfig {
     return [TransferConfig]::new()
 }
 
-function Set-TransferConfigOrigen {
+function Get-TransferConfigValue {
     <#
     .SYNOPSIS
-        Configura el origen en el objeto de transferencia
+        Obtiene un valor de la configuración mediante notación de punto
     .DESCRIPTION
-        Cada tipo tiene su propia estructura de parámetros.
-        No hay Path común - cada tipo define su ubicación de forma específica.
+        Navega por la estructura de TransferConfig y retorna el valor solicitado.
+        Soporta rutas como "Opciones.BlockSizeMB" o "Origen.FTP.Server"
+    .PARAMETER Config
+        Objeto TransferConfig
+    .PARAMETER Path
+        Ruta al valor usando notación de punto (ej: "Origen.FTP.Server", "Opciones.BlockSizeMB")
     .EXAMPLE
-        Set-TransferConfigOrigen -Config $cfg -Tipo "FTP" -Parametros @{
-            Server = "ftp.ejemplo.com"; Port = 21; User = "user"; Password = "pass"; Directory = "/datos"
-        }
+        $blockSize = Get-TransferConfigValue -Config $cfg -Path "Opciones.BlockSizeMB"
+    .EXAMPLE
+        $ftpServer = Get-TransferConfigValue -Config $cfg -Path "Origen.FTP.Server"
     #>
     param(
-        [Parameter(Mandatory)]
+        [Parameter(Mandatory = $true)]
         [TransferConfig]$Config,
         
-        [Parameter(Mandatory)]
-        [ValidateSet("Local", "FTP", "UNC", "OneDrive", "Dropbox", "USB")]
-        [string]$Tipo,
-        
-        [Parameter(Mandatory)]
-        [hashtable]$Parametros
+        [Parameter(Mandatory = $true)]
+        [string]$Path
     )
     
-    $Config.Origen.Tipo = $Tipo
+    $parts = $Path -split '\.'
+    $current = $Config
     
-    switch ($Tipo) {
-        "FTP" {
-            $Config.Origen.FTP.Server = $Parametros.Server
-            $Config.Origen.FTP.Port = $Parametros.Port ?? 21
-            $Config.Origen.FTP.User = $Parametros.User
-            $Config.Origen.FTP.Password = $Parametros.Password
-            $Config.Origen.FTP.UseSsl = $Parametros.UseSsl ?? $false
-            $Config.Origen.FTP.Directory = $Parametros.Directory ?? "/"
+    foreach ($part in $parts) {
+        if ($current.PSObject.Properties.Name -contains $part) {
+            $current = $current.$part
         }
-        "UNC" {
-            $Config.Origen.UNC.Path = $Parametros.Path
-            $Config.Origen.UNC.User = $Parametros.User
-            $Config.Origen.UNC.Password = $Parametros.Password
-            $Config.Origen.UNC.Domain = $Parametros.Domain
-            $Config.Origen.UNC.Credentials = $Parametros.Credentials
-        }
-        "OneDrive" {
-            $Config.Origen.OneDrive.Path = $Parametros.Path
-            $Config.Origen.OneDrive.Token = $Parametros.Token
-            $Config.Origen.OneDrive.RefreshToken = $Parametros.RefreshToken
-            $Config.Origen.OneDrive.Email = $Parametros.Email
-            if ($Parametros.ApiUrl) {
-                $Config.Origen.OneDrive.ApiUrl = $Parametros.ApiUrl
-            }
-        }
-        "Dropbox" {
-            $Config.Origen.Dropbox.Path = $Parametros.Path
-            $Config.Origen.Dropbox.Token = $Parametros.Token
-            $Config.Origen.Dropbox.RefreshToken = $Parametros.RefreshToken
-            $Config.Origen.Dropbox.Email = $Parametros.Email
-            if ($Parametros.ApiUrl) {
-                $Config.Origen.Dropbox.ApiUrl = $Parametros.ApiUrl
-            }
-        }
-        { $_ -in "Local", "USB" } {
-            $Config.Origen.Local.Path = $Parametros.Path
-        }
-    }
-}
-
-function Set-TransferConfigDestino {
-    <#
-    .SYNOPSIS
-        Configura el destino en el objeto de transferencia
-    .DESCRIPTION
-        Cada tipo tiene su propia estructura de parámetros.
-        No hay Path común - cada tipo define su ubicación de forma específica.
-    .EXAMPLE
-        Set-TransferConfigDestino -Config $cfg -Tipo "ISO" -Parametros @{
-            OutputPath = "C:\ISOs"; Size = "dvd"; VolumeName = "Backup"
-        }
-    #>
-    param(
-        [Parameter(Mandatory)]
-        [TransferConfig]$Config,
-        
-        [Parameter(Mandatory)]
-        [ValidateSet("Local", "USB", "FTP", "UNC", "OneDrive", "Dropbox", "ISO", "Diskette")]
-        [string]$Tipo,
-        
-        [Parameter(Mandatory)]
-        [hashtable]$Parametros
-    )
-    
-    $Config.Destino.Tipo = $Tipo
-    
-    switch ($Tipo) {
-        "FTP" {
-            $Config.Destino.FTP.Server = $Parametros.Server
-            $Config.Destino.FTP.Port = $Parametros.Port ?? 21
-            $Config.Destino.FTP.User = $Parametros.User
-            $Config.Destino.FTP.Password = $Parametros.Password
-            $Config.Destino.FTP.UseSsl = $Parametros.UseSsl ?? $false
-            $Config.Destino.FTP.Directory = $Parametros.Directory ?? "/"
-        }
-        "UNC" {
-            $Config.Destino.UNC.Path = $Parametros.Path
-            $Config.Destino.UNC.User = $Parametros.User
-            $Config.Destino.UNC.Password = $Parametros.Password
-            $Config.Destino.UNC.Domain = $Parametros.Domain
-            $Config.Destino.UNC.Credentials = $Parametros.Credentials
-        }
-        "OneDrive" {
-            $Config.Destino.OneDrive.Path = $Parametros.Path
-            $Config.Destino.OneDrive.Token = $Parametros.Token
-            $Config.Destino.OneDrive.RefreshToken = $Parametros.RefreshToken
-            $Config.Destino.OneDrive.Email = $Parametros.Email
-            if ($Parametros.ApiUrl) {
-                $Config.Destino.OneDrive.ApiUrl = $Parametros.ApiUrl
-            }
-        }
-        "Dropbox" {
-            $Config.Destino.Dropbox.Path = $Parametros.Path
-            $Config.Destino.Dropbox.Token = $Parametros.Token
-            $Config.Destino.Dropbox.RefreshToken = $Parametros.RefreshToken
-            $Config.Destino.Dropbox.Email = $Parametros.Email
-            if ($Parametros.ApiUrl) {
-                $Config.Destino.Dropbox.ApiUrl = $Parametros.ApiUrl
-            }
-        }
-        "ISO" {
-            $Config.Destino.ISO.OutputPath = $Parametros.OutputPath ?? $Parametros.Path
-            $Config.Destino.ISO.Size = $Parametros.Size ?? $Parametros.IsoSize ?? "dvd"
-            $Config.Destino.ISO.VolumeSize = $Parametros.VolumeSize
-            $Config.Destino.ISO.VolumeName = $Parametros.VolumeName ?? "LLEVAR"
-        }
-        "Diskette" {
-            $Config.Destino.Diskette.MaxDisks = $Parametros.MaxDisks ?? 30
-            $Config.Destino.Diskette.OutputPath = $Parametros.OutputPath ?? $Parametros.Path
-            if ($Parametros.Size) {
-                $Config.Destino.Diskette.Size = $Parametros.Size
-            }
-        }
-        { $_ -in "Local", "USB" } {
-            $Config.Destino.Local.Path = $Parametros.Path
-        }
-    }
-}
-
-function Get-TransferConfigOrigen {
-    <#
-    .SYNOPSIS
-        Obtiene la configuración del origen según su tipo
-    #>
-    param(
-        [Parameter(Mandatory)]
-        [TransferConfig]$Config
-    )
-    
-    # Fallback: infer tipo si no está establecido pero hay datos FTP/UNC/Local
-    if (-not $Config.Origen.Tipo) {
-        if ($Config.Origen.FTP.Server) { $Config.Origen.Tipo = "FTP" }
-        elseif ($Config.Origen.UNC.Path) { $Config.Origen.Tipo = "UNC" }
-        elseif ($Config.Origen.Local.Path) { $Config.Origen.Tipo = "Local" }
-    }
-    $tipo = $Config.Origen.Tipo
-    if (-not $tipo) { Write-Host "DEBUG Get-TransferConfigOrigen: Tipo vacío" -ForegroundColor Yellow; return $null }
-    $path = Get-TransferConfigOrigenPath -Config $Config
-    
-    $subConfig = switch ($tipo) {
-        "FTP" { $Config.Origen.FTP }
-        "UNC" { $Config.Origen.UNC }
-        "OneDrive" { $Config.Origen.OneDrive }
-        "Dropbox" { $Config.Origen.Dropbox }
-        "Local" { $Config.Origen.Local }
-        "USB" { $Config.Origen.Local }
-        default { $null }
-    }
-
-    if (-not $subConfig) { return $null }
-
-    $ht = [ordered]@{ Tipo = $tipo }
-    foreach ($prop in $subConfig.PSObject.Properties) {
-        $ht[$prop.Name] = $prop.Value
-    }
-    if ($path) { $ht["Path"] = $path }
-    if ($tipo -in @("Local", "USB", "UNC")) { $ht["LocalPath"] = $path }
-    return [pscustomobject]$ht
-}
-
-function Get-TransferConfigDestino {
-    <#
-    .SYNOPSIS
-        Obtiene la configuración del destino según su tipo
-    #>
-    param(
-        [Parameter(Mandatory)]
-        [TransferConfig]$Config
-    )
-    
-    # Fallback: infer tipo si no está establecido pero hay datos FTP/UNC/Local
-    if (-not $Config.Destino.Tipo) {
-        if ($Config.Destino.FTP.Server) { $Config.Destino.Tipo = "FTP" }
-        elseif ($Config.Destino.UNC.Path) { $Config.Destino.Tipo = "UNC" }
-        elseif ($Config.Destino.Local.Path) { $Config.Destino.Tipo = "Local" }
-    }
-    $tipo = $Config.Destino.Tipo
-    if (-not $tipo) { Write-Host "DEBUG Get-TransferConfigDestino: Tipo vacío" -ForegroundColor Yellow; return $null }
-    $path = Get-TransferConfigDestinoPath -Config $Config
-    
-    $subConfig = switch ($tipo) {
-        "FTP" { $Config.Destino.FTP }
-        "UNC" { $Config.Destino.UNC }
-        "OneDrive" { $Config.Destino.OneDrive }
-        "Dropbox" { $Config.Destino.Dropbox }
-        "ISO" { $Config.Destino.ISO }
-        "Diskette" { $Config.Destino.Diskette }
-        "Local" { $Config.Destino.Local }
-        "USB" { $Config.Destino.Local }
-        default { $null }
-    }
-
-    if (-not $subConfig) { return $null }
-
-    $ht = [ordered]@{ Tipo = $tipo }
-    foreach ($prop in $subConfig.PSObject.Properties) {
-        $ht[$prop.Name] = $prop.Value
-    }
-    if ($path) { $ht["Path"] = $path }
-    if ($tipo -in @("Local", "USB", "UNC")) { $ht["LocalPath"] = $path }
-    return [pscustomobject]$ht
-}
-
-function Get-TransferConfigOrigenPath {
-    <#
-    .SYNOPSIS
-        Obtiene el path efectivo del origen según su tipo
-    .DESCRIPTION
-        Construye una representación de ruta según el tipo:
-        - Local/USB: Ruta del sistema
-        - FTP: ftp://servidor:puerto/directorio
-        - UNC: \\servidor\recurso
-        - OneDrive/Dropbox: Ruta API o local
-    #>
-    param(
-        [Parameter(Mandatory)]
-        [TransferConfig]$Config
-    )
-    
-    $tipo = $Config.Origen.Tipo
-    
-    switch ($tipo) {
-        "FTP" {
-            $ftp = $Config.Origen.FTP
-            $scheme = if ($ftp.UseSsl) { "ftps" } else { "ftp" }
-            $server = $ftp.Server
-            if ($server -match '^ftps?://(.+)$') { $server = $Matches[1] }
-            return "${scheme}://${server}:$($ftp.Port)$($ftp.Directory)"
-        }
-        "UNC" {
-            return $Config.Origen.UNC.Path
-        }
-        "OneDrive" {
-            return $Config.Origen.OneDrive.Path
-        }
-        "Dropbox" {
-            return $Config.Origen.Dropbox.Path
-        }
-        { $_ -in "Local", "USB" } {
-            return $Config.Origen.Local.Path
-        }
-        default {
+        else {
+            Write-Warning "Ruta no encontrada en TransferConfig: $Path (parte: $part)"
             return $null
         }
     }
+    
+    return $current
 }
 
-function Get-TransferConfigDestinoPath {
+function Set-TransferConfigValue {
     <#
     .SYNOPSIS
-        Obtiene el path efectivo del destino según su tipo
+        Establece un valor en la configuración mediante notación de punto
     .DESCRIPTION
-        Construye una representación de ruta según el tipo:
-        - Local/USB: Ruta del sistema
-        - FTP: ftp://servidor:puerto/directorio
-        - UNC: \\servidor\recurso
-        - OneDrive/Dropbox: Ruta API o local
-        - ISO/Diskette: OutputPath
+        Navega por la estructura de TransferConfig y establece el valor solicitado.
+        Soporta rutas como "Opciones.BlockSizeMB" o "Origen.FTP.Server"
+    .PARAMETER Config
+        Objeto TransferConfig
+    .PARAMETER Path
+        Ruta al valor usando notación de punto (ej: "Origen.FTP.Server", "Opciones.Clave")
+    .PARAMETER Value
+        Nuevo valor a establecer
+    .EXAMPLE
+        Set-TransferConfigValue -Config $cfg -Path "Opciones.BlockSizeMB" -Value 50
+    .EXAMPLE
+        Set-TransferConfigValue -Config $cfg -Path "Origen.FTP.Server" -Value "ftp.example.com"
     #>
     param(
-        [Parameter(Mandatory)]
-        [TransferConfig]$Config
+        [Parameter(Mandatory = $true)]
+        [TransferConfig]$Config,
+        
+        [Parameter(Mandatory = $true)]
+        [string]$Path,
+        
+        [Parameter(Mandatory = $true)]
+        $Value
     )
     
-    $tipo = $Config.Destino.Tipo
+    $parts = $Path -split '\.'
+    $current = $Config
     
-    switch ($tipo) {
-        "FTP" {
-            $ftp = $Config.Destino.FTP
-            $scheme = if ($ftp.UseSsl) { "ftps" } else { "ftp" }
-            $server = $ftp.Server
-            if ($server -match '^ftps?://(.+)$') { $server = $Matches[1] }
-            return "${scheme}://${server}:$($ftp.Port)$($ftp.Directory)"
+    # Navegar hasta el penúltimo elemento
+    for ($i = 0; $i -lt $parts.Count - 1; $i++) {
+        $part = $parts[$i]
+        if ($current.PSObject.Properties.Name -contains $part) {
+            $current = $current.$part
         }
-        "UNC" {
-            return $Config.Destino.UNC.Path
+        else {
+            throw "Ruta de configuración inválida en TransferConfig: $Path (parte: $part no existe)"
         }
-        "OneDrive" {
-            return $Config.Destino.OneDrive.Path
-        }
-        "Dropbox" {
-            return $Config.Destino.Dropbox.Path
-        }
-        "ISO" {
-            return $Config.Destino.ISO.OutputPath
-        }
-        "Diskette" {
-            return $Config.Destino.Diskette.OutputPath
-        }
-        { $_ -in "Local", "USB" } {
-            return $Config.Destino.Local.Path
-        }
-        default {
-            return $null
-        }
+    }
+    
+    # Establecer el valor en la última propiedad
+    $lastPart = $parts[$parts.Count - 1]
+    if ($current.PSObject.Properties.Name -contains $lastPart) {
+        $current.$lastPart = $Value
+    }
+    else {
+        throw "Propiedad no existe en TransferConfig: $lastPart en ruta $Path"
     }
 }
 
-function Test-TransferConfigComplete {
+function Export-TransferConfig {
     <#
     .SYNOPSIS
-        Valida que la configuración de transferencia esté completa
+        Exporta TransferConfig a archivo JSON
     .DESCRIPTION
-        Verifica que cada tipo tenga sus parámetros requeridos configurados.
-        No usa Path común - cada tipo tiene sus propios requisitos.
+        Serializa el objeto TransferConfig completo a JSON y lo guarda en archivo.
+        Útil para persistencia de configuraciones entre sesiones.
+    .PARAMETER Config
+        Objeto TransferConfig a exportar
+    .PARAMETER Path
+        Ruta del archivo JSON de salida
+    .EXAMPLE
+        Export-TransferConfig -Config $cfg -Path "C:\Temp\llevar-config.json"
     #>
     param(
-        [Parameter(Mandatory)]
-        [TransferConfig]$Config
+        [Parameter(Mandatory = $true)]
+        [TransferConfig]$Config,
+        
+        [Parameter(Mandatory = $true)]
+        [string]$Path
     )
     
-    $errors = @()
-    
-    # Validar origen
-    if (-not $Config.Origen.Tipo) {
-        $errors += "Falta definir tipo de origen"
+    try {
+        # Convertir TransferConfig a JSON con profundidad completa
+        $json = $Config | ConvertTo-Json -Depth 10
+        
+        # Guardar en archivo
+        $json | Out-File -FilePath $Path -Encoding UTF8 -Force
+        
+        Write-Log "TransferConfig exportado a: $Path" "INFO"
     }
-    else {
-        switch ($Config.Origen.Tipo) {
-            "FTP" {
-                if (-not $Config.Origen.FTP.Server) {
-                    $errors += "Origen FTP: falta especificar servidor"
-                }
-                if (-not $Config.Origen.FTP.User) {
-                    $errors += "Origen FTP: falta especificar usuario"
-                }
+    catch {
+        Write-Log "Error exportando TransferConfig: $($_.Exception.Message)" "ERROR" -ErrorRecord $_
+        throw "No se pudo exportar TransferConfig a $Path"
+    }
+}
+
+function Import-TransferConfig {
+    <#
+    .SYNOPSIS
+        Importa TransferConfig desde archivo JSON
+    .DESCRIPTION
+        Lee un archivo JSON y reconstruye el objeto TransferConfig.
+        Útil para cargar configuraciones guardadas previamente.
+    .PARAMETER Path
+        Ruta del archivo JSON a importar
+    .OUTPUTS
+        [TransferConfig] Objeto reconstruido desde JSON
+    .EXAMPLE
+        $cfg = Import-TransferConfig -Path "C:\Temp\llevar-config.json"
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path
+    )
+    
+    if (-not (Test-Path $Path)) {
+        throw "Archivo de configuración no encontrado: $Path"
+    }
+    
+    try {
+        # Leer JSON
+        $json = Get-Content -Path $Path -Raw -Encoding UTF8
+        $data = $json | ConvertFrom-Json
+        
+        # Crear nueva instancia de TransferConfig
+        $config = [TransferConfig]::new()
+        
+        # Copiar propiedades desde JSON a TransferConfig
+        # Origen
+        if ($data.Origen) {
+            $config.Origen.Tipo = $data.Origen.Tipo
+            foreach ($prop in $data.Origen.FTP.PSObject.Properties) {
+                $config.Origen.FTP.$($prop.Name) = $prop.Value
             }
-            "UNC" {
-                if (-not $Config.Origen.UNC.Path) {
-                    $errors += "Origen UNC: falta especificar ruta de red"
-                }
+            foreach ($prop in $data.Origen.UNC.PSObject.Properties) {
+                $config.Origen.UNC.$($prop.Name) = $prop.Value
             }
-            "OneDrive" {
-                if (-not $Config.Origen.OneDrive.Path) {
-                    $errors += "Origen OneDrive: falta especificar ruta"
-                }
-                if (-not $Config.Origen.OneDrive.Token) {
-                    $errors += "Origen OneDrive: falta autenticación (token)"
-                }
+            foreach ($prop in $data.Origen.OneDrive.PSObject.Properties) {
+                $config.Origen.OneDrive.$($prop.Name) = $prop.Value
             }
-            "Dropbox" {
-                if (-not $Config.Origen.Dropbox.Path) {
-                    $errors += "Origen Dropbox: falta especificar ruta"
-                }
-                if (-not $Config.Origen.Dropbox.Token) {
-                    $errors += "Origen Dropbox: falta autenticación (token)"
-                }
+            foreach ($prop in $data.Origen.Dropbox.PSObject.Properties) {
+                $config.Origen.Dropbox.$($prop.Name) = $prop.Value
             }
-            { $_ -in "Local", "USB" } {
-                if (-not $Config.Origen.Local.Path) {
-                    $errors += "Origen $($Config.Origen.Tipo): falta especificar ruta"
-                }
+            foreach ($prop in $data.Origen.Local.PSObject.Properties) {
+                $config.Origen.Local.$($prop.Name) = $prop.Value
             }
         }
-    }
-    
-    # Validar destino
-    if (-not $Config.Destino.Tipo) {
-        $errors += "Falta definir tipo de destino"
-    }
-    else {
-        switch ($Config.Destino.Tipo) {
-            "FTP" {
-                if (-not $Config.Destino.FTP.Server) {
-                    $errors += "Destino FTP: falta especificar servidor"
-                }
-                if (-not $Config.Destino.FTP.User) {
-                    $errors += "Destino FTP: falta especificar usuario"
-                }
+        
+        # Destino
+        if ($data.Destino) {
+            $config.Destino.Tipo = $data.Destino.Tipo
+            foreach ($prop in $data.Destino.FTP.PSObject.Properties) {
+                $config.Destino.FTP.$($prop.Name) = $prop.Value
             }
-            "UNC" {
-                if (-not $Config.Destino.UNC.Path) {
-                    $errors += "Destino UNC: falta especificar ruta de red"
-                }
+            foreach ($prop in $data.Destino.UNC.PSObject.Properties) {
+                $config.Destino.UNC.$($prop.Name) = $prop.Value
             }
-            "OneDrive" {
-                if (-not $Config.Destino.OneDrive.Path) {
-                    $errors += "Destino OneDrive: falta especificar ruta"
-                }
-                if (-not $Config.Destino.OneDrive.Token) {
-                    $errors += "Destino OneDrive: falta autenticación (token)"
-                }
+            foreach ($prop in $data.Destino.OneDrive.PSObject.Properties) {
+                $config.Destino.OneDrive.$($prop.Name) = $prop.Value
             }
-            "Dropbox" {
-                if (-not $Config.Destino.Dropbox.Path) {
-                    $errors += "Destino Dropbox: falta especificar ruta"
-                }
-                if (-not $Config.Destino.Dropbox.Token) {
-                    $errors += "Destino Dropbox: falta autenticación (token)"
-                }
+            foreach ($prop in $data.Destino.Dropbox.PSObject.Properties) {
+                $config.Destino.Dropbox.$($prop.Name) = $prop.Value
             }
-            "ISO" {
-                if (-not $Config.Destino.ISO.OutputPath) {
-                    $errors += "Destino ISO: falta especificar ruta de salida"
-                }
+            foreach ($prop in $data.Destino.Local.PSObject.Properties) {
+                $config.Destino.Local.$($prop.Name) = $prop.Value
             }
-            "Diskette" {
-                if (-not $Config.Destino.Diskette.OutputPath) {
-                    $errors += "Destino Diskette: falta especificar ruta de salida"
-                }
+            foreach ($prop in $data.Destino.ISO.PSObject.Properties) {
+                $config.Destino.ISO.$($prop.Name) = $prop.Value
             }
-            { $_ -in "Local", "USB" } {
-                if (-not $Config.Destino.Local.Path) {
-                    $errors += "Destino $($Config.Destino.Tipo): falta especificar ruta"
-                }
+            foreach ($prop in $data.Destino.Diskette.PSObject.Properties) {
+                $config.Destino.Diskette.$($prop.Name) = $prop.Value
             }
         }
+        
+        # Opciones
+        if ($data.Opciones) {
+            foreach ($prop in $data.Opciones.PSObject.Properties) {
+                $config.Opciones.$($prop.Name) = $prop.Value
+            }
+        }
+        
+        Write-Log "TransferConfig importado desde: $Path" "INFO"
+        return $config
+    }
+    catch {
+        Write-Log "Error importando TransferConfig: $($_.Exception.Message)" "ERROR" -ErrorRecord $_
+        throw "No se pudo importar TransferConfig desde $Path"
+    }
+}
+
+function Reset-TransferConfigSection {
+    <#
+    .SYNOPSIS
+        Reinicia una sección de TransferConfig a valores por defecto
+    .DESCRIPTION
+        Limpia todos los valores de Origen o Destino, dejándolos como una instancia nueva.
+    .PARAMETER Config
+        Objeto TransferConfig
+    .PARAMETER Section
+        Sección a reiniciar: "Origen" o "Destino"
+    .EXAMPLE
+        Reset-TransferConfigSection -Config $cfg -Section "Origen"
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [TransferConfig]$Config,
+        
+        [Parameter(Mandatory = $true)]
+        [ValidateSet("Origen", "Destino")]
+        [string]$Section
+    )
+    
+    # Crear instancia temporal para obtener valores por defecto
+    $default = [TransferConfig]::new()
+    
+    # Copiar la sección por defecto
+    if ($Section -eq "Origen") {
+        $Config.Origen = $default.Origen
+    }
+    else {
+        $Config.Destino = $default.Destino
     }
     
-    return @{
-        IsValid = ($errors.Count -eq 0)
-        Errors  = $errors
+    Write-Log "Sección $Section reiniciada a valores por defecto" "INFO"
+}
+
+function Copy-TransferConfigSection {
+    <#
+    .SYNOPSIS
+        Copia una sección de TransferConfig a otra
+    .DESCRIPTION
+        Duplica todos los valores de Origen a Destino o viceversa.
+        Útil cuando origen y destino tienen configuración similar.
+    .PARAMETER Config
+        Objeto TransferConfig
+    .PARAMETER From
+        Sección origen: "Origen" o "Destino"
+    .PARAMETER To
+        Sección destino: "Origen" o "Destino"
+    .EXAMPLE
+        Copy-TransferConfigSection -Config $cfg -From "Origen" -To "Destino"
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [TransferConfig]$Config,
+        
+        [Parameter(Mandatory = $true)]
+        [ValidateSet("Origen", "Destino")]
+        [string]$From,
+        
+        [Parameter(Mandatory = $true)]
+        [ValidateSet("Origen", "Destino")]
+        [string]$To
+    )
+    
+    if ($From -eq $To) {
+        Write-Warning "Origen y destino son la misma sección. No se realizó copia."
+        return
     }
+    
+    # Serializar y deserializar para copia profunda
+    $json = $Config.$From | ConvertTo-Json -Depth 10
+    $Config.$To = $json | ConvertFrom-Json
+    
+    Write-Log "Sección $From copiada a $To" "INFO"
 }
 
 # Exportar funciones
@@ -609,5 +469,11 @@ Export-ModuleMember -Function @(
     'Get-TransferConfigDestino',
     'Get-TransferConfigOrigenPath',
     'Get-TransferConfigDestinoPath',
-    'Test-TransferConfigComplete'
+    'Test-TransferConfigComplete',
+    'Get-TransferConfigValue',
+    'Set-TransferConfigValue',
+    'Export-TransferConfig',
+    'Import-TransferConfig',
+    'Reset-TransferConfigSection',
+    'Copy-TransferConfigSection'
 )

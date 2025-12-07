@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Maneja el parámetro -Instalar para realizar la instalación del sistema.
 

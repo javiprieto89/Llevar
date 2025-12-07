@@ -1,0 +1,157 @@
+﻿<Project ToolsVersion="4.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <SchemaVersion>2.0</SchemaVersion>
+    <ProjectGuid>6CAFC0C6-A428-4d30-A9F9-700E829FEA51</ProjectGuid>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>MyApplication</RootNamespace>
+    <AssemblyName>MyApplication</AssemblyName>
+    <Name>Llevar</Name>
+    <StartupFile>$(ProjectDir)Llevar.ps1</StartupFile>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <ItemGroup>
+    <Content Include="alex-cool\.editorconfig" />
+    <Content Include="alex-cool\LLEVAR.BAT" />
+    <Content Include="BANNER-DOCUMENTATION.md" />
+    <Content Include="CAMBIOS-FTP.md" />
+    <Content Include="CORRECCIONES-TRANSFERCONFIG.md" />
+    <Content Include="Data\alexsoft.txt" />
+    <Content Include="Data\ftp-test-config.json" />
+    <Content Include="EARTHBL2.BMP" />
+    <Content Include="EARTHBL2.jpg" />
+    <Content Include="FIX-WARNINGS.md" />
+    <Content Include="FUNCTION-AUDIT-REPORT.md" />
+    <Content Include="IMPLEMENTACION-PRUEBAS.md" />
+    <Content Include="INSTALAR.BAT" />
+    <Content Include="license.txt" />
+    <Content Include="LIMPIEZA-FUNCIONES-OBSOLETAS.md" />
+    <Content Include="LLEVAR.BAT.old" />
+    <Content Include="LLEVAR.CMD" />
+    <Content Include="Llevar.inf" />
+    <Content Include="Llevar.ps1.backup" />
+    <Content Include="Llevar.ps1.backup2" />
+    <Content Include="Llevar.ps1_" />
+    <Content Include="Llevar2.ps1_" />
+    <Content Include="llevarbienascii.png" />
+    <Content Include="MENU-IMPLEMENTATION.md" />
+    <Content Include="MODULARIZATION-SUMMARY.md" />
+    <Content Include="NAVIGATOR-FEATURES.md" />
+    <Content Include="ONEDRIVE-README.md" />
+    <Content Include="TEST-QUICK-GUIDE.md" />
+    <Content Include="TEST-SYSTEM.md" />
+    <Content Include="TRANSFERCONFIG-ARCHITECTURE.md" />
+    <Content Include="TRANSFERCONFIG-TYPE.md" />
+    <Content Include="VERIFICATION-COMPLETE.md" />
+    <Content Include="Modules\Parameters\README.md" />
+    <Content Include="Tests\README.md" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="Convert-ToUtf8.ps1" />
+    <Compile Include="Demo-Banner.ps1" />
+    <Compile Include="Demo-Banners-Fixed.ps1" />
+    <Compile Include="Demo-MenusYPopups.ps1" />
+    <Compile Include="Demo-Navigator-Enhanced.ps1" />
+    <Compile Include="Find-InvisibleCharacters.ps1" />
+    <Compile Include="Fix-InvisibleChars.ps1" />
+    <Compile Include="Fix-PowerShellEncoding.ps1" />
+    <Compile Include="generate_vcxproj.ps1" />
+    <Compile Include="Instalar-MenuContextual.ps1" />
+    <Compile Include="Llevar.ps1" />
+    <Compile Include="RemoveCache.ps1" />
+    <Compile Include="Test-Actualizaciones.ps1" />
+    <Compile Include="Test-CompleteFlow.ps1" />
+    <Compile Include="test-ftp-auto.ps1" />
+    <Compile Include="Test-FTPUrlParsing.ps1" />
+    <Compile Include="Test-Navigator-Fixed.ps1" />
+    <Compile Include="Test-TransferConfigFlow.ps1" />
+    <Compile Include="Tests\Test-RefactorizacionCompleta.ps1" />
+    <Compile Include="tmp-test-ftp.ps1" />
+    <Compile Include="Verify-Functions.ps1" />
+    <Compile Include="Verify-Modularization.ps1" />
+    <Compile Include="Modules\Compression\BlockSplitter.psm1" />
+    <Compile Include="Modules\Compression\NativeZip.psm1" />
+    <Compile Include="Modules\Compression\SevenZip.psm1" />
+    <Compile Include="Modules\Core\Logger.psm1" />
+    <Compile Include="Modules\Core\TransferConfig.psm1" />
+    <Compile Include="Modules\Core\Validation.psm1" />
+    <Compile Include="Modules\Installation\Installer.psm1" />
+    <Compile Include="Modules\Installation\ISO.psm1" />
+    <Compile Include="Modules\Installation\SystemInstall.psm1" />
+    <Compile Include="Modules\Parameters\Example.psm1" />
+    <Compile Include="Modules\Parameters\Help.psm1" />
+    <Compile Include="Modules\Parameters\Install.psm1" />
+    <Compile Include="Modules\Parameters\InstallationCheck.psm1" />
+    <Compile Include="Modules\Parameters\InteractiveMenu.psm1" />
+    <Compile Include="Modules\Parameters\NormalMode.psm1" />
+    <Compile Include="Modules\Parameters\Robocopy.psm1" />
+    <Compile Include="Modules\Parameters\Test.psm1" />
+    <Compile Include="Modules\System\Audio.psm1" />
+    <Compile Include="Modules\System\FileSystem.psm1" />
+    <Compile Include="Modules\System\Robocopy.psm1" />
+    <Compile Include="Modules\Transfer\Dropbox.psm1" />
+    <Compile Include="Modules\Transfer\Floppy.psm1" />
+    <Compile Include="Modules\Transfer\FTP.psm1" />
+    <Compile Include="Modules\Transfer\Local.psm1" />
+    <Compile Include="Modules\Transfer\OneDrive.psm1" />
+    <Compile Include="Modules\Transfer\UNC.psm1" />
+    <Compile Include="Modules\Transfer\Unified.psm1" />
+    <Compile Include="Modules\UI\Banners.psm1" />
+    <Compile Include="Modules\UI\ConfigMenus.psm1" />
+    <Compile Include="Modules\UI\Console.psm1" />
+    <Compile Include="Modules\UI\Menus.psm1" />
+    <Compile Include="Modules\UI\Navigator.psm1" />
+    <Compile Include="Modules\UI\ProgressBar.psm1" />
+    <Compile Include="Modules\Utilities\Examples.psm1" />
+    <Compile Include="Modules\Utilities\Help.psm1" />
+    <Compile Include="Modules\Utilities\Installation.psm1" />
+    <Compile Include="Modules\Utilities\PathSelectors.psm1" />
+    <Compile Include="Modules\Utilities\VolumeManagement.psm1" />
+    <Compile Include="Tests\Import-LlevarModules.ps1" />
+    <Compile Include="Tests\Mock-USBDevices.ps1" />
+    <Compile Include="Tests\Run-AllTests.ps1" />
+    <Compile Include="Tests\Run-FTPTest.ps1" />
+    <Compile Include="Tests\Test-Dropbox.ps1" />
+    <Compile Include="Tests\Test-FTPToFTP.ps1" />
+    <Compile Include="Tests\Test-FTPToLocal.ps1" />
+    <Compile Include="Tests\Test-Functions.ps1" />
+    <Compile Include="Tests\Test-Integration.ps1" />
+    <Compile Include="Tests\Test-LocalToFTP.ps1" />
+    <Compile Include="Tests\Test-LocalToISO.ps1" />
+    <Compile Include="Tests\Test-LocalToUSB.ps1" />
+    <Compile Include="Tests\Test-OneDrive.ps1" />
+    <Compile Include="Tests\Test-Robocopy.ps1" />
+    <Compile Include="Verify-TransferConfig-Usage.ps1" />
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="alex-cool\" />
+    <Folder Include="Data\" />
+    <Folder Include="Modules\" />
+    <Folder Include="Modules\Compression\" />
+    <Folder Include="Modules\Core\" />
+    <Folder Include="Modules\Installation\" />
+    <Folder Include="Modules\Parameters\" />
+    <Folder Include="Modules\System\" />
+    <Folder Include="Modules\Transfer\" />
+    <Folder Include="Modules\UI\" />
+    <Folder Include="Modules\Utilities\" />
+    <Folder Include="Tests\" />
+  </ItemGroup>
+  <Import Project="$(MSBuildExtensionsPath)\PowerShell Tools for Visual Studio\PowerShellTools.targets" Condition="Exists('$(MSBuildExtensionsPath)\PowerShell Tools for Visual Studio\PowerShellTools.targets')" />
+</Project>

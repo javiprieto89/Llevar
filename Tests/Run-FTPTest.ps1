@@ -1,4 +1,4 @@
-using module "../Modules/Core/TransferConfig.psm1"
+﻿using module "../Modules/Core/TransferConfig.psm1"
 
 param(
     [string]$ConfigPath = "..\Data\ftp-test-config.json",

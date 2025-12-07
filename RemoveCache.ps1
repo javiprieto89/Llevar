@@ -1,4 +1,4 @@
-# Cerrar VS Code para evitar archivos bloqueados
+﻿# Cerrar VS Code para evitar archivos bloqueados
 Get-Process code -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 
 Start-Sleep -Seconds 1

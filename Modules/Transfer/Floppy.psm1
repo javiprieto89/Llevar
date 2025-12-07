@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Módulo para manejo de copias a diskettes (disquetes)
 
@@ -380,7 +380,7 @@ function Copy-ToFloppyDisks {
                     Write-Host ""
                 }
                 
-                Write-Host "Inserte un diskette VAC�O en la unidad $Script:FloppyDrive" -ForegroundColor Cyan
+                Write-Host "Inserte un diskette VAC�O en la unidad $Script:FloppyDrive" -ForegroundColor Cyan
                 Write-Host ""
                 Write-Host "Presione ENTER para continuar o ESC para cancelar..." -ForegroundColor Gray
                 

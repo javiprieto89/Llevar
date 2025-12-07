@@ -1,271 +1,364 @@
+﻿# ========================================================================== #
+#                    MÓDULO: DISPATCHER UNIFICADO DE TRANSFERENCIAS          #
 # ========================================================================== #
-#                    MÓDULO: ORQUESTADOR DE TRANSFERENCIAS                   #
+# Propósito: Orquestador inteligente que detecta todas las combinaciones posibles
+# Arquitectura: Funciones públicas legibles → Dispatcher genérico → Handlers específicos
 # ========================================================================== #
-# Propósito: Función unificada Copy-LlevarFiles que orquesta todas las transferencias
-# Soporta: Local, FTP, OneDrive, Dropbox, UNC en todas las combinaciones
+
+# Importar TransferConfig
+using module "Q:\Utilidad\LLevar\Modules\Core\TransferConfig.psm1"
+
+# Imports necesarios
+$ModulesPath = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
+Import-Module (Join-Path $ModulesPath "Modules\UI\ProgressBar.psm1") -Force -Global
+Import-Module (Join-Path $ModulesPath "Modules\Core\Logging.psm1") -Force -Global
+Import-Module (Join-Path $ModulesPath "Modules\Transfer\Local.psm1") -Force -Global
+
+# ========================================================================== #
+#                  FUNCIONES PÚBLICAS (NOMBRES DESCRIPTIVOS)                 #
 # ========================================================================== #
 
 function Copy-LlevarFiles {
     <#
     .SYNOPSIS
-        Función unificada para copiar archivos entre cualquier tipo de origen y destino
+        Función pública principal para copiar archivos (mantiene compatibilidad)
     .DESCRIPTION
-        Soporta todas las combinaciones: Local, FTP, OneDrive, Dropbox, UNC
-        Incluye barra de progreso automática con Write-LlevarProgressBar
+        Punto de entrada unificado que delega al dispatcher.
+        Soporta tanto el formato antiguo (SourceConfig/DestinationConfig)
+        como el nuevo formato (TransferConfig).
+    .PARAMETER TransferConfig
+        Objeto TransferConfig completo (formato nuevo recomendado)
     .PARAMETER SourceConfig
-        Hashtable con configuración de origen (Tipo, Path, credenciales según tipo)
+        Configuración de origen (formato legacy)
     .PARAMETER DestinationConfig
-        Hashtable con configuración de destino (Tipo, Path, credenciales según tipo)
+        Configuración de destino (formato legacy)
     .PARAMETER SourcePath
-        Ruta local del archivo/carpeta a copiar (si origen es Local/UNC)
+        Ruta de origen (opcional)
     .PARAMETER ShowProgress
-        Si se debe mostrar barra de progreso (por defecto: $true)
+        Mostrar barra de progreso
     .PARAMETER ProgressTop
-        Posición Y de la barra de progreso (-1 = posición actual)
+        Posición Y de la barra
     .PARAMETER UseRobocopy
-        Usar Robocopy para copias locales (más rápido para carpetas grandes)
+        Usar Robocopy para Local→Local
     .PARAMETER RobocopyMirror
-        Modo espejo con Robocopy (elimina archivos extras en destino)
+        Modo mirror de Robocopy
     #>
     param(
-        [Parameter(Mandatory = $true)]
+        [Parameter(ParameterSetName='NewFormat')]
+        [TransferConfig]$TransferConfig,
+        
+        [Parameter(ParameterSetName='LegacyFormat', Mandatory=$true)]
         [psobject]$SourceConfig,
         
-        [Parameter(Mandatory = $true)]
+        [Parameter(ParameterSetName='LegacyFormat', Mandatory=$true)]
         [psobject]$DestinationConfig,
         
-        [Parameter(Mandatory = $false)]
         [string]$SourcePath,
-        
         [bool]$ShowProgress = $true,
         [int]$ProgressTop = -1,
         [bool]$UseRobocopy = $false,
         [bool]$RobocopyMirror = $false
     )
     
-    $startTime = Get-Date
-    Write-Log "Iniciando copia unificada: $($SourceConfig.Tipo) → $($DestinationConfig.Tipo)" "INFO"
-    
-    # Validar tipos
-    $validTypes = @("Local", "FTP", "OneDrive", "Dropbox", "UNC", "USB")
-    if ($SourceConfig.Tipo -notin $validTypes) {
-        Write-Log "Tipo de origen inválido: $($SourceConfig.Tipo)" "ERROR"
-        throw "Tipo de origen inválido: $($SourceConfig.Tipo)"
-    }
-    if ($DestinationConfig.Tipo -notin $validTypes) {
-        Write-Log "Tipo de destino inválido: $($DestinationConfig.Tipo)" "ERROR"
-        throw "Tipo de destino inválido: $($DestinationConfig.Tipo)"
-    }
-    
-    # Determinar ruta de origen
-    $sourceLocation = $SourcePath
-    if (-not $sourceLocation) {
-        if ($SourceConfig.LocalPath) { 
-            $sourceLocation = $SourceConfig.LocalPath
-        }
-        elseif ($SourceConfig.Path) {
-            $sourceLocation = $SourceConfig.Path
-        }
-        else {
-            throw "No se pudo determinar la ubicación de origen"
-        }
-    }
-    
-    # Verificar que el origen existe (solo para Local/UNC)
-    if ($SourceConfig.Tipo -in @("Local", "UNC")) {
-        if (-not (Test-Path $sourceLocation)) {
-            Write-Log "Origen no existe: $sourceLocation" "ERROR"
-            throw "El origen no existe: $sourceLocation"
-        }
-    }
-    
-    # Obtener información del archivo/carpeta origen
-    $isFolder = $false
-    $totalBytes = 0
-    $fileCount = 0
-    
-    if ($SourceConfig.Tipo -in @("Local", "UNC")) {
-        $item = Get-Item $sourceLocation
-        $isFolder = $item.PSIsContainer
+    # Si recibimos formato legacy, convertir a TransferConfig
+    if ($PSCmdlet.ParameterSetName -eq 'LegacyFormat') {
+        $TransferConfig = [TransferConfig]::new()
         
-        if ($isFolder) {
-            $files = Get-ChildItem -Path $sourceLocation -Recurse -File
-            $fileCount = $files.Count
-            $totalBytes = ($files | Measure-Object -Property Length -Sum).Sum
+        # Convertir origen
+        $TransferConfig.Origen.Tipo = $SourceConfig.Tipo
+        switch ($SourceConfig.Tipo) {
+            "Local" { $TransferConfig.Origen.Local.Path = $SourceConfig.Path }
+            "FTP" {
+                $TransferConfig.Origen.FTP.Server = $SourceConfig.Server
+                $TransferConfig.Origen.FTP.Port = $SourceConfig.Port
+                $TransferConfig.Origen.FTP.User = $SourceConfig.User
+                $TransferConfig.Origen.FTP.Password = $SourceConfig.Password
+                $TransferConfig.Origen.FTP.UseSsl = $SourceConfig.UseSsl
+                $TransferConfig.Origen.FTP.Directory = $SourceConfig.Directory
+            }
+            # ... otros tipos si es necesario
         }
-        else {
-            $fileCount = 1
-            $totalBytes = $item.Length
+        
+        # Convertir destino
+        $TransferConfig.Destino.Tipo = $DestinationConfig.Tipo
+        switch ($DestinationConfig.Tipo) {
+            "Local" { $TransferConfig.Destino.Local.Path = $DestinationConfig.Path }
+            "FTP" {
+                $TransferConfig.Destino.FTP.Server = $DestinationConfig.Server
+                $TransferConfig.Destino.FTP.Port = $DestinationConfig.Port
+                $TransferConfig.Destino.FTP.User = $DestinationConfig.User
+                $TransferConfig.Destino.FTP.Password = $DestinationConfig.Password
+                $TransferConfig.Destino.FTP.UseSsl = $DestinationConfig.UseSsl
+                $TransferConfig.Destino.FTP.Directory = $DestinationConfig.Directory
+            }
+            # ... otros tipos si es necesario
         }
+        
+        # Opciones
+        $TransferConfig.Opciones.RobocopyMirror = $RobocopyMirror
     }
+    
+    # Delegar al dispatcher
+    return Invoke-TransferDispatcher -Llevar $TransferConfig -ShowProgress $ShowProgress -ProgressTop $ProgressTop
+}
+
+function Copy-LlevarLocalToFtp {
+    param([Parameter(Mandatory=$true)][TransferConfig]$Llevar)
+    Invoke-TransferDispatcher -Llevar $Llevar -ExpectedSource "Local" -ExpectedDest "FTP"
+}
+
+function Copy-LlevarFtpToLocal {
+    param([Parameter(Mandatory=$true)][TransferConfig]$Llevar)
+    Invoke-TransferDispatcher -Llevar $Llevar -ExpectedSource "FTP" -ExpectedDest "Local"
+}
+
+function Copy-LlevarLocalToOneDrive {
+    param([Parameter(Mandatory=$true)][TransferConfig]$Llevar)
+    Invoke-TransferDispatcher -Llevar $Llevar -ExpectedSource "Local" -ExpectedDest "OneDrive"
+}
+
+function Copy-LlevarOneDriveToLocal {
+    param([Parameter(Mandatory=$true)][TransferConfig]$Llevar)
+    Invoke-TransferDispatcher -Llevar $Llevar -ExpectedSource "OneDrive" -ExpectedDest "Local"
+}
+
+function Copy-LlevarLocalToDropbox {
+    param([Parameter(Mandatory=$true)][TransferConfig]$Llevar)
+    Invoke-TransferDispatcher -Llevar $Llevar -ExpectedSource "Local" -ExpectedDest "Dropbox"
+}
+
+function Copy-LlevarDropboxToLocal {
+    param([Parameter(Mandatory=$true)][TransferConfig]$Llevar)
+    Invoke-TransferDispatcher -Llevar $Llevar -ExpectedSource "Dropbox" -ExpectedDest "Local"
+}
+
+# ========================================================================== #
+#                  DISPATCHER GENÉRICO (CORAZÓN DEL SISTEMA)                 #
+# ========================================================================== #
+
+function Invoke-TransferDispatcher {
+    <#
+    .SYNOPSIS
+        Dispatcher inteligente que detecta automáticamente qué ruta tomar
+    #>
+    param(
+        [Parameter(Mandatory=$true)]
+        [TransferConfig]$Llevar,
+        
+        [string]$ExpectedSource,
+        [string]$ExpectedDest,
+        [bool]$ShowProgress = $true,
+        [int]$ProgressTop = -1
+    )
+    
+    $startTime = Get-Date
+    
+    # Validar tipos si se especificaron
+    if ($ExpectedSource -and $Llevar.Origen.Tipo -ne $ExpectedSource) {
+        throw "Origen esperado: $ExpectedSource, recibido: $($Llevar.Origen.Tipo)"
+    }
+    
+    if ($ExpectedDest -and $Llevar.Destino.Tipo -ne $ExpectedDest) {
+        throw "Destino esperado: $ExpectedDest, recibido: $($Llevar.Destino.Tipo)"
+    }
+    
+    # Construir ruta de transferencia
+    $route = "$($Llevar.Origen.Tipo)→$($Llevar.Destino.Tipo)"
+    
+    Write-Log "Dispatcher: Ruta detectada = $route" "INFO"
     
     if ($ShowProgress) {
-        Write-LlevarProgressBar -Percent 0 -StartTime $startTime -Label "Preparando copia..." -Top $ProgressTop -Width 50
+        Write-LlevarProgressBar -Percent 0 -StartTime $startTime -Label "Analizando ruta: $route..." -Top $ProgressTop -Width 50
     }
     
-    Write-Log "Origen: $($SourceConfig.Tipo) - $sourceLocation" "INFO"
-    Write-Log "Destino: $($DestinationConfig.Tipo) - $($DestinationConfig.Path)" "INFO"
-    Write-Log "Archivos: $fileCount | Tamaño: $([Math]::Round($totalBytes/1MB, 2)) MB" "INFO"
-    
-    # ====== MATRIZ DE DECISIÓN: ORIGEN → DESTINO ======
-    
+    # MATRIZ DE DECISIÓN AUTOMÁTICA
     try {
-        # LOCAL → LOCAL/UNC
-        if ($SourceConfig.Tipo -eq "Local" -and $DestinationConfig.Tipo -in @("Local", "UNC")) {
-            if ($UseRobocopy) {
-                Copy-LlevarLocalToLocalRobocopy -SourcePath $sourceLocation -DestinationPath $DestinationConfig.Path `
-                    -UseMirror $RobocopyMirror -StartTime $startTime -ShowProgress $ShowProgress -ProgressTop $ProgressTop
-            }
-            else {
-                Copy-LlevarLocalToLocal -SourcePath $sourceLocation -DestinationPath $DestinationConfig.Path `
-                    -TotalBytes $totalBytes -FileCount $fileCount -StartTime $startTime `
-                    -ShowProgress $ShowProgress -ProgressTop $ProgressTop
-            }
-        }
-        
-        # LOCAL → FTP
-        elseif ($SourceConfig.Tipo -eq "Local" -and $DestinationConfig.Tipo -eq "FTP") {
-            Copy-LlevarLocalToFtp -SourcePath $sourceLocation -FtpConfig $DestinationConfig `
-                -TotalBytes $totalBytes -FileCount $fileCount -StartTime $startTime `
-                -ShowProgress $ShowProgress -ProgressTop $ProgressTop
-        }
-        
-        # LOCAL → ONEDRIVE
-        elseif ($SourceConfig.Tipo -eq "Local" -and $DestinationConfig.Tipo -eq "OneDrive") {
-            Copy-LlevarLocalToOneDrive -SourcePath $sourceLocation -OneDriveConfig $DestinationConfig `
-                -TotalBytes $totalBytes -FileCount $fileCount -StartTime $startTime `
-                -ShowProgress $ShowProgress -ProgressTop $ProgressTop
-        }
-        
-        # LOCAL → DROPBOX
-        elseif ($SourceConfig.Tipo -eq "Local" -and $DestinationConfig.Tipo -eq "Dropbox") {
-            Copy-LlevarLocalToDropbox -SourcePath $sourceLocation -DropboxConfig $DestinationConfig `
-                -TotalBytes $totalBytes -FileCount $fileCount -StartTime $startTime `
-                -ShowProgress $ShowProgress -ProgressTop $ProgressTop
-        }
-        
-        # FTP → LOCAL
-        elseif ($SourceConfig.Tipo -eq "FTP" -and $DestinationConfig.Tipo -in @("Local", "UNC")) {
-            Copy-LlevarFtpToLocal -FtpConfig $SourceConfig -DestinationPath $DestinationConfig.Path `
-                -StartTime $startTime -ShowProgress $ShowProgress -ProgressTop $ProgressTop
-        }
-
-        # FTP → FTP (vía carpeta temporal local)
-        elseif ($SourceConfig.Tipo -eq "FTP" -and $DestinationConfig.Tipo -eq "FTP") {
-            $tempPath = Join-Path $env:TEMP "LlevarFtpBridge_$(Get-Date -Format 'yyyyMMddHHmmss')"
-            New-Item -ItemType Directory -Path $tempPath -Force | Out-Null
-            try {
-                if ($ShowProgress) {
-                    Write-LlevarProgressBar -Percent 10 -StartTime $startTime -Label "Descargando FTP origen..." -Top $ProgressTop -Width 50
-                }
-                Copy-LlevarFtpToLocal -FtpConfig $SourceConfig -DestinationPath $tempPath `
-                    -StartTime $startTime -ShowProgress $false -ProgressTop $ProgressTop
-                $files = Get-ChildItem -Path $tempPath -Recurse -File
-                $fileCount = $files.Count
-                $totalBytes = ($files | Measure-Object -Property Length -Sum).Sum
-                if ($ShowProgress) {
-                    Write-LlevarProgressBar -Percent 60 -StartTime $startTime -Label "Subiendo a FTP destino..." -Top $ProgressTop -Width 50
-                }
-                Copy-LlevarLocalToFtp -SourcePath $tempPath -FtpConfig $DestinationConfig `
-                    -TotalBytes $totalBytes -FileCount $fileCount -StartTime $startTime `
-                    -ShowProgress $ShowProgress -ProgressTop $ProgressTop
-            }
-            finally {
-                Remove-Item -Path $tempPath -Recurse -Force -ErrorAction SilentlyContinue
-            }
-        }
-        
-        # ONEDRIVE → LOCAL
-        elseif ($SourceConfig.Tipo -eq "OneDrive" -and $DestinationConfig.Tipo -in @("Local", "UNC")) {
-            Copy-LlevarOneDriveToLocal -OneDriveConfig $SourceConfig -DestinationPath $DestinationConfig.Path `
-                -StartTime $startTime -ShowProgress $ShowProgress -ProgressTop $ProgressTop
-        }
-        
-        # DROPBOX → LOCAL
-        elseif ($SourceConfig.Tipo -eq "Dropbox" -and $DestinationConfig.Tipo -in @("Local", "UNC")) {
-            Copy-LlevarDropboxToLocal -DropboxConfig $SourceConfig -DestinationPath $DestinationConfig.Path `
-                -StartTime $startTime -ShowProgress $ShowProgress -ProgressTop $ProgressTop
-        }
-        
-        # ONEDRIVE → DROPBOX (vía local temporal)
-        elseif ($SourceConfig.Tipo -eq "OneDrive" -and $DestinationConfig.Tipo -eq "Dropbox") {
-            $tempPath = Join-Path $env:TEMP "LlevarTransfer_$(Get-Date -Format 'yyyyMMddHHmmss')"
-            New-Item -ItemType Directory -Path $tempPath -Force | Out-Null
+        $result = switch ($route) {
+            # LOCAL COMO ORIGEN
+            "Local→Local"      { Invoke-LocalToLocal -Llevar $Llevar -ShowProgress $ShowProgress -ProgressTop $ProgressTop -StartTime $startTime }
+            "Local→FTP"        { Invoke-LocalToFtp -Llevar $Llevar -ShowProgress $ShowProgress -ProgressTop $ProgressTop -StartTime $startTime }
+            "Local→OneDrive"   { Invoke-LocalToCloud -Llevar $Llevar -CloudType "OneDrive" -ShowProgress $ShowProgress -ProgressTop $ProgressTop -StartTime $startTime }
+            "Local→Dropbox"    { Invoke-LocalToCloud -Llevar $Llevar -CloudType "Dropbox" -ShowProgress $ShowProgress -ProgressTop $ProgressTop -StartTime $startTime }
+            "Local→UNC"        { Invoke-LocalToUNC -Llevar $Llevar -ShowProgress $ShowProgress -ProgressTop $ProgressTop -StartTime $startTime }
+            "Local→USB"        { Invoke-LocalToUSB -Llevar $Llevar -ShowProgress $ShowProgress -ProgressTop $ProgressTop -StartTime $startTime }
+            "Local→ISO"        { Invoke-LocalToISO -Llevar $Llevar -ShowProgress $ShowProgress -ProgressTop $ProgressTop -StartTime $startTime }
+            "Local→Diskette"   { Invoke-LocalToDiskette -Llevar $Llevar -ShowProgress $ShowProgress -ProgressTop $ProgressTop -StartTime $startTime }
             
-            try {
-                if ($ShowProgress) {
-                    Write-LlevarProgressBar -Percent 25 -StartTime $startTime -Label "Descargando de OneDrive..." -Top $ProgressTop -Width 50
-                }
-                Copy-LlevarOneDriveToLocal -OneDriveConfig $SourceConfig -DestinationPath $tempPath `
-                    -StartTime $startTime -ShowProgress $false -ProgressTop $ProgressTop
-                
-                if ($ShowProgress) {
-                    Write-LlevarProgressBar -Percent 75 -StartTime $startTime -Label "Subiendo a Dropbox..." -Top $ProgressTop -Width 50
-                }
-                Copy-LlevarLocalToDropbox -SourcePath $tempPath -DropboxConfig $DestinationConfig `
-                    -TotalBytes $totalBytes -FileCount $fileCount -StartTime $startTime `
-                    -ShowProgress $false -ProgressTop $ProgressTop
-            }
-            finally {
-                Remove-Item -Path $tempPath -Recurse -Force -ErrorAction SilentlyContinue
-            }
-        }
-        
-        # DROPBOX → ONEDRIVE (vía local temporal)
-        elseif ($SourceConfig.Tipo -eq "Dropbox" -and $DestinationConfig.Tipo -eq "OneDrive") {
-            $tempPath = Join-Path $env:TEMP "LlevarTransfer_$(Get-Date -Format 'yyyyMMddHHmmss')"
-            New-Item -ItemType Directory -Path $tempPath -Force | Out-Null
+            # FTP COMO ORIGEN
+            "FTP→Local"        { Invoke-FtpToLocal -Llevar $Llevar -ShowProgress $ShowProgress -ProgressTop $ProgressTop -StartTime $startTime }
+            "FTP→FTP"          { Invoke-FtpToFtp -Llevar $Llevar -ShowProgress $ShowProgress -ProgressTop $ProgressTop -StartTime $startTime }
+            "FTP→OneDrive"     { Invoke-FtpToCloud -Llevar $Llevar -CloudType "OneDrive" -ShowProgress $ShowProgress -ProgressTop $ProgressTop -StartTime $startTime }
+            "FTP→Dropbox"      { Invoke-FtpToCloud -Llevar $Llevar -CloudType "Dropbox" -ShowProgress $ShowProgress -ProgressTop $ProgressTop -StartTime $startTime }
+            "FTP→UNC"          { Invoke-FtpToUNC -Llevar $Llevar -ShowProgress $ShowProgress -ProgressTop $ProgressTop -StartTime $startTime }
+            "FTP→USB"          { Invoke-FtpToUSB -Llevar $Llevar -ShowProgress $ShowProgress -ProgressTop $ProgressTop -StartTime $startTime }
+            "FTP→ISO"          { Invoke-FtpToISO -Llevar $Llevar -ShowProgress $ShowProgress -ProgressTop $ProgressTop -StartTime $startTime }
             
-            try {
-                if ($ShowProgress) {
-                    Write-LlevarProgressBar -Percent 25 -StartTime $startTime -Label "Descargando de Dropbox..." -Top $ProgressTop -Width 50
-                }
-                Copy-LlevarDropboxToLocal -DropboxConfig $SourceConfig -DestinationPath $tempPath `
-                    -StartTime $startTime -ShowProgress $false -ProgressTop $ProgressTop
-                
-                if ($ShowProgress) {
-                    Write-LlevarProgressBar -Percent 75 -StartTime $startTime -Label "Subiendo a OneDrive..." -Top $ProgressTop -Width 50
-                }
-                Copy-LlevarLocalToOneDrive -SourcePath $tempPath -OneDriveConfig $DestinationConfig `
-                    -TotalBytes $totalBytes -FileCount $fileCount -StartTime $startTime `
-                    -ShowProgress $false -ProgressTop $ProgressTop
+            # ONEDRIVE COMO ORIGEN
+            "OneDrive→Local"   { Invoke-CloudToLocal -Llevar $Llevar -CloudType "OneDrive" -ShowProgress $ShowProgress -ProgressTop $ProgressTop -StartTime $startTime }
+            "OneDrive→FTP"     { Invoke-CloudToFtp -Llevar $Llevar -CloudType "OneDrive" -ShowProgress $ShowProgress -ProgressTop $ProgressTop -StartTime $startTime }
+            "OneDrive→OneDrive" { Invoke-CloudToCloud -Llevar $Llevar -SourceCloud "OneDrive" -DestCloud "OneDrive" -ShowProgress $ShowProgress -ProgressTop $ProgressTop -StartTime $startTime }
+            "OneDrive→Dropbox" { Invoke-CloudToCloud -Llevar $Llevar -SourceCloud "OneDrive" -DestCloud "Dropbox" -ShowProgress $ShowProgress -ProgressTop $ProgressTop -StartTime $startTime }
+            "OneDrive→UNC"     { Invoke-CloudToUNC -Llevar $Llevar -CloudType "OneDrive" -ShowProgress $ShowProgress -ProgressTop $ProgressTop -StartTime $startTime }
+            "OneDrive→USB"     { Invoke-CloudToUSB -Llevar $Llevar -CloudType "OneDrive" -ShowProgress $ShowProgress -ProgressTop $ProgressTop -StartTime $startTime }
+            "OneDrive→ISO"     { Invoke-CloudToISO -Llevar $Llevar -CloudType "OneDrive" -ShowProgress $ShowProgress -ProgressTop $ProgressTop -StartTime $startTime }
+            
+            # DROPBOX COMO ORIGEN
+            "Dropbox→Local"    { Invoke-CloudToLocal -Llevar $Llevar -CloudType "Dropbox" -ShowProgress $ShowProgress -ProgressTop $ProgressTop -StartTime $startTime }
+            "Dropbox→FTP"      { Invoke-CloudToFtp -Llevar $Llevar -CloudType "Dropbox" -ShowProgress $ShowProgress -ProgressTop $ProgressTop -StartTime $startTime }
+            "Dropbox→OneDrive" { Invoke-CloudToCloud -Llevar $Llevar -SourceCloud "Dropbox" -DestCloud "OneDrive" -ShowProgress $ShowProgress -ProgressTop $ProgressTop -StartTime $startTime }
+            "Dropbox→Dropbox"  { Invoke-CloudToCloud -Llevar $Llevar -SourceCloud "Dropbox" -DestCloud "Dropbox" -ShowProgress $ShowProgress -ProgressTop $ProgressTop -StartTime $startTime }
+            "Dropbox→UNC"      { Invoke-CloudToUNC -Llevar $Llevar -CloudType "Dropbox" -ShowProgress $ShowProgress -ProgressTop $ProgressTop -StartTime $startTime }
+            "Dropbox→USB"      { Invoke-CloudToUSB -Llevar $Llevar -CloudType "Dropbox" -ShowProgress $ShowProgress -ProgressTop $ProgressTop -StartTime $startTime }
+            "Dropbox→ISO"      { Invoke-CloudToISO -Llevar $Llevar -CloudType "Dropbox" -ShowProgress $ShowProgress -ProgressTop $ProgressTop -StartTime $startTime }
+            
+            # UNC COMO ORIGEN/DESTINO
+            "UNC→Local"        { Invoke-UNCToLocal -Llevar $Llevar -ShowProgress $ShowProgress -ProgressTop $ProgressTop -StartTime $startTime }
+            "UNC→FTP"          { Invoke-UNCToFtp -Llevar $Llevar -ShowProgress $ShowProgress -ProgressTop $ProgressTop -StartTime $startTime }
+            "UNC→OneDrive"     { Invoke-UNCToCloud -Llevar $Llevar -CloudType "OneDrive" -ShowProgress $ShowProgress -ProgressTop $ProgressTop -StartTime $startTime }
+            "UNC→Dropbox"      { Invoke-UNCToCloud -Llevar $Llevar -CloudType "Dropbox" -ShowProgress $ShowProgress -ProgressTop $ProgressTop -StartTime $startTime }
+            "UNC→UNC"          { Invoke-UNCToUNC -Llevar $Llevar -ShowProgress $ShowProgress -ProgressTop $ProgressTop -StartTime $startTime }
+            "UNC→USB"          { Invoke-UNCToUSB -Llevar $Llevar -ShowProgress $ShowProgress -ProgressTop $ProgressTop -StartTime $startTime }
+            "UNC→ISO"          { Invoke-UNCToISO -Llevar $Llevar -ShowProgress $ShowProgress -ProgressTop $ProgressTop -StartTime $startTime }
+            
+            default {
+                $errorMsg = "Combinación no soportada: $route"
+                Write-Log $errorMsg "ERROR"
+                throw $errorMsg
             }
-            finally {
-                Remove-Item -Path $tempPath -Recurse -Force -ErrorAction SilentlyContinue
-            }
-        }
-        
-        # Combinaciones no implementadas
-        else {
-            throw "Combinación no soportada: $($SourceConfig.Tipo) → $($DestinationConfig.Tipo)"
         }
         
         if ($ShowProgress) {
-            Write-LlevarProgressBar -Percent 100 -StartTime $startTime -Label "Copia completada" -Top $ProgressTop -Width 50
+            Write-LlevarProgressBar -Percent 100 -StartTime $startTime -Label "Transferencia completada" -Top $ProgressTop -Width 50
         }
         
-        $elapsed = (Get-Date) - $startTime
-        Write-Log "Copia completada en $($elapsed.TotalSeconds) segundos" "INFO"
+        Write-Log "Dispatcher: Ruta $route completada en $([math]::Round(((Get-Date) - $startTime).TotalSeconds, 2))s" "INFO"
         
-        return @{
-            Success        = $true
-            BytesCopied    = $totalBytes
-            FileCount      = $fileCount
-            ElapsedSeconds = $elapsed.TotalSeconds
-        }
+        return $result
     }
     catch {
-        Write-Log "Error en copia unificada: $($_.Exception.Message)" "ERROR" -ErrorRecord $_
-        
-        if ($ShowProgress) {
-            Write-LlevarProgressBar -Percent 0 -StartTime $startTime -Label "Error en copia" -Top $ProgressTop -Width 50
-        }
-        
+        Write-Log "Dispatcher: Error en ruta $route - $($_.Exception.Message)" "ERROR" -ErrorRecord $_
         throw
     }
 }
 
-# Exportar función
-Export-ModuleMember -Function @(
-    'Copy-LlevarFiles'
-)
+# ========================================================================== #
+#                  HANDLERS ESPECÍFICOS (FUNCIONES INTERNAS)                 #
+# ========================================================================== #
+
+function Invoke-LocalToLocal {
+    param([TransferConfig]$Llevar, [bool]$ShowProgress, [int]$ProgressTop, [datetime]$StartTime)
+    
+    Write-Log "Handler: Local→Local" "INFO"
+    
+    $sourcePath = $Llevar.Origen.Local.Path
+    $destPath = $Llevar.Destino.Local.Path
+    $useMirror = $Llevar.Opciones.RobocopyMirror
+    
+    Copy-LlevarLocalToLocalRobocopy -SourcePath $sourcePath -DestinationPath $destPath `
+        -UseMirror $useMirror -ShowProgress $ShowProgress -ProgressTop $ProgressTop -StartTime $StartTime
+    
+    return @{ Success = $true; Route = "Local→Local" }
+}
+
+function Invoke-LocalToFtp {
+    param([TransferConfig]$Llevar, [bool]$ShowProgress, [int]$ProgressTop, [datetime]$StartTime)
+    Write-Log "Handler: Local→FTP (en desarrollo)" "WARNING"
+    throw "Local→FTP: Implementación pendiente"
+}
+
+function Invoke-LocalToCloud {
+    param([TransferConfig]$Llevar, [string]$CloudType, [bool]$ShowProgress, [int]$ProgressTop, [datetime]$StartTime)
+    Write-Log "Handler: Local→$CloudType (en desarrollo)" "WARNING"
+    throw "Local→$CloudType: Implementación pendiente"
+}
+
+function Invoke-FtpToLocal {
+    param([TransferConfig]$Llevar, [bool]$ShowProgress, [int]$ProgressTop, [datetime]$StartTime)
+    Write-Log "Handler: FTP→Local (en desarrollo)" "WARNING"
+    throw "FTP→Local: Implementación pendiente"
+}
+
+function Invoke-FtpToFtp {
+    param([TransferConfig]$Llevar, [bool]$ShowProgress, [int]$ProgressTop, [datetime]$StartTime)
+    
+    Write-Log "Handler: FTP→FTP (vía temporal)" "INFO"
+    
+    $tempPath = Join-Path $env:TEMP "LLEVAR_FTP_BRIDGE_$(Get-Date -Format 'yyyyMMddHHmmss')"
+    try {
+        New-Item -Type Directory $tempPath | Out-Null
+        
+        if ($ShowProgress) {
+            Write-LlevarProgressBar -Percent 25 -StartTime $StartTime -Label "Descargando FTP origen..." -Top $ProgressTop -Width 50
+        }
+        
+        # TODO: Descargar de FTP origen
+        
+        if ($ShowProgress) {
+            Write-LlevarProgressBar -Percent 75 -StartTime $StartTime -Label "Subiendo a FTP destino..." -Top $ProgressTop -Width 50
+        }
+        
+        # TODO: Subir a FTP destino
+        
+        throw "FTP→FTP: Implementación pendiente"
+    }
+    finally {
+        Remove-Item $tempPath -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+
+function Invoke-CloudToLocal {
+    param([TransferConfig]$Llevar, [string]$CloudType, [bool]$ShowProgress, [int]$ProgressTop, [datetime]$StartTime)
+    Write-Log "Handler: $CloudType→Local (en desarrollo)" "WARNING"
+    throw "$CloudType→Local: Implementación pendiente"
+}
+
+function Invoke-CloudToCloud {
+    param([TransferConfig]$Llevar, [string]$SourceCloud, [string]$DestCloud, [bool]$ShowProgress, [int]$ProgressTop, [datetime]$StartTime)
+    
+    Write-Log "Handler: $SourceCloud→$DestCloud (vía temporal)" "INFO"
+    
+    $tempPath = Join-Path $env:TEMP "LLEVAR_CLOUD_BRIDGE_$(Get-Date -Format 'yyyyMMddHHmmss')"
+    try {
+        New-Item -Type Directory $tempPath | Out-Null
+        
+        if ($ShowProgress) {
+            Write-LlevarProgressBar -Percent 33 -StartTime $StartTime -Label "Descargando de $SourceCloud..." -Top $ProgressTop -Width 50
+        }
+        
+        # TODO: Descargar de origen
+        
+        if ($ShowProgress) {
+            Write-LlevarProgressBar -Percent 67 -StartTime $StartTime -Label "Subiendo a $DestCloud..." -Top $ProgressTop -Width 50
+        }
+        
+        # TODO: Subir a destino
+        
+        throw "$SourceCloud→$DestCloud: Implementación pendiente"
+    }
+    finally {
+        Remove-Item $tempPath -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+
+# Stubs para todas las demás combinaciones
+function Invoke-LocalToUNC { param($Llevar, $ShowProgress, $ProgressTop, $StartTime); throw "Local→UNC: En desarrollo" }
+function Invoke-LocalToUSB { param($Llevar, $ShowProgress, $ProgressTop, $StartTime); throw "Local→USB: En desarrollo" }
+function Invoke-LocalToISO { param($Llevar, $ShowProgress, $ProgressTop, $StartTime); throw "Local→ISO: En desarrollo" }
+function Invoke-LocalToDiskette { param($Llevar, $ShowProgress, $ProgressTop, $StartTime); throw "Local→Diskette: En desarrollo" }
+function Invoke-FtpToCloud { param($Llevar, $CloudType, $ShowProgress, $ProgressTop, $StartTime); throw "FTP→$CloudType: En desarrollo" }
+function Invoke-FtpToUNC { param($Llevar, $ShowProgress, $ProgressTop, $StartTime); throw "FTP→UNC: En desarrollo" }
+function Invoke-FtpToUSB { param($Llevar, $ShowProgress, $ProgressTop, $StartTime); throw "FTP→USB: En desarrollo" }
+function Invoke-FtpToISO { param($Llevar, $ShowProgress, $ProgressTop, $StartTime); throw "FTP→ISO: En desarrollo" }
+function Invoke-CloudToFtp { param($Llevar, $CloudType, $ShowProgress, $ProgressTop, $StartTime); throw "$CloudType→FTP: En desarrollo" }
+function Invoke-CloudToUNC { param($Llevar, $CloudType, $ShowProgress, $ProgressTop, $StartTime); throw "$CloudType→UNC: En desarrollo" }
+function Invoke-CloudToUSB { param($Llevar, $CloudType, $ShowProgress, $ProgressTop, $StartTime); throw "$CloudType→USB: En desarrollo" }
+function Invoke-CloudToISO { param($Llevar, $CloudType, $ShowProgress, $ProgressTop, $StartTime); throw "$CloudType→ISO: En desarrollo" }
+function Invoke-UNCToLocal { param($Llevar, $ShowProgress, $ProgressTop, $StartTime); throw "UNC→Local: En desarrollo" }
+function Invoke-UNCToFtp { param($Llevar, $ShowProgress, $ProgressTop, $StartTime); throw "UNC→FTP: En desarrollo" }
+function Invoke-UNCToCloud { param($Llevar, $CloudType, $ShowProgress, $ProgressTop, $StartTime); throw "UNC→$CloudType: En desarrollo" }
+function Invoke-UNCToUNC { param($Llevar, $ShowProgress, $ProgressTop, $StartTime); throw "UNC→UNC: En desarrollo" }
+function Invoke-UNCToUSB { param($Llevar, $ShowProgress, $ProgressTop, $StartTime); throw "UNC→USB: En desarrollo" }
+function Invoke-UNCToISO { param($Llevar, $ShowProgress, $ProgressTop, $StartTime); throw "UNC→ISO: En desarrollo" }
+
+# Exportar funciones PÚBLICAS solamente
+Export-ModuleMember -Function Copy-LlevarFiles, Copy-LlevarLocalToFtp, Copy-LlevarFtpToLocal, Copy-LlevarLocalToOneDrive, Copy-LlevarOneDriveToLocal, Copy-LlevarLocalToDropbox, Copy-LlevarDropboxToLocal

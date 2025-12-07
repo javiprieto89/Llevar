@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Demo de menús y popups con los nuevos bordes box-drawing
 

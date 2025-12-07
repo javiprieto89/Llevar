@@ -1,4 +1,4 @@
-# ============================================================================ #
+﻿# ============================================================================ #
 # Archivo: Q:\Utilidad\LLevar\Modules\Compression\BlockSplitter.psm1
 # Descripción: Funciones para dividir/reconstruir archivos en bloques
 # ============================================================================ #

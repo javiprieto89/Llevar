@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Simulador de dispositivos USB para tests de Llevar.ps1
 
@@ -202,13 +202,13 @@ function Test-MockUSBScenario {
         Write-Host ""
         
         $usb1 = New-MockUSB -DriveLetter "E" -Label "USB_01_DATOS" -CapacityMB 2048
-        Write-Host "✓ USB 1: 2 GB - E:\ (USB_01_DATOS)" -ForegroundColor Green
+        Write-Host "[OK] USB 1: 2 GB - E:\ (USB_01_DATOS)" -ForegroundColor Green
         
         $usb2 = New-MockUSB -DriveLetter "F" -Label "USB_02_BACKUP" -CapacityMB 4096
-        Write-Host "✓ USB 2: 4 GB - F:\ (USB_02_BACKUP)" -ForegroundColor Green
+        Write-Host "[OK] USB 2: 4 GB - F:\ (USB_02_BACKUP)" -ForegroundColor Green
         
         $usb3 = New-MockUSB -DriveLetter "G" -Label "USB_03_EXTRA" -CapacityMB 8192
-        Write-Host "✓ USB 3: 8 GB - G:\ (USB_03_EXTRA)" -ForegroundColor Green
+        Write-Host "[OK] USB 3: 8 GB - G:\ (USB_03_EXTRA)" -ForegroundColor Green
         
         Write-Host ""
         
@@ -219,8 +219,8 @@ function Test-MockUSBScenario {
         # USB 1: llenar con 10 bloques de 100MB cada uno (1000MB total)
         Write-Host "USB 1 - Copiando bloques..." -ForegroundColor Gray
         for ($i = 1; $i -le 10; $i++) {
-            $usb1.CreateDummyFile("DATOS.alx$('{0:D4}' -f $i)", 100)
-            Write-Host "  ✓ DATOS.alx$('{0:D4}' -f $i) (100 MB)" -ForegroundColor Green
+            $usb1.CreateDummyFile(("DATOS.alx{0:D4}" -f $i), 100)
+            Write-Host (("  [OK] DATOS.alx{0:D4} (100 MB)" -f $i)) -ForegroundColor Green
         }
         
         Write-Host ""
@@ -228,8 +228,8 @@ function Test-MockUSBScenario {
         # USB 2: llenar con 20 bloques de 100MB cada uno (2000MB total)
         Write-Host "USB 2 - Copiando bloques..." -ForegroundColor Gray
         for ($i = 11; $i -le 30; $i++) {
-            $usb2.CreateDummyFile("DATOS.alx$('{0:D4}' -f $i)", 100)
-            Write-Host "  ✓ DATOS.alx$('{0:D4}' -f $i) (100 MB)" -ForegroundColor Green
+            $usb2.CreateDummyFile(("DATOS.alx{0:D4}" -f $i), 100)
+            Write-Host (("  [OK] DATOS.alx{0:D4} (100 MB)" -f $i)) -ForegroundColor Green
         }
         
         Write-Host ""
@@ -237,16 +237,16 @@ function Test-MockUSBScenario {
         # USB 3: llenar con 30 bloques de 100MB cada uno (3000MB total) y archivos de instalación
         Write-Host "USB 3 - Copiando bloques y archivos del sistema..." -ForegroundColor Gray
         for ($i = 31; $i -le 60; $i++) {
-            $usb3.CreateDummyFile("DATOS.alx$('{0:D4}' -f $i)", 100)
-            Write-Host "  ✓ DATOS.alx$('{0:D4}' -f $i) (100 MB)" -ForegroundColor Green
+            $usb3.CreateDummyFile(("DATOS.alx{0:D4}" -f $i), 100)
+            Write-Host (("  [OK] DATOS.alx{0:D4} (100 MB)" -f $i)) -ForegroundColor Green
         }
         
         # Crear archivos del sistema
         New-Item -ItemType File -Path (Join-Path $usb3.Path "INSTALAR.ps1") -Force | Out-Null
-        Write-Host "  ✓ INSTALAR.ps1" -ForegroundColor Green
+        Write-Host "  [OK] INSTALAR.ps1" -ForegroundColor Green
         
         New-Item -ItemType File -Path (Join-Path $usb3.Path "__EOF__") -Force | Out-Null
-        Write-Host "  ✓ __EOF__ (marcador de fin)" -ForegroundColor Green
+        Write-Host "  [OK] __EOF__ (marcador de fin)" -ForegroundColor Green
         
         Write-Host ""
         

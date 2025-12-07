@@ -1,4 +1,4 @@
-using module ".\Modules\Core\TransferConfig.psm1"
+﻿using module ".\Modules\Core\TransferConfig.psm1"
 
 # Simular el flujo completo: InteractiveMenu → TransferConfig → NormalMode
 Write-Host "`n========== TEST FLUJO COMPLETO ==========" -ForegroundColor Magenta

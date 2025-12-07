@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Tests para funcionalidad de Robocopy Mirror en Llevar.ps1
 

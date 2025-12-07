@@ -1,4 +1,4 @@
-# ============================================================================ #
+﻿# ============================================================================ #
 # Archivo: Q:\Utilidad\LLevar\Modules\UI\ProgressBar.psm1
 # Descripción: Barra de progreso visual con información de tiempo
 # ============================================================================ #
@@ -185,10 +185,10 @@ function Show-CalculatingSpinner {
         [int]$Width = 60
     )
     
-    $spinnerChars = @('⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '�')
+    $spinnerChars = @('⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏')
     $spinnerIndex = 0
     
-    $borderLine = "�" * $Width
+    $borderLine = "═" * $Width
     
     # Limpiar área
     Clear-Host
@@ -213,7 +213,7 @@ function Show-CalculatingSpinner {
     if ($dirDisplay.Length -gt ($Width - 4)) {
         $dirDisplay = $dirDisplay.Substring(0, $Width - 7) + "..."
     }
-    $dirLine = " � " + $dirDisplay
+    $dirLine = "  " + $dirDisplay
     $dirLine = $dirLine.PadRight($Width)
     Write-Host "║" -ForegroundColor Cyan -NoNewline
     Write-Host $dirLine -ForegroundColor Yellow -NoNewline
@@ -241,7 +241,7 @@ function Show-CalculatingSpinner {
     $instrLine = (" " * [Math]::Floor($instrPad)) + $instruction + (" " * [Math]::Ceiling($instrPad))
     Write-Host "║${instrLine}║" -ForegroundColor Green
     
-    Write-Host "╚${borderLine}�" -ForegroundColor Cyan
+    Write-Host "╚${borderLine}╝" -ForegroundColor Cyan
     
     return @{
         SpinnerY     = $spinnerY

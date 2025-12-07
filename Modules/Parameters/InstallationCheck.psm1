@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Verifica si el script está instalado en C:\Llevar y ofrece instalarlo si no lo está.
 
@@ -65,7 +65,7 @@ function Invoke-InstallationCheck {
             $wantsInstall = Show-InstallationPrompt
             
             if ($wantsInstall) {
-                # Usuario dijo S� - proceder con instalación
+                # Usuario dijo S� - proceder con instalación
                 
                 if ($IsInIDE) {
                     Write-Host "`n[DEBUG/IDE] Omitiendo verificación de permisos de administrador" -ForegroundColor Cyan

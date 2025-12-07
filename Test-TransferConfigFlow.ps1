@@ -1,4 +1,4 @@
-using module ".\Modules\Core\TransferConfig.psm1"
+﻿using module ".\Modules\Core\TransferConfig.psm1"
 
 # Test completo del flujo TransferConfig
 Write-Host "`n========== TEST TRANSFERCONFIG ==========" -ForegroundColor Magenta

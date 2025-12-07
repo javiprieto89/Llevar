@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Prueba de banners, menús y popups actualizados
 

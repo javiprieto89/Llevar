@@ -1,4 +1,4 @@
-# ========================================================================== #
+﻿# ========================================================================== #
 #                   MÓDULO: FUNCIONES DE AUDIO                               #
 # ========================================================================== #
 # Propósito: Reproducción de sonidos y efectos de audio estilo DOS
@@ -15,7 +15,7 @@ function Invoke-DOSBeep {
         de notas musicales estilo PC Speaker de DOS. Usado para feedback
         auditivo durante operaciones largas.
     .PARAMETER LineIndex
-        �ndice de línea actual (para ciclo de frecuencias)
+        �ndice de línea actual (para ciclo de frecuencias)
     .PARAMETER TotalLines
         Total de líneas a procesar (no usado actualmente)
     .EXAMPLE

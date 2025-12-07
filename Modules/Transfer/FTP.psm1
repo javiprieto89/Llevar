@@ -1,13 +1,22 @@
-# ========================================================================== #
+﻿# ========================================================================== #
 #                           MÓDULO: OPERACIONES FTP                          #
 # ========================================================================== #
 # Propósito: Configuración, validación y operaciones con servidores FTP/FTPS
-# Funciones:
-#   - Get-FtpConfigFromUser: Solicita y valida configuración FTP interactiva
-#   - Test-IsFtpPath: Detecta si una ruta es FTP/FTPS
-#   - Mount-FtpPath: Monta conexión FTP como unidad virtual
-#   - Copy-LlevarLocalToFtp: Copia de local a FTP con progreso
-#   - Copy-LlevarFtpToLocal: Descarga de FTP a local con progreso
+# Funciones refactorizadas para usar TransferConfig como única fuente de verdad
+# ========================================================================== #
+
+# Importar TransferConfig al inicio
+using module "Q:\Utilidad\LLevar\Modules\Core\TransferConfig.psm1"
+
+# Imports necesarios
+$ModulesPath = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
+Import-Module (Join-Path $ModulesPath "Modules\UI\Banners.psm1") -Force -Global
+Import-Module (Join-Path $ModulesPath "Modules\UI\ProgressBar.psm1") -Force -Global
+Import-Module (Join-Path $ModulesPath "Modules\Core\Logging.psm1") -Force -Global
+Import-Module (Join-Path $ModulesPath "Modules\UI\Menus.psm1") -Force -Global
+
+# ========================================================================== #
+#                          FUNCIONES AUXILIARES                              #
 # ========================================================================== #
 
 function Test-IsFtpPath {
@@ -26,37 +35,70 @@ function Test-IsFtpPath {
 function Get-FtpConfigFromUser {
     <#
     .SYNOPSIS
-        Solicita configuración FTP al usuario con validación interactiva
+        Solicita configuración FTP al usuario y la asigna directamente a $Llevar
     .DESCRIPTION
         Muestra menú para configurar servidor FTP, puerto, ruta y credenciales.
-        Valida la conexión antes de retornar la configuración.
-    .PARAMETER Purpose
-        Propósito de la conexión (ej: "ORIGEN", "DESTINO")
+        Valida la conexión y asigna SOLO los valores FTP a:
+        - $Llevar.Origen.Tipo = "FTP" + $Llevar.Origen.FTP.* si $Cual = "Origen"
+        - $Llevar.Destino.Tipo = "FTP" + $Llevar.Destino.FTP.* si $Cual = "Destino"
+        
+        ✅ NO PISA otros valores del objeto $Llevar (Opciones, la otra sección, etc.)
+    .PARAMETER Llevar
+        Objeto TransferConfig donde se guardarán SOLO los valores FTP
+    .PARAMETER Cual
+        "Origen" o "Destino" - indica qué sección configurar
     .OUTPUTS
-        Hashtable con Path, Server, Port, Directory, User, Password
+        $true si la configuración fue exitosa, $false si se canceló
     #>
-    param([string]$Purpose = "DESTINO")
+    param(
+        [Parameter(Mandatory = $true)]
+        [TransferConfig]$Llevar,
+        
+        [Parameter(Mandatory = $true)]
+        [ValidateSet("Origen", "Destino")]
+        [string]$Cual
+    )
     
-    Show-Banner "CONFIGURACIÓN FTP - $Purpose" -BorderColor Cyan -TextColor Yellow
+    Show-Banner "CONFIGURACIÓN FTP - $Cual" -BorderColor Cyan -TextColor Yellow
     
+    # Solicitar servidor
     Write-Host "Servidor FTP (ej: 192.168.1.100 o ftp.ejemplo.com): " -NoNewline -ForegroundColor Cyan
     $server = Read-Host
+    
+    if ([string]::IsNullOrWhiteSpace($server)) {
+        Write-Host "✗ Servidor FTP requerido" -ForegroundColor Red
+        return $false
+    }
     
     # Si no tiene protocolo, agregarlo
     if ($server -notlike "ftp://*" -and $server -notlike "ftps://*") {
         $server = "ftp://$server"
     }
     
+    # Solicitar puerto
     Write-Host "Puerto (presione ENTER para usar 21 predeterminado): " -NoNewline -ForegroundColor Cyan
     $portInput = Read-Host
-    $port = 21
-    if (-not [string]::IsNullOrWhiteSpace($portInput)) {
-        if ([int]::TryParse($portInput, [ref]$port)) {
-            Write-Log "Puerto FTP configurado: $port" "INFO"
+    
+    # ✅ SI USUARIO DA ENTER, USA EL PUERTO POR DEFECTO DE TransferConfig
+    if ([string]::IsNullOrWhiteSpace($portInput)) {
+        # Obtener puerto por defecto de TransferConfig
+        if ($Cual -eq "Origen") {
+            $port = if ($Llevar.Origen.FTP.Port -gt 0) { $Llevar.Origen.FTP.Port } else { 21 }
         }
         else {
+            $port = if ($Llevar.Destino.FTP.Port -gt 0) { $Llevar.Destino.FTP.Port } else { 21 }
+        }
+        Write-Log "Usuario aceptó puerto por defecto: $port" "INFO"
+    }
+    else {
+        # ✅ SI USUARIO INGRESÓ VALOR, PARSEAR Y VALIDAR
+        if (-not [int]::TryParse($portInput, [ref]$port)) {
             Write-Host "Puerto inválido, usando 21" -ForegroundColor Yellow
+            $port = 21
             Write-Log "Puerto FTP inválido ($portInput), usando 21" "WARNING"
+        }
+        else {
+            Write-Log "Puerto FTP configurado manualmente: $port" "INFO"
         }
     }
     
@@ -66,11 +108,11 @@ function Get-FtpConfigFromUser {
         $server = "$($serverUri.Scheme)://$($serverUri.Host):$port"
     }
     
+    # Solicitar ruta
     Write-Host "Ruta en servidor (ej: /carpeta/subcarpeta o presione ENTER para raíz): " -NoNewline -ForegroundColor Cyan
     $path = Read-Host
     
     if ([string]::IsNullOrWhiteSpace($path)) {
-        $fullPath = $server
         $directory = "/"
     }
     else {
@@ -78,17 +120,17 @@ function Get-FtpConfigFromUser {
         if (-not $path.StartsWith('/')) {
             $path = "/$path"
         }
-        $fullPath = "$server$path"
         $directory = $path
     }
     
+    # Solicitar credenciales
     Write-Host ""
     Write-Host "Credenciales FTP:" -ForegroundColor Yellow
     $credentials = Get-Credential -Message "Ingrese usuario y contraseña para $server"
     
     if (-not $credentials) {
         Write-Log "Configuración FTP cancelada por el usuario" "WARNING"
-        return $null
+        return $false
     }
     
     # Validar conexión
@@ -112,7 +154,7 @@ function Get-FtpConfigFromUser {
         Write-Host "  Estado: $statusDescription" -ForegroundColor Gray
         Write-Log "Conexión FTP exitosa: $server - $statusDescription" "INFO"
         
-        Start-Sleep -Seconds 2
+        Start-Sleep -Seconds 1
     }
     catch {
         $errorMsg = $_.Exception.Message
@@ -128,11 +170,7 @@ function Get-FtpConfigFromUser {
         Write-Host "  • Credenciales inválidas" -ForegroundColor DarkGray
         Write-Host "  • Firewall bloqueando conexión" -ForegroundColor DarkGray
         Write-Host "  • Servidor FTP no disponible" -ForegroundColor DarkGray
-        Write-Host "  • Modo pasivo no soportado (intente modo activo)" -ForegroundColor DarkGray
         Write-Host ""
-        
-        Write-Host "Presione cualquier tecla para continuar..." -ForegroundColor Gray
-        $null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
         
         # Reintentar con popup
         $respuesta = Show-ConsolePopup -Title "⚠ ERROR FTP" `
@@ -140,39 +178,125 @@ function Get-FtpConfigFromUser {
             -Options @("*Reintentar", "*Cancelar") -Beep
         
         if ($respuesta -eq 0) {
-            # Reintentar recursivamente
-            return Get-FtpConfigFromUser -Purpose $Purpose
+            # ✅ RECURSIÓN: VUELVE A LLAMAR PASANDO EL MISMO $Llevar
+            return Get-FtpConfigFromUser -Llevar $Llevar -Cual $Cual
         }
         else {
             Write-Log "Usuario canceló configuración FTP tras error" "INFO"
-            return $null
+            return $false
         }
     }
     
-    return @{
-        Path      = $fullPath
-        Server    = $server
-        Port      = $port
-        Directory = $directory
-        User      = $credentials.UserName
-        Password  = $credentials.GetNetworkCredential().Password
+    # ✅✅✅ ASIGNAR SOLO LA SECCIÓN FTP CORRESPONDIENTE
+    if ($Cual -eq "Origen") {
+        $Llevar.Origen.Tipo = "FTP"
+        $Llevar.Origen.FTP.Server = $server
+        $Llevar.Origen.FTP.Port = $port
+        $Llevar.Origen.FTP.User = $credentials.UserName
+        $Llevar.Origen.FTP.Password = $credentials.GetNetworkCredential().Password
+        $Llevar.Origen.FTP.UseSsl = ($server -match '^ftps://')
+        $Llevar.Origen.FTP.Directory = $directory
+        
+        Write-Log "FTP Origen configurado: $server$directory (Usuario: $($credentials.UserName), Puerto: $port)" "INFO"
     }
+    else {
+        $Llevar.Destino.Tipo = "FTP"
+        $Llevar.Destino.FTP.Server = $server
+        $Llevar.Destino.FTP.Port = $port
+        $Llevar.Destino.FTP.User = $credentials.UserName
+        $Llevar.Destino.FTP.Password = $credentials.GetNetworkCredential().Password
+        $Llevar.Destino.FTP.UseSsl = ($server -match '^ftps://')
+        $Llevar.Destino.FTP.Directory = $directory
+        
+        Write-Log "FTP Destino configurado: $server$directory (Usuario: $($credentials.UserName), Puerto: $port)" "INFO"
+    }
+    
+    Write-Host ""
+    Write-Host "✓ Configuración FTP guardada en \$Llevar.$Cual.FTP" -ForegroundColor Green
+    Write-Host ""
+    
+    return $true
 }
+
+# ========================================================================== #
+#                  FUNCIONES PRINCIPALES DE TRANSFERENCIA                    #
+# ========================================================================== #
+
+function Copy-LlevarLocalToFtp {
+    <#
+    .SYNOPSIS
+        Copia archivos locales a servidor FTP con progreso
+    .DESCRIPTION
+        ✅ DELEGADO AL DISPATCHER UNIFICADO
+        Esta función es ahora un wrapper que delega al dispatcher.
+    .PARAMETER Llevar
+        Objeto TransferConfig completo
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [TransferConfig]$Llevar,
+        
+        [datetime]$StartTime = (Get-Date),
+        [bool]$ShowProgress = $true,
+        [int]$ProgressTop = -1
+    )
+    
+    # ✅ DELEGAR AL DISPATCHER
+    Write-Log "Copy-LlevarLocalToFtp: Delegando al dispatcher unificado" "INFO"
+    
+    # Importar dispatcher si no está cargado
+    $dispatcherPath = Join-Path $ModulesPath "Modules\Transfer\Unified.psm1"
+    if (-not (Get-Command Invoke-TransferDispatcher -ErrorAction SilentlyContinue)) {
+        Import-Module $dispatcherPath -Force -Global
+    }
+    
+    return Invoke-TransferDispatcher -Llevar $Llevar -ExpectedSource "Local" -ExpectedDest "FTP" `
+        -ShowProgress $ShowProgress -ProgressTop $ProgressTop
+}
+
+function Copy-LlevarFtpToLocal {
+    <#
+    .SYNOPSIS
+        Descarga archivos desde FTP a local con progreso
+    .DESCRIPTION
+        ✅ DELEGADO AL DISPATCHER UNIFICADO
+        Esta función es ahora un wrapper que delega al dispatcher.
+    .PARAMETER Llevar
+        Objeto TransferConfig completo
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [TransferConfig]$Llevar,
+        
+        [datetime]$StartTime = (Get-Date),
+        [bool]$ShowProgress = $true,
+        [int]$ProgressTop = -1
+    )
+    
+    # ✅ DELEGAR AL DISPATCHER
+    Write-Log "Copy-LlevarFtpToLocal: Delegando al dispatcher unificado" "INFO"
+    
+    # Importar dispatcher si no está cargado
+    $dispatcherPath = Join-Path $ModulesPath "Modules\Transfer\Unified.psm1"
+    if (-not (Get-Command Invoke-TransferDispatcher -ErrorAction SilentlyContinue)) {
+        Import-Module $dispatcherPath -Force -Global
+    }
+    
+    return Invoke-TransferDispatcher -Llevar $Llevar -ExpectedSource "FTP" -ExpectedDest "Local" `
+        -ShowProgress $ShowProgress -ProgressTop $ProgressTop
+}
+
+# ========================================================================== #
+#                         FUNCIONES LEGACY (OBSOLETAS)                       #
+# ========================================================================== #
 
 function Mount-FtpPath {
     <#
     .SYNOPSIS
-        Monta una conexión FTP como unidad virtual
+        [LEGACY] Monta una conexión FTP como unidad virtual
     .DESCRIPTION
-        Establece conexión FTP y la guarda en hashtable global para uso posterior
-    .PARAMETER Path
-        URL FTP completa (ftp://servidor/ruta o ftps://servidor/ruta)
-    .PARAMETER Credential
-        Credenciales para autenticación FTP
-    .PARAMETER DriveName
-        Nombre de la unidad virtual a crear
-    .OUTPUTS
-        String con identificador de conexión (FTP:NombreUnidad)
+        Función legacy mantenida por compatibilidad.
+        Se recomienda usar TransferConfig en su lugar.
     #>
     param(
         [Parameter(Mandatory = $true)]
@@ -184,7 +308,6 @@ function Mount-FtpPath {
         [string]$DriveName
     )
     
-    # Extraer componentes de la URL FTP
     if ($Path -match '^(ftps?://)(.*?)(/.*)?$') {
         $protocol = $Matches[1]
         $server = $Matches[2]
@@ -194,16 +317,13 @@ function Mount-FtpPath {
         throw "Formato de URL FTP inválido: $Path"
     }
     
-    # Solicitar credenciales si no se proporcionaron
     if (-not $Credential) {
-        Write-Host "Se requieren credenciales para: $protocol$server" -ForegroundColor Yellow
         $Credential = Get-Credential -Message "Credenciales FTP para $server"
         if (-not $Credential) {
             throw "Se requieren credenciales para acceder a $Path"
         }
     }
     
-    # Crear información de conexión
     try {
         if (Get-PSDrive -Name $DriveName -ErrorAction SilentlyContinue) {
             Remove-PSDrive -Name $DriveName -ErrorAction SilentlyContinue
@@ -216,7 +336,6 @@ function Mount-FtpPath {
             Protocol = $protocol
         }
         
-        # Guardar globalmente para uso posterior
         if (-not $Global:FtpConnections) {
             $Global:FtpConnections = @{}
         }
@@ -233,292 +352,10 @@ function Mount-FtpPath {
     }
 }
 
-function Copy-LlevarLocalToFtp {
-    <#
-    .SYNOPSIS
-        Copia archivos locales a servidor FTP con progreso
-    .DESCRIPTION
-        Sube archivos/carpetas a FTP usando WebClient con barra de progreso
-    .PARAMETER SourcePath
-        Ruta local del archivo o carpeta origen
-    .PARAMETER FtpConfig
-        Hashtable con configuración FTP (Path, Server, User, Password)
-    .PARAMETER TotalBytes
-        Total de bytes a copiar (para progreso)
-    .PARAMETER FileCount
-        Número de archivos a copiar
-    .PARAMETER StartTime
-        Tiempo de inicio para barra de progreso
-    .PARAMETER ShowProgress
-        Mostrar barra de progreso
-    .PARAMETER ProgressTop
-        Posición Y de la barra de progreso
-    #>
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$SourcePath,
-        
-        [Parameter(Mandatory = $true)]
-        [hashtable]$FtpConfig,
-        
-        [long]$TotalBytes = 0,
-        [int]$FileCount = 0,
-        [datetime]$StartTime = (Get-Date),
-        [bool]$ShowProgress = $true,
-        [int]$ProgressTop = -1
-    )
-    
-    Write-Log "Copia Local → FTP: $SourcePath → $($FtpConfig.Server)" "INFO"
-    
-    if ($ShowProgress) {
-        Write-LlevarProgressBar -Percent 0 -StartTime $StartTime -Label "Subiendo a FTP..." -Top $ProgressTop -Width 50
-    }
-    
-    # TODO: Implementación completa de subida FTP con progreso byte por byte
-    # Por ahora, lanzar excepción indicando que está en desarrollo
-    Write-Log "Copia Local → FTP: Funcionalidad en desarrollo" "WARNING"
-    throw "Copia Local → FTP no implementada completamente. Use FTP client externo por ahora."
-}
-
-function Copy-LlevarFtpToLocal {
-    <#
-    .SYNOPSIS
-        Descarga archivos desde FTP a local con progreso
-    .DESCRIPTION
-        Descarga archivos/carpetas desde FTP usando WebClient con barra de progreso
-    .PARAMETER FtpConfig
-        Hashtable con configuración FTP (Path, Server, User, Password)
-    .PARAMETER DestinationPath
-        Ruta local de destino
-    .PARAMETER StartTime
-        Tiempo de inicio para barra de progreso
-    .PARAMETER ShowProgress
-        Mostrar barra de progreso
-    .PARAMETER ProgressTop
-        Posición Y de la barra de progreso
-    #>
-    param(
-        [Parameter(Mandatory = $true)]
-        [hashtable]$FtpConfig,
-        
-        [Parameter(Mandatory = $true)]
-        [string]$DestinationPath,
-        
-        [datetime]$StartTime = (Get-Date),
-        [bool]$ShowProgress = $true,
-        [int]$ProgressTop = -1
-    )
-    
-    Write-Log "Copia FTP → Local: $($FtpConfig.Server) → $DestinationPath" "INFO"
-    
-    if ($ShowProgress) {
-        Write-LlevarProgressBar -Percent 0 -StartTime $StartTime -Label "Descargando de FTP..." -Top $ProgressTop -Width 50
-    }
-    
-    # TODO: Implementación completa de descarga FTP con progreso byte por byte
-    Write-Log "Copia FTP → Local: Funcionalidad en desarrollo" "WARNING"
-    throw "Copia FTP → Local no implementada completamente. Use FTP client externo por ahora."
-}
-
-function Connect-FtpServer {
-    <#
-    .SYNOPSIS
-        Configura y valida conexión a servidor FTP
-    
-    .DESCRIPTION
-        Solicita configuración de FTP (puerto, autenticación, credenciales) y valida la conexión.
-        Retorna objeto con la configuración para uso posterior.
-    
-    .PARAMETER FtpUrl
-        URL del servidor FTP (puede incluir puerto)
-    
-    .PARAMETER Tipo
-        Tipo de conexión: "Origen" o "Destino"
-    
-    .EXAMPLE
-        $ftpConfig = Connect-FtpServer -FtpUrl "ftp://servidor.com" -Tipo "Origen"
-    #>
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$FtpUrl,
-        
-        [Parameter(Mandatory = $true)]
-        [ValidateSet("Origen", "Destino")]
-        [string]$Tipo
-    )
-    
-    Show-Banner "CONFIGURACIÓN FTP - $Tipo" -BorderColor Cyan -TextColor Yellow
-    
-    # Extraer componentes del servidor de la URL
-    if ($FtpUrl -match '^(ftps?://)([^/:]+)(:(\d+))?(/.*)?$') {
-        $protocol = $Matches[1]
-        $server = $Matches[2]
-        $portFromUrl = $Matches[4]
-        $path = if ($Matches[5]) { $Matches[5] } else { "/" }
-    }
-    else {
-        throw "URL FTP inválida: $FtpUrl"
-    }
-    
-    Write-Host "Servidor: " -NoNewline
-    Write-Host $server -ForegroundColor White
-    Write-Host "Protocolo: " -NoNewline
-    Write-Host $protocol.TrimEnd('://').ToUpper() -ForegroundColor White
-    Write-Host ""
-    
-    # Solicitar puerto
-    if ($portFromUrl) {
-        $puerto = [int]$portFromUrl
-        Write-Host "Puerto detectado en URL: $puerto" -ForegroundColor Green
-    }
-    else {
-        Write-Host "Ingrese puerto FTP [21]: " -NoNewline -ForegroundColor Cyan
-        $puertoInput = Read-Host
-        $puerto = if ([string]::IsNullOrWhiteSpace($puertoInput)) { 21 } else { [int]$puertoInput }
-    }
-    
-    Write-Host "Puerto configurado: " -NoNewline
-    Write-Host $puerto -ForegroundColor White
-    Write-Host ""
-    
-    # Solicitar tipo de autenticación
-    $menuOptions = @(
-        "*Anónima (sin credenciales)",
-        "*Usuario y Contraseña (Básica)",
-        "Usuario y Contraseña con *SSL/TLS (FTPS)"
-    )
-    
-    $authOption = Show-DosMenu -Title "TIPO DE AUTENTICACIÓN" `
-        -Items $menuOptions `
-        -BorderColor Cyan `
-        -TextColor Gray `
-        -DefaultValue 2
-    
-    $useSsl = $false
-    $credential = $null
-    $authType = ""
-    
-    switch ($authOption) {
-        1 {
-            $authType = "Anónima"
-            Write-Host "Usando autenticación anónima" -ForegroundColor Yellow
-            # Crear credencial anónima
-            $securePass = ConvertTo-SecureString "anonymous@" -AsPlainText -Force
-            $credential = New-Object System.Management.Automation.PSCredential("anonymous", $securePass)
-        }
-        2 {
-            $authType = "Básica"
-            Write-Host "Autenticación con usuario y contraseña (sin SSL)" -ForegroundColor Yellow
-            $credential = Get-Credential -Message "Credenciales para FTP: $server"
-            if (-not $credential) {
-                throw "Se requieren credenciales para conectar al servidor FTP"
-            }
-        }
-        3 {
-            $authType = "SSL/TLS"
-            $useSsl = $true
-            Write-Host "Autenticación con usuario y contraseña (SSL/TLS habilitado)" -ForegroundColor Yellow
-            $credential = Get-Credential -Message "Credenciales FTPS para: $server"
-            if (-not $credential) {
-                throw "Se requieren credenciales para conectar al servidor FTPS"
-            }
-            # Cambiar protocolo a FTPS si no lo es
-            if ($protocol -notmatch '^ftps://') {
-                $protocol = "ftps://"
-            }
-        }
-        default {
-            $authType = "Básica"
-            Write-Host "Opción inválida, usando autenticación básica por defecto" -ForegroundColor Yellow
-            $credential = Get-Credential -Message "Credenciales para FTP: $server"
-            if (-not $credential) {
-                throw "Se requieren credenciales para conectar al servidor FTP"
-            }
-        }
-    }
-    
-    Write-Host ""
-    Write-Host "Validando conexión a $server`:$puerto..." -ForegroundColor Cyan
-    
-    # Construir URL completa
-    $fullUrl = "${protocol}${server}:${puerto}${path}"
-    
-    # Intentar conexión de prueba
-    try {
-        $testRequest = [System.Net.FtpWebRequest]::Create($fullUrl)
-        $testRequest.Credentials = New-Object System.Net.NetworkCredential(
-            $credential.UserName,
-            $credential.GetNetworkCredential().Password
-        )
-        $testRequest.Method = [System.Net.WebRequestMethods+Ftp]::ListDirectory
-        $testRequest.UseBinary = $true
-        $testRequest.KeepAlive = $false
-        $testRequest.EnableSsl = $useSsl
-        $testRequest.Timeout = 10000  # 10 segundos
-        
-        # Ignorar errores de certificado SSL si es necesario
-        if ($useSsl) {
-            [System.Net.ServicePointManager]::ServerCertificateValidationCallback = { $true }
-        }
-        
-        $response = $testRequest.GetResponse()
-        $stream = $response.GetResponseStream()
-        $reader = New-Object System.IO.StreamReader($stream)
-        $listing = $reader.ReadToEnd()
-        $reader.Close()
-        $stream.Close()
-        $response.Close()
-        
-        Write-Host "✓ Conexión exitosa a $server`:$puerto" -ForegroundColor Green
-        Write-Host "✓ Autenticación verificada ($authType)" -ForegroundColor Green
-        
-        # Mostrar algunos archivos si los hay
-        if ($listing) {
-            $files = $listing.Split("`n") | Where-Object { $_.Trim() -ne "" } | Select-Object -First 5
-            if ($files.Count -gt 0) {
-                Write-Host "✓ Directorio accesible (archivos encontrados: $($files.Count))" -ForegroundColor Green
-            }
-        }
-        
-        Write-Host ""
-        
-        # Retornar configuración
-        return [PSCustomObject]@{
-            Url        = $fullUrl
-            Server     = $server
-            Port       = $puerto
-            Protocol   = $protocol.TrimEnd('://')
-            Path       = $path
-            Credential = $credential
-            UseSsl     = $useSsl
-            AuthType   = $authType
-            Validated  = $true
-        }
-    }
-    catch {
-        Write-Host "✗ Error al conectar a $server`:$puerto" -ForegroundColor Red
-        Write-Host "  Mensaje: $($_.Exception.Message)" -ForegroundColor Red
-        Write-Host ""
-        
-        Write-Host "Posibles causas:" -ForegroundColor Yellow
-        Write-Host "  • Puerto incorrecto (verifique que sea $puerto)" -ForegroundColor Gray
-        Write-Host "  • Credenciales inválidas" -ForegroundColor Gray
-        Write-Host "  • Servidor no accesible o firewall bloqueando" -ForegroundColor Gray
-        Write-Host "  • SSL/TLS requerido pero no configurado" -ForegroundColor Gray
-        Write-Host ""
-        
-        throw "No se pudo validar la conexión FTP al $Tipo"
-    }
-}
-
 function Get-FtpConnection {
     <#
     .SYNOPSIS
-        Obtiene información de conexión FTP previamente establecida
-    .PARAMETER DriveName
-        Nombre de la unidad/conexión FTP
-    .OUTPUTS
-        Hashtable con información de conexión o $null si no existe
+        [LEGACY] Obtiene información de conexión FTP previamente establecida
     #>
     param([string]$DriveName)
     
@@ -531,15 +368,7 @@ function Get-FtpConnection {
 function Send-FtpFile {
     <#
     .SYNOPSIS
-        Sube un archivo a servidor FTP
-    .PARAMETER LocalPath
-        Ruta local del archivo a subir
-    .PARAMETER DriveName
-        Nombre de la conexión FTP establecida
-    .PARAMETER RemoteFileName
-        Nombre del archivo en el servidor FTP
-    .OUTPUTS
-        $true si la subida fue exitosa, $false si falló
+        [LEGACY] Sube un archivo a servidor FTP
     #>
     param(
         [string]$LocalPath,
@@ -574,15 +403,7 @@ function Send-FtpFile {
 function Receive-FtpFile {
     <#
     .SYNOPSIS
-        Descarga un archivo desde servidor FTP
-    .PARAMETER RemoteFileName
-        Nombre del archivo en el servidor FTP
-    .PARAMETER DriveName
-        Nombre de la conexión FTP establecida
-    .PARAMETER LocalPath
-        Ruta local donde guardar el archivo
-    .OUTPUTS
-        $true si la descarga fue exitosa, $false si falló
+        [LEGACY] Descarga un archivo desde servidor FTP
     #>
     param(
         [string]$RemoteFileName,
@@ -618,10 +439,9 @@ function Receive-FtpFile {
 Export-ModuleMember -Function @(
     'Test-IsFtpPath',
     'Get-FtpConfigFromUser',
-    'Mount-FtpPath',
     'Copy-LlevarLocalToFtp',
     'Copy-LlevarFtpToLocal',
-    'Connect-FtpServer',
+    'Mount-FtpPath',
     'Get-FtpConnection',
     'Send-FtpFile',
     'Receive-FtpFile'

@@ -1,4 +1,4 @@
-# ========================================================================== #
+﻿# ========================================================================== #
 #                         MÓDULO: MENÚS INTERACTIVOS                         #
 # ========================================================================== #
 # Propósito: Menús DOS y popups para interfaces interactivas
@@ -113,9 +113,10 @@ function Show-DosMenu {
         }
     ) + $meta
 
-    # ----------------------------
-    # 3) CALCULAR TAMAÑOS
-    # ----------------------------
+    # -----------------------------#
+# 3) CALCULAR TAMAÑOS         #
+# -----------------------------#
+
     $leftIndent = 2      # espacios después del borde izquierdo
     $rightMargin = 2      # margen a la derecha de la opción más larga
 
@@ -136,9 +137,9 @@ function Show-DosMenu {
         $innerWidth = $Title.Length + 2   # un poco de aire para el título
     }
 
-    $top = "╔" + ("�" * $innerWidth) + "╗"
-    $div = "╠" + ("�" * $innerWidth) + "╣"
-    $bottom = "╚" + ("�" * $innerWidth) + "�"
+    $top = "╔" + ("═" * $innerWidth) + "╗"
+    $div = "╠" + ("═" * $innerWidth) + "╣"
+    $bottom = "╚" + ("═" * $innerWidth) + "╝"
 
     # Título centrado según innerWidth
     $leftPad = [Math]::Floor(($innerWidth - $Title.Length) / 2)
@@ -165,7 +166,7 @@ function Show-DosMenu {
 
     while ($true) {
 
-        # DIBUJO EST�TICO (bordes y título)
+        # DIBUJO EST�TICO (bordes y título)
         Write-MenuLine ($menuY + 0) $top $BorderColor $TextBackgroundColor
         Write-MenuLine ($menuY + 1) $titleLine $BorderColor $TextBackgroundColor
         Write-MenuLine ($menuY + 2) $div $BorderColor $TextBackgroundColor
@@ -173,7 +174,7 @@ function Show-DosMenu {
         # Línea vacía debajo del título (aire)$result
         Write-MenuLine ($menuY + 3) ("║" + (" " * $innerWidth) + "║") $BorderColor $TextBackgroundColor
 
-        # DIBUJO DIN�MICO DE OPCIONES
+        # DIBUJO DIN�MICO DE OPCIONES
         for ($i = 0; $i -lt $optionMeta.Count; $i++) {
             $metaItem = $optionMeta[$i]
             $isSel = ($i -eq $selected)
@@ -295,7 +296,7 @@ function Show-ConsolePopup {
     .PARAMETER Options
         Array de opciones. Use * para marcar hotkey: @("*Sí","*No")
     .PARAMETER DefaultIndex
-        �ndice de la opción seleccionada por defecto
+        �ndice de la opción seleccionada por defecto
     .PARAMETER AllowEsc
         Si se permite cancelar con ESC (retorna -1)
     .PARAMETER Beep
@@ -414,9 +415,9 @@ function Show-ConsolePopup {
     $innerWidth = $contentWidth + $padding
     $boxWidth = $innerWidth + 2
 
-    $topLine = "╔" + ("�" * $innerWidth) + "╗"
-    $bottomLine = "╚" + ("�" * $innerWidth) + "�"
-    $dividerLine = "╠" + ("�" * $innerWidth) + "╣"
+    $topLine = "╔" + ("═" * $innerWidth) + "╗"
+    $bottomLine = "╚" + ("═" * $innerWidth) + "╝"
+    $dividerLine = "╠" + ("═" * $innerWidth) + "╣"
 
     $winWidth = [console]::WindowWidth
     $winHeight = [console]::WindowHeight

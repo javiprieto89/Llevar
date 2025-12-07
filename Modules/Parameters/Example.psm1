@@ -1,4 +1,4 @@
-function Invoke-ExampleParameter {
+ï»¿function Invoke-ExampleParameter {
     param(
         [switch]$Ejemplo,
         [ValidateSet("local", "iso-cd", "iso-dvd", "ftp", "onedrive", "dropbox")]
@@ -8,7 +8,7 @@ function Invoke-ExampleParameter {
     if (-not $Ejemplo) { return $false }
     
     try {
-        Show-Banner "MODO EJEMPLO AUTOMÃTICO" -BorderColor Magenta -TextColor Yellow
+        Show-Banner "MODO EJEMPLO AUTOMï¿½TICO" -BorderColor Magenta -TextColor Yellow
         Write-Host "Tipo: $($TipoEjemplo.ToUpper())" -ForegroundColor Cyan
         Write-Host ""
         

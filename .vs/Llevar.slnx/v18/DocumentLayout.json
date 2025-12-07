@@ -1,0 +1,292 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "Q:\\Utilidad\\Llevar\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{6CAFC0C6-A428-4D30-A9F9-700E829FEA51}|Llevar.pssproj|Q:\\Utilidad\\Llevar\\Modules\\Transfer\\FTP.psm1||{8B382828-6202-11D1-8870-0000F87579D2}",
+      "RelativeMoniker": "D:0:0:{6CAFC0C6-A428-4D30-A9F9-700E829FEA51}|Llevar.pssproj|solutionrelative:Modules\\Transfer\\FTP.psm1||{8B382828-6202-11D1-8870-0000F87579D2}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{6CAFC0C6-A428-4D30-A9F9-700E829FEA51}|Llevar.pssproj|Q:\\Utilidad\\Llevar\\Tests\\Test-RefactorizacionCompleta.ps1||{53EE1FC9-2478-4DD6-9FE2-6B4E499EF22B}",
+      "RelativeMoniker": "D:0:0:{6CAFC0C6-A428-4D30-A9F9-700E829FEA51}|Llevar.pssproj|solutionrelative:Tests\\Test-RefactorizacionCompleta.ps1||{53EE1FC9-2478-4DD6-9FE2-6B4E499EF22B}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{6CAFC0C6-A428-4D30-A9F9-700E829FEA51}|Llevar.pssproj|Q:\\Utilidad\\Llevar\\Modules\\Transfer\\Dropbox.psm1||{53EE1FC9-2478-4DD6-9FE2-6B4E499EF22B}",
+      "RelativeMoniker": "D:0:0:{6CAFC0C6-A428-4D30-A9F9-700E829FEA51}|Llevar.pssproj|solutionrelative:Modules\\Transfer\\Dropbox.psm1||{53EE1FC9-2478-4DD6-9FE2-6B4E499EF22B}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{6CAFC0C6-A428-4D30-A9F9-700E829FEA51}|Llevar.pssproj|Q:\\Utilidad\\Llevar\\Modules\\Transfer\\OneDrive.psm1||{53EE1FC9-2478-4DD6-9FE2-6B4E499EF22B}",
+      "RelativeMoniker": "D:0:0:{6CAFC0C6-A428-4D30-A9F9-700E829FEA51}|Llevar.pssproj|solutionrelative:Modules\\Transfer\\OneDrive.psm1||{53EE1FC9-2478-4DD6-9FE2-6B4E499EF22B}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{6CAFC0C6-A428-4D30-A9F9-700E829FEA51}|Llevar.pssproj|Q:\\Utilidad\\Llevar\\Modules\\Core\\TransferConfig.psm1||{8B382828-6202-11D1-8870-0000F87579D2}",
+      "RelativeMoniker": "D:0:0:{6CAFC0C6-A428-4D30-A9F9-700E829FEA51}|Llevar.pssproj|solutionrelative:Modules\\Core\\TransferConfig.psm1||{8B382828-6202-11D1-8870-0000F87579D2}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{6CAFC0C6-A428-4D30-A9F9-700E829FEA51}|Llevar.pssproj|Q:\\Utilidad\\Llevar\\Modules\\Transfer\\UNC.psm1||{53EE1FC9-2478-4DD6-9FE2-6B4E499EF22B}",
+      "RelativeMoniker": "D:0:0:{6CAFC0C6-A428-4D30-A9F9-700E829FEA51}|Llevar.pssproj|solutionrelative:Modules\\Transfer\\UNC.psm1||{53EE1FC9-2478-4DD6-9FE2-6B4E499EF22B}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{6CAFC0C6-A428-4D30-A9F9-700E829FEA51}|Llevar.pssproj|Q:\\Utilidad\\Llevar\\Modules\\Transfer\\Local.psm1||{53EE1FC9-2478-4DD6-9FE2-6B4E499EF22B}",
+      "RelativeMoniker": "D:0:0:{6CAFC0C6-A428-4D30-A9F9-700E829FEA51}|Llevar.pssproj|solutionrelative:Modules\\Transfer\\Local.psm1||{53EE1FC9-2478-4DD6-9FE2-6B4E499EF22B}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{6CAFC0C6-A428-4D30-A9F9-700E829FEA51}|Llevar.pssproj|Q:\\Utilidad\\Llevar\\Verify-Modularization.ps1||{53EE1FC9-2478-4DD6-9FE2-6B4E499EF22B}",
+      "RelativeMoniker": "D:0:0:{6CAFC0C6-A428-4D30-A9F9-700E829FEA51}|Llevar.pssproj|solutionrelative:Verify-Modularization.ps1||{53EE1FC9-2478-4DD6-9FE2-6B4E499EF22B}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{6CAFC0C6-A428-4D30-A9F9-700E829FEA51}|Llevar.pssproj|Q:\\Utilidad\\Llevar\\Tests\\Import-LlevarModules.ps1||{53EE1FC9-2478-4DD6-9FE2-6B4E499EF22B}",
+      "RelativeMoniker": "D:0:0:{6CAFC0C6-A428-4D30-A9F9-700E829FEA51}|Llevar.pssproj|solutionrelative:Tests\\Import-LlevarModules.ps1||{53EE1FC9-2478-4DD6-9FE2-6B4E499EF22B}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{6CAFC0C6-A428-4D30-A9F9-700E829FEA51}|Llevar.pssproj|Q:\\Utilidad\\Llevar\\Modules\\Parameters\\NormalMode.psm1||{53EE1FC9-2478-4DD6-9FE2-6B4E499EF22B}",
+      "RelativeMoniker": "D:0:0:{6CAFC0C6-A428-4D30-A9F9-700E829FEA51}|Llevar.pssproj|solutionrelative:Modules\\Parameters\\NormalMode.psm1||{53EE1FC9-2478-4DD6-9FE2-6B4E499EF22B}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{6CAFC0C6-A428-4D30-A9F9-700E829FEA51}|Llevar.pssproj|Q:\\Utilidad\\Llevar\\Modules\\UI\\ConfigMenus.psm1||{53EE1FC9-2478-4DD6-9FE2-6B4E499EF22B}",
+      "RelativeMoniker": "D:0:0:{6CAFC0C6-A428-4D30-A9F9-700E829FEA51}|Llevar.pssproj|solutionrelative:Modules\\UI\\ConfigMenus.psm1||{53EE1FC9-2478-4DD6-9FE2-6B4E499EF22B}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{6CAFC0C6-A428-4D30-A9F9-700E829FEA51}|Llevar.pssproj|Q:\\Utilidad\\Llevar\\Llevar.ps1||{53EE1FC9-2478-4DD6-9FE2-6B4E499EF22B}",
+      "RelativeMoniker": "D:0:0:{6CAFC0C6-A428-4D30-A9F9-700E829FEA51}|Llevar.pssproj|solutionrelative:Llevar.ps1||{53EE1FC9-2478-4DD6-9FE2-6B4E499EF22B}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{6CAFC0C6-A428-4D30-A9F9-700E829FEA51}|Llevar.pssproj|Q:\\Utilidad\\Llevar\\Modules\\UI\\Menus.psm1||{53EE1FC9-2478-4DD6-9FE2-6B4E499EF22B}",
+      "RelativeMoniker": "D:0:0:{6CAFC0C6-A428-4D30-A9F9-700E829FEA51}|Llevar.pssproj|solutionrelative:Modules\\UI\\Menus.psm1||{53EE1FC9-2478-4DD6-9FE2-6B4E499EF22B}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{6CAFC0C6-A428-4D30-A9F9-700E829FEA51}|Llevar.pssproj|Q:\\Utilidad\\Llevar\\Modules\\UI\\ProgressBar.psm1||{53EE1FC9-2478-4DD6-9FE2-6B4E499EF22B}",
+      "RelativeMoniker": "D:0:0:{6CAFC0C6-A428-4D30-A9F9-700E829FEA51}|Llevar.pssproj|solutionrelative:Modules\\UI\\ProgressBar.psm1||{53EE1FC9-2478-4DD6-9FE2-6B4E499EF22B}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{6CAFC0C6-A428-4D30-A9F9-700E829FEA51}|Llevar.pssproj|Q:\\Utilidad\\Llevar\\Modules\\Parameters\\Test.psm1||{53EE1FC9-2478-4DD6-9FE2-6B4E499EF22B}",
+      "RelativeMoniker": "D:0:0:{6CAFC0C6-A428-4D30-A9F9-700E829FEA51}|Llevar.pssproj|solutionrelative:Modules\\Parameters\\Test.psm1||{53EE1FC9-2478-4DD6-9FE2-6B4E499EF22B}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{6CAFC0C6-A428-4D30-A9F9-700E829FEA51}|Llevar.pssproj|Q:\\Utilidad\\Llevar\\Modules\\Transfer\\Unified.psm1||{53EE1FC9-2478-4DD6-9FE2-6B4E499EF22B}",
+      "RelativeMoniker": "D:0:0:{6CAFC0C6-A428-4D30-A9F9-700E829FEA51}|Llevar.pssproj|solutionrelative:Modules\\Transfer\\Unified.psm1||{53EE1FC9-2478-4DD6-9FE2-6B4E499EF22B}"
+    }
+  ],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 0,
+      "VerticalTabListWidth": 256,
+      "DocumentGroups": [
+        {
+          "DockedWidth": 200,
+          "SelectedChildIndex": 1,
+          "Children": [
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "Test-RefactorizacionCompleta.ps1",
+              "DocumentMoniker": "Q:\\Utilidad\\Llevar\\Tests\\Test-RefactorizacionCompleta.ps1",
+              "RelativeDocumentMoniker": "Tests\\Test-RefactorizacionCompleta.ps1",
+              "ToolTip": "Q:\\Utilidad\\Llevar\\Tests\\Test-RefactorizacionCompleta.ps1",
+              "RelativeToolTip": "Tests\\Test-RefactorizacionCompleta.ps1",
+              "ViewState": "AgIAAKEAAAAAAAAAAADwvw0BAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
+              "WhenOpened": "2025-12-07T05:22:39.207Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "FTP.psm1",
+              "DocumentMoniker": "Q:\\Utilidad\\Llevar\\Modules\\Transfer\\FTP.psm1",
+              "RelativeDocumentMoniker": "Modules\\Transfer\\FTP.psm1",
+              "ToolTip": "Q:\\Utilidad\\Llevar\\Modules\\Transfer\\FTP.psm1",
+              "RelativeToolTip": "Modules\\Transfer\\FTP.psm1",
+              "ViewState": "AgIAAJ4BAAAAAAAAAAAAwCMAAAAGAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
+              "WhenOpened": "2025-12-07T05:00:39.409Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 3,
+              "Title": "OneDrive.psm1",
+              "DocumentMoniker": "Q:\\Utilidad\\Llevar\\Modules\\Transfer\\OneDrive.psm1",
+              "RelativeDocumentMoniker": "Modules\\Transfer\\OneDrive.psm1",
+              "ToolTip": "Q:\\Utilidad\\Llevar\\Modules\\Transfer\\OneDrive.psm1",
+              "RelativeToolTip": "Modules\\Transfer\\OneDrive.psm1",
+              "ViewState": "AgIAAPQAAAAAAAAAAADwvwAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
+              "WhenOpened": "2025-12-07T04:59:05.178Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 5,
+              "Title": "UNC.psm1",
+              "DocumentMoniker": "Q:\\Utilidad\\Llevar\\Modules\\Transfer\\UNC.psm1",
+              "RelativeDocumentMoniker": "Modules\\Transfer\\UNC.psm1",
+              "ToolTip": "Q:\\Utilidad\\Llevar\\Modules\\Transfer\\UNC.psm1",
+              "RelativeToolTip": "Modules\\Transfer\\UNC.psm1",
+              "ViewState": "AgIAAGYBAAAAAAAAAADwv28BAAAFAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
+              "WhenOpened": "2025-12-07T04:19:36.864Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 6,
+              "Title": "Local.psm1",
+              "DocumentMoniker": "Q:\\Utilidad\\Llevar\\Modules\\Transfer\\Local.psm1",
+              "RelativeDocumentMoniker": "Modules\\Transfer\\Local.psm1",
+              "ToolTip": "Q:\\Utilidad\\Llevar\\Modules\\Transfer\\Local.psm1",
+              "RelativeToolTip": "Modules\\Transfer\\Local.psm1",
+              "ViewState": "AgIAAGcAAAAAAAAAAADwv3oAAAAEAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
+              "WhenOpened": "2025-12-07T04:19:05.623Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 2,
+              "Title": "Dropbox.psm1",
+              "DocumentMoniker": "Q:\\Utilidad\\Llevar\\Modules\\Transfer\\Dropbox.psm1",
+              "RelativeDocumentMoniker": "Modules\\Transfer\\Dropbox.psm1",
+              "ToolTip": "Q:\\Utilidad\\Llevar\\Modules\\Transfer\\Dropbox.psm1",
+              "RelativeToolTip": "Modules\\Transfer\\Dropbox.psm1",
+              "ViewState": "AgIAANIAAAAAAAAAAADwv+4AAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
+              "WhenOpened": "2025-12-07T04:04:21.957Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 7,
+              "Title": "Verify-Modularization.ps1",
+              "DocumentMoniker": "Q:\\Utilidad\\Llevar\\Verify-Modularization.ps1",
+              "RelativeDocumentMoniker": "Verify-Modularization.ps1",
+              "ToolTip": "Q:\\Utilidad\\Llevar\\Verify-Modularization.ps1",
+              "RelativeToolTip": "Verify-Modularization.ps1",
+              "ViewState": "AgIAAJ0AAAAAAAAAAADwvwAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
+              "WhenOpened": "2025-12-07T03:56:37.993Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 4,
+              "Title": "TransferConfig.psm1",
+              "DocumentMoniker": "Q:\\Utilidad\\Llevar\\Modules\\Core\\TransferConfig.psm1",
+              "RelativeDocumentMoniker": "Modules\\Core\\TransferConfig.psm1",
+              "ToolTip": "Q:\\Utilidad\\Llevar\\Modules\\Core\\TransferConfig.psm1",
+              "RelativeToolTip": "Modules\\Core\\TransferConfig.psm1",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAABEAAAAlAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
+              "WhenOpened": "2025-12-07T03:46:06.585Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 10,
+              "Title": "ConfigMenus.psm1",
+              "DocumentMoniker": "Q:\\Utilidad\\Llevar\\Modules\\UI\\ConfigMenus.psm1",
+              "RelativeDocumentMoniker": "Modules\\UI\\ConfigMenus.psm1",
+              "ToolTip": "Q:\\Utilidad\\Llevar\\Modules\\UI\\ConfigMenus.psm1",
+              "RelativeToolTip": "Modules\\UI\\ConfigMenus.psm1",
+              "ViewState": "AgIAAK0BAAAAAAAAAABRwLUAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
+              "WhenOpened": "2025-12-07T03:48:05.029Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 8,
+              "Title": "Import-LlevarModules.ps1",
+              "DocumentMoniker": "Q:\\Utilidad\\Llevar\\Tests\\Import-LlevarModules.ps1",
+              "RelativeDocumentMoniker": "Tests\\Import-LlevarModules.ps1",
+              "ToolTip": "Q:\\Utilidad\\Llevar\\Tests\\Import-LlevarModules.ps1",
+              "RelativeToolTip": "Tests\\Import-LlevarModules.ps1",
+              "ViewState": "AgIAADYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
+              "WhenOpened": "2025-12-07T03:57:15.295Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 15,
+              "Title": "Unified.psm1",
+              "DocumentMoniker": "Q:\\Utilidad\\Llevar\\Modules\\Transfer\\Unified.psm1",
+              "RelativeDocumentMoniker": "Modules\\Transfer\\Unified.psm1",
+              "ToolTip": "Q:\\Utilidad\\Llevar\\Modules\\Transfer\\Unified.psm1",
+              "RelativeToolTip": "Modules\\Transfer\\Unified.psm1",
+              "ViewState": "AgIAAHEBAAAAAAAAAABRwHQBAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
+              "WhenOpened": "2025-12-07T03:29:50.818Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 9,
+              "Title": "NormalMode.psm1",
+              "DocumentMoniker": "Q:\\Utilidad\\Llevar\\Modules\\Parameters\\NormalMode.psm1",
+              "RelativeDocumentMoniker": "Modules\\Parameters\\NormalMode.psm1",
+              "ToolTip": "Q:\\Utilidad\\Llevar\\Modules\\Parameters\\NormalMode.psm1",
+              "RelativeToolTip": "Modules\\Parameters\\NormalMode.psm1",
+              "ViewState": "AgIAADMDAAAAAAAAAIBJwAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
+              "WhenOpened": "2025-12-07T03:28:01.413Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 14,
+              "Title": "Test.psm1",
+              "DocumentMoniker": "Q:\\Utilidad\\Llevar\\Modules\\Parameters\\Test.psm1",
+              "RelativeDocumentMoniker": "Modules\\Parameters\\Test.psm1",
+              "ToolTip": "Q:\\Utilidad\\Llevar\\Modules\\Parameters\\Test.psm1",
+              "RelativeToolTip": "Modules\\Parameters\\Test.psm1",
+              "ViewState": "AgIAAGwCAAAAAAAAAABRwAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
+              "WhenOpened": "2025-12-07T03:23:43.247Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 13,
+              "Title": "ProgressBar.psm1",
+              "DocumentMoniker": "Q:\\Utilidad\\Llevar\\Modules\\UI\\ProgressBar.psm1",
+              "RelativeDocumentMoniker": "Modules\\UI\\ProgressBar.psm1",
+              "ToolTip": "Q:\\Utilidad\\Llevar\\Modules\\UI\\ProgressBar.psm1",
+              "RelativeToolTip": "Modules\\UI\\ProgressBar.psm1",
+              "ViewState": "AgIAACsBAAAAAAAAAADwvwAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
+              "WhenOpened": "2025-12-07T03:22:58.641Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 12,
+              "Title": "Menus.psm1",
+              "DocumentMoniker": "Q:\\Utilidad\\Llevar\\Modules\\UI\\Menus.psm1",
+              "RelativeDocumentMoniker": "Modules\\UI\\Menus.psm1",
+              "ToolTip": "Q:\\Utilidad\\Llevar\\Modules\\UI\\Menus.psm1",
+              "RelativeToolTip": "Modules\\UI\\Menus.psm1",
+              "ViewState": "AgIAAJwBAAAAAAAAAADwv6gBAAA0AAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
+              "WhenOpened": "2025-12-07T03:17:38.973Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 11,
+              "Title": "Llevar.ps1",
+              "DocumentMoniker": "Q:\\Utilidad\\Llevar\\Llevar.ps1",
+              "RelativeDocumentMoniker": "Llevar.ps1",
+              "ToolTip": "Q:\\Utilidad\\Llevar\\Llevar.ps1",
+              "RelativeToolTip": "Llevar.ps1",
+              "ViewState": "AgIAAHkCAAAAAAAAAABRwHwCAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
+              "WhenOpened": "2025-12-07T03:16:17.185Z",
+              "EditorCaption": ""
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

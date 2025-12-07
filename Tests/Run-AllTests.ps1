@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Runner principal para ejecutar todos los tests de Llevar.ps1
 

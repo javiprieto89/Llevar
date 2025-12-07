@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Repara archivos PowerShell con problemas de encoding y caracteres corruptos
 
