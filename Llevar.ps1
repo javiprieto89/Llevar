@@ -1,7 +1,4 @@
-﻿# Importar clases de TransferConfig (using module DEBE estar al INICIO del archivo)
-using module "Q:\Utilidad\LLevar\Modules\Core\TransferConfig.psm1"
-
-# *********************************************************************************************
+﻿# *********************************************************************************************
 # SE MANTIENE POR COMPATIBILIDAD CON LA TERCERA EDAD LO VIEJO SIRVE JUAN ehhhhhh ALEJANDRO xD #
 # ********************************************************************************************* 
 # Con el mayor de los respetos, para alguien por el que siempre senti mucha admiración, a modo homenaje, 
@@ -102,6 +99,9 @@ using module "Q:\Utilidad\LLevar\Modules\Core\TransferConfig.psm1"
     Versión PowerShell modernizada con soporte ZIP nativo
 #>
 
+# ========================================================================== #
+#                          DEFINICIÓN DE PARÁMETROS                          #
+# ==========================================================================
 param(
     [string]$Origen,
     [string]$Destino,
@@ -126,8 +126,19 @@ param(
     [switch]$DropboxOrigen,
     [switch]$DropboxDestino,
     [switch]$RobocopyMirror,
-    [switch]$Verbose
+    [switch]$Verbose,
+    [switch]$ForceLogo
 )
+
+# ========================================================================== #
+#              CONFIGURAR PREFERENCIAS DE ERROR/WARNING TEMPRANO             #
+# ========================================================================== #
+
+# Configurar preferencias ANTES de cualquier importación para silenciar errores/warnings
+$script:OriginalErrorPreference = $ErrorActionPreference
+$script:OriginalWarningPreference = $WarningPreference
+$ErrorActionPreference = 'SilentlyContinue'
+$WarningPreference = 'SilentlyContinue'
 
 # ========================================================================== #
 #                    INICIALIZACIÓN TEMPRANA DE LOGGING                      #
@@ -140,12 +151,32 @@ if (-not (Test-Path $Global:LogsDir)) {
     New-Item -Path $Global:LogsDir -ItemType Directory -Force | Out-Null
 }
 
-# Nombre del log con fecha, hora y minuto
+# Nombre base del log con fecha, hora y minuto
 $timestamp = Get-Date -Format "yyyy-MM-dd_HH-mm"
-$Global:LogFile = Join-Path $Global:LogsDir "LLEVAR_$timestamp.log"
+$Global:LogBaseName = "LLEVAR_$timestamp"
+$Global:LogFile = Join-Path $Global:LogsDir "$($Global:LogBaseName).log"
+
+function Write-InitLogSafe {
+    param([string]$Value)
+    try {
+        if (-not $Global:LogFile) {
+            $Global:LogFile = Join-Path $Global:LogsDir "$($Global:LogBaseName)_fallback.log"
+        }
+        # Crear carpeta del log si aún no existe
+        $logDir = Split-Path -Parent $Global:LogFile
+        if ($logDir -and -not (Test-Path $logDir)) {
+            New-Item -Path $logDir -ItemType Directory -Force | Out-Null
+        }
+        Add-Content -Path $Global:LogFile -Value $Value -Encoding UTF8
+    }
+    catch {
+        # Último recurso: dejar constancia en consola
+        Write-Host "No se pudo escribir el log en $Global:LogFile : $($_.Exception.Message)" -ForegroundColor Red
+    }
+}
 
 # Iniciar transcript para capturar TODA la salida (incluyendo warnings de importación)
-$TranscriptFile = Join-Path $Global:LogsDir "LLEVAR_TRANSCRIPT_$timestamp.log"
+$TranscriptFile = Join-Path $Global:LogsDir "$($Global:LogBaseName)_TRANSCRIPT.log"
 try {
     Start-Transcript -Path $TranscriptFile -Force | Out-Null
 }
@@ -166,7 +197,7 @@ Modo Verbose: $Verbose
 Transcript: $(if ($TranscriptFile) { 'Activo' } else { 'No disponible' })
 ========================================
 "@
-Add-Content -Path $Global:LogFile -Value $initLog -Encoding UTF8
+Write-InitLogSafe $initLog
 
 # ========================================================================== #
 #                   WRAPPER DE MANEJO DE ERRORES GLOBAL                      #
@@ -182,80 +213,87 @@ try {
 
     $ModulesPath = Join-Path $PSScriptRoot "Modules"
 
-    # Redirigir warnings durante importación de módulos
-    $oldWarningPref = $WarningPreference
-    $WarningPreference = 'Continue'
+    # Las preferencias de error/warning ya están configuradas al inicio del script
+    # Variables para capturar errores y warnings durante importación
+    $importWarnings = @()
+    $importErrors = @()
 
-    # Módulos Core
-    Import-Module (Join-Path $ModulesPath "Core\Validation.psm1") -Force -Global -WarningVariable +importWarnings
-    Import-Module (Join-Path $ModulesPath "Core\Logger.psm1") -Force -Global -WarningVariable +importWarnings
-    # TransferConfig.psm1 ya importado con "using module" al inicio del archivo
+    # Módulos Core        
+    Import-Module (Join-Path $ModulesPath "Core\TransferConfig.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
+    Import-Module (Join-Path $ModulesPath "Core\Validation.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
+    Import-Module (Join-Path $ModulesPath "Core\Logger.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
+    
 
     # Módulos UI
-    Import-Module (Join-Path $ModulesPath "UI\Console.psm1") -Force -Global -WarningVariable +importWarnings
-    Import-Module (Join-Path $ModulesPath "UI\ProgressBar.psm1") -Force -Global -WarningVariable +importWarnings
-    Import-Module (Join-Path $ModulesPath "UI\Banners.psm1") -Force -Global -WarningVariable +importWarnings
-    Import-Module (Join-Path $ModulesPath "UI\Navigator.psm1") -Force -Global -WarningVariable +importWarnings
-    Import-Module (Join-Path $ModulesPath "UI\Menus.psm1") -Force -Global -WarningVariable +importWarnings
-    Import-Module (Join-Path $ModulesPath "UI\ConfigMenus.psm1") -Force -Global -WarningVariable +importWarnings
+    Import-Module (Join-Path $ModulesPath "UI\Console.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
+    Import-Module (Join-Path $ModulesPath "UI\ProgressBar.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
+    Import-Module (Join-Path $ModulesPath "UI\Banners.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
+    Import-Module (Join-Path $ModulesPath "UI\Navigator.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
+    Import-Module (Join-Path $ModulesPath "UI\Menus.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
+    Import-Module (Join-Path $ModulesPath "UI\ConfigMenus.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
 
     # Módulos de Compresión
-    Import-Module (Join-Path $ModulesPath "Compression\SevenZip.psm1") -Force -Global -WarningVariable +importWarnings
-    Import-Module (Join-Path $ModulesPath "Compression\NativeZip.psm1") -Force -Global -WarningVariable +importWarnings
-    Import-Module (Join-Path $ModulesPath "Compression\BlockSplitter.psm1") -Force -Global -WarningVariable +importWarnings
+    Import-Module (Join-Path $ModulesPath "Compression\SevenZip.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
+    Import-Module (Join-Path $ModulesPath "Compression\NativeZip.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
+    Import-Module (Join-Path $ModulesPath "Compression\BlockSplitter.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
 
     # Módulos de Transferencia
-    Import-Module (Join-Path $ModulesPath "Transfer\Local.psm1") -Force -Global -WarningVariable +importWarnings
-    Import-Module (Join-Path $ModulesPath "Transfer\FTP.psm1") -Force -Global -WarningVariable +importWarnings
-    Import-Module (Join-Path $ModulesPath "Transfer\UNC.psm1") -Force -Global -WarningVariable +importWarnings
-    Import-Module (Join-Path $ModulesPath "Transfer\OneDrive.psm1") -Force -Global -WarningVariable +importWarnings
-    Import-Module (Join-Path $ModulesPath "Transfer\Dropbox.psm1") -Force -Global -WarningVariable +importWarnings
-    Import-Module (Join-Path $ModulesPath "Transfer\Floppy.psm1") -Force -Global -WarningVariable +importWarnings
-    Import-Module (Join-Path $ModulesPath "Transfer\Unified.psm1") -Force -Global -WarningVariable +importWarnings
+    Import-Module (Join-Path $ModulesPath "Transfer\Local.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
+    Import-Module (Join-Path $ModulesPath "Transfer\FTP.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
+    Import-Module (Join-Path $ModulesPath "Transfer\UNC.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
+    Import-Module (Join-Path $ModulesPath "Transfer\OneDrive.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
+    Import-Module (Join-Path $ModulesPath "Transfer\Dropbox.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
+    Import-Module (Join-Path $ModulesPath "Transfer\Floppy.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
+    Import-Module (Join-Path $ModulesPath "Transfer\Unified.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
 
     # Módulos de Instalación
-    Import-Module (Join-Path $ModulesPath "Installation\SystemInstall.psm1") -Force -Global -WarningVariable +importWarnings
-    Import-Module (Join-Path $ModulesPath "Installation\Installer.psm1") -Force -Global -WarningVariable +importWarnings
-    Import-Module (Join-Path $ModulesPath "Installation\ISO.psm1") -Force -Global -WarningVariable +importWarnings
+    Import-Module (Join-Path $ModulesPath "Installation\SystemInstall.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
+    Import-Module (Join-Path $ModulesPath "Installation\Installer.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
+    Import-Module (Join-Path $ModulesPath "Installation\ISO.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
 
     # Módulos de Utilidades
-    Import-Module (Join-Path $ModulesPath "Utilities\Installation.psm1") -Force -Global -WarningVariable +importWarnings
-    Import-Module (Join-Path $ModulesPath "Utilities\Examples.psm1") -Force -Global -WarningVariable +importWarnings
-    Import-Module (Join-Path $ModulesPath "Utilities\Help.psm1") -Force -Global -WarningVariable +importWarnings
-    Import-Module (Join-Path $ModulesPath "Utilities\PathSelectors.psm1") -Force -Global -WarningVariable +importWarnings
-    Import-Module (Join-Path $ModulesPath "Utilities\VolumeManagement.psm1") -Force -Global -WarningVariable +importWarnings
+    Import-Module (Join-Path $ModulesPath "Utilities\Installation.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
+    Import-Module (Join-Path $ModulesPath "Utilities\Examples.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
+    Import-Module (Join-Path $ModulesPath "Utilities\Help.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
+    Import-Module (Join-Path $ModulesPath "Utilities\PathSelectors.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
+    Import-Module (Join-Path $ModulesPath "Utilities\VolumeManagement.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
 
     # Módulos del Sistema
-    Import-Module (Join-Path $ModulesPath "System\Audio.psm1") -Force -Global -WarningVariable +importWarnings
-    Import-Module (Join-Path $ModulesPath "System\FileSystem.psm1") -Force -Global -WarningVariable +importWarnings
-    Import-Module (Join-Path $ModulesPath "System\Robocopy.psm1") -Force -Global -WarningVariable +importWarnings
+    Import-Module (Join-Path $ModulesPath "System\Audio.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
+    Import-Module (Join-Path $ModulesPath "System\FileSystem.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
+    Import-Module (Join-Path $ModulesPath "System\Robocopy.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
 
     # Módulos de Parámetros
-    Import-Module (Join-Path $ModulesPath "Parameters\Help.psm1") -Force -Global -WarningVariable +importWarnings
-    Import-Module (Join-Path $ModulesPath "Parameters\Install.psm1") -Force -Global -WarningVariable +importWarnings
-    Import-Module (Join-Path $ModulesPath "Parameters\Example.psm1") -Force -Global -WarningVariable +importWarnings
-    Import-Module (Join-Path $ModulesPath "Parameters\Test.psm1") -Force -Global -WarningVariable +importWarnings
-    Import-Module (Join-Path $ModulesPath "Parameters\Robocopy.psm1") -Force -Global -WarningVariable +importWarnings
-    Import-Module (Join-Path $ModulesPath "Parameters\InteractiveMenu.psm1") -Force -Global -WarningVariable +importWarnings
-    Import-Module (Join-Path $ModulesPath "Parameters\InstallationCheck.psm1") -Force -Global -WarningVariable +importWarnings
-    Import-Module (Join-Path $ModulesPath "Parameters\NormalMode.psm1") -Force -Global -WarningVariable +importWarnings
+    Import-Module (Join-Path $ModulesPath "Parameters\Help.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
+    Import-Module (Join-Path $ModulesPath "Parameters\Install.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
+    Import-Module (Join-Path $ModulesPath "Parameters\Example.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
+    Import-Module (Join-Path $ModulesPath "Parameters\Test.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
+    Import-Module (Join-Path $ModulesPath "Parameters\Robocopy.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
+    Import-Module (Join-Path $ModulesPath "Parameters\InteractiveMenu.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
+    Import-Module (Join-Path $ModulesPath "Parameters\InstallationCheck.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
+    Import-Module (Join-Path $ModulesPath "Parameters\NormalMode.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
     
-    # Restaurar preferencia de warnings
-    $WarningPreference = $oldWarningPref
-    
-    # Registrar warnings de importacion en el log (sin mostrar en consola)
+    # Registrar warnings y errores de importacion en el log (sin mostrar en consola todavía)
     if ($importWarnings -and $importWarnings.Count -gt 0) {
         $warningLog = "`n[WARNINGS DURANTE IMPORTACION DE MODULOS]`n"
         foreach ($warning in $importWarnings) {
             $warningLog += "  - $warning`n"
         }
-        Add-Content -Path $Global:LogFile -Value $warningLog -Encoding UTF8
-        
-        # Solo mostrar en verbose
-        if ($Verbose) {
-            Write-Host "[DEBUG] Se registraron $($importWarnings.Count) advertencias de módulos en el log" -ForegroundColor DarkGray
-        }
+        Write-InitLogSafe $warningLog
     }
+    
+    if ($importErrors -and $importErrors.Count -gt 0) {
+        $errorLog = "`n[ERRORES DURANTE IMPORTACION DE MODULOS]`n"
+        foreach ($err in $importErrors) {
+            $errorLog += "  - $($err.Exception.Message)`n"
+        }
+        Write-InitLogSafe $errorLog
+    }
+    
+    # Restaurar preferencias de error y warning después de la importación
+    # para que el resto del script funcione normalmente
+    $ErrorActionPreference = $script:OriginalErrorPreference
+    $WarningPreference = $script:OriginalWarningPreference
 
     # ========================================================================== #
     #                 VERIFICACIÓN DE PERMISOS DE ADMINISTRADOR                  #
@@ -274,33 +312,8 @@ try {
         Write-Host "[DEBUG/IDE] Verbose activado automáticamente" -ForegroundColor DarkGray
     }
 
-    # Solo pedir elevación si NO es administrador Y NO está en IDE
-    $needsElevation = -not $isAdmin -and -not $isInIDE
-
-    if ($needsElevation) {
-        Write-Host "⚠ Se requieren permisos de administrador para redimensionar la consola." -ForegroundColor Yellow
-        Write-Host "Elevando a administrador..." -ForegroundColor Cyan
-    
-        # Construir argumentos para relanzar el script
-        $scriptPath = $MyInvocation.MyCommand.Path
-        $arguments = @("-NoExit", "-ExecutionPolicy", "Bypass", "-File", "`"$scriptPath`"")
-    
-        # Agregar parámetros pasados originalmente
-        if ($Origen) { $arguments += "-Origen", "`"$Origen`"" }
-        if ($Destino) { $arguments += "-Destino", "`"$Destino`"" }
-        if ($BlockSizeMB -ne 10) { $arguments += "-BlockSizeMB", $BlockSizeMB }
-        if ($Clave) { $arguments += "-Clave", "`"$Clave`"" }
-        if ($Iso) { $arguments += "-Iso" }
-        if ($IsoDestino -ne "dvd") { $arguments += "-IsoDestino", $IsoDestino }
-        if ($UseNativeZip) { $arguments += "-UseNativeZip" }
-        if ($Ejemplo) { $arguments += "-Ejemplo" }
-        if ($Ayuda) { $arguments += "-Ayuda" }
-        if ($Verbose) { $arguments += "-Verbose" }
-    
-        # Relanzar con privilegios de administrador
-        Start-Process pwsh.exe -Verb RunAs -ArgumentList $arguments
-        exit
-    }
+    # NOTA: La elevación de permisos se pospone hasta después del logo
+    # para mejor experiencia de usuario
 
     # ========================================================================== #
     #                            INICIALIZACIÓN                                  #
@@ -310,6 +323,7 @@ try {
     Initialize-LogFile -Verbose:$Verbose
 
     # Inicializar consola si es necesario (solo si hay consola válida)
+    # NO hacer Clear-Host aquí para no borrar errores/warnings antes del logo
     $hostName = $host.Name
     if ($hostName -and ($hostName -ilike '*consolehost*' -or $hostName -ilike '*visual studio code host*')) {
         try {
@@ -317,7 +331,7 @@ try {
             if ($rawUI) {
                 $rawUI.BackgroundColor = 'Black'
                 $rawUI.ForegroundColor = 'White'
-                Clear-Host
+                # Clear-Host eliminado - Show-AsciiLogo lo hará cuando sea necesario
             }
         }
         catch {
@@ -341,31 +355,104 @@ try {
     
     # Variable para rastrear si se mostró el logo
     $script:LogoWasShown = $false
+
+    $forceLogoEnv = $false
+    if ($env:LLEVAR_FORCE_LOGO -eq '1' -or $env:LLEVAR_FORCE_LOGO -eq 'true') { $forceLogoEnv = $true }
+    $shouldShowLogo = (-not $hasExecutionParams) -and ((-not $isInIDE) -or $ForceLogo -or $forceLogoEnv)
     
-    # Mostrar logo ASCII si existe (solo si NO está en IDE y NO hay parámetros de ejecución)
-    if (-not $isInIDE -and -not $hasExecutionParams) {
+    # Log de depuración solo si Write-Log está disponible
+    if (Get-Command Write-Log -ErrorAction SilentlyContinue) {
+        Write-Log "Logo check -> isInIDE=$isInIDE hasParams=$hasExecutionParams ForceLogo=$ForceLogo EnvForceLogo=$forceLogoEnv" "DEBUG"
+    }
+    
+    # Mostrar logo ASCII si corresponde
+    if ($shouldShowLogo) {
         $logoPath = Join-Path $PSScriptRoot "Data\alexsoft.txt"
         if (Test-Path $logoPath) {
             try {
-                # Usar Show-AsciiLogo como renderer unificado para el logo con sonidos estilo DOS    
-                Show-AsciiLogo -Path $logoPath -DelayMs 30 -ShowProgress $true -Label "Cargando..." -ForegroundColor Gray -PlaySound $true
+                # Usar Show-AsciiLogo como renderer unificado para el logo con sonidos estilo DOS
+                # Show-AsciiLogo hace su propio Clear-Host internamente
+                Show-AsciiLogo -Path $logoPath -DelayMs 30 -ShowProgress $true -Label "Cargando..." -ForegroundColor Gray -PlaySound $true -FinalDelaySeconds 2
                 $script:LogoWasShown = $true
-                    
-                # Limpiar pantalla después de cargar el logo
-                Clear-Host
                 
                 # Mostrar mensaje de bienvenida personalizado parpadeante
                 Show-WelcomeMessage -BlinkCount 3 -VisibleDelayMs 450 -TextColor Cyan
                 
-                # Limpiar para mostrar el menú
+                # Mostrar errores/warnings después del logo y mensaje de bienvenida si los hay
+                if (($importWarnings -and $importWarnings.Count -gt 0) -or ($importErrors -and $importErrors.Count -gt 0)) {
+                    Write-Host ""
+                    Write-Host "═══════════════════════════════════════════════════════════" -ForegroundColor Yellow
+                    Write-Host "  ADVERTENCIAS/ERRORES DURANTE LA CARGA DE MÓDULOS" -ForegroundColor Yellow
+                    Write-Host "═══════════════════════════════════════════════════════════" -ForegroundColor Yellow
+                    Write-Host ""
+                    
+                    if ($importWarnings -and $importWarnings.Count -gt 0) {
+                        Write-Host "Advertencias ($($importWarnings.Count)):" -ForegroundColor Yellow
+                        foreach ($warning in $importWarnings) {
+                            Write-Host "  ⚠ $warning" -ForegroundColor Yellow
+                        }
+                        Write-Host ""
+                    }
+                    
+                    if ($importErrors -and $importErrors.Count -gt 0) {
+                        Write-Host "Errores ($($importErrors.Count)):" -ForegroundColor Red
+                        foreach ($err in $importErrors) {
+                            Write-Host "  ✗ $($err.Exception.Message)" -ForegroundColor Red
+                        }
+                        Write-Host ""
+                    }
+                    
+                    Write-Host "Los detalles completos están en el log: $Global:LogFile" -ForegroundColor Gray
+                    Write-Host ""
+                    Write-Host "Presione cualquier tecla para continuar..." -ForegroundColor Cyan
+                    $null = $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+                }
+                
+                # Limpiar para mostrar el menú (solo después de mostrar errores si los hay)
                 Clear-Host
             }
             catch {
-                # Si hay error en el logo, simplemente continuar
-                Write-Log "Error mostrando logo ASCII: $($_.Exception.Message)" "WARNING"
-                Clear-Host
+                # Si hay error en el logo (ej: cuando se usa -NoProfile), simplemente continuar
+                # No es un error crítico, solo significa que las funciones de consola no están disponibles
+                try {
+                    Write-Log "Error mostrando logo ASCII: $($_.Exception.Message)" "WARNING"
+                }
+                catch {
+                    # Ignorar errores al escribir el log
+                }
+                try {
+                    Clear-Host
+                }
+                catch {
+                    # Ignorar si Clear-Host falla
+                }
             }
         }
+    }
+
+    # Si no se mostró el logo pero hubo errores/warnings de importación y no hay parámetros, mostrarlos igual
+    if (-not $script:LogoWasShown -and -not $hasExecutionParams -and (($importWarnings -and $importWarnings.Count -gt 0) -or ($importErrors -and $importErrors.Count -gt 0))) {
+        Write-Host "═══════════════════════════════════════════════════════════" -ForegroundColor Yellow
+        Write-Host "  ADVERTENCIAS/ERRORES DURANTE LA CARGA DE MÓDULOS" -ForegroundColor Yellow
+        Write-Host "═══════════════════════════════════════════════════════════" -ForegroundColor Yellow
+        Write-Host ""
+
+        if ($importWarnings -and $importWarnings.Count -gt 0) {
+            Write-Host "Advertencias ($($importWarnings.Count)):" -ForegroundColor Yellow
+            foreach ($warning in $importWarnings) { Write-Host "  ⚠ $warning" -ForegroundColor Yellow }
+            Write-Host ""
+        }
+
+        if ($importErrors -and $importErrors.Count -gt 0) {
+            Write-Host "Errores ($($importErrors.Count)):" -ForegroundColor Red
+            foreach ($err in $importErrors) { Write-Host "  ✗ $($err.Exception.Message)" -ForegroundColor Red }
+            Write-Host ""
+        }
+
+        Write-Host "Los detalles completos están en el log: $Global:LogFile" -ForegroundColor Gray
+        Write-Host ""; Write-Host "Presione cualquier tecla para continuar..." -ForegroundColor Cyan
+        $null = $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+        Clear-Host
     }
 
     # ========================================================================== #
@@ -552,11 +639,18 @@ try {
     #                         FINALIZACIÓN Y LIMPIEZA                            #
     # ========================================================================== #
 
-    # Registrar finalización en el log
-    $endTime = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-    Add-Content -Path $Global:LogFile -Value "`n========================================" -Encoding UTF8
-    Add-Content -Path $Global:LogFile -Value "Finalización: $endTime" -Encoding UTF8
-    Add-Content -Path $Global:LogFile -Value "========================================" -Encoding UTF8
+    # Registrar finalización en el log (solo si está inicializado)
+    if ($Global:LogFile) {
+        try {
+            $endTime = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+            Add-Content -Path $Global:LogFile -Value "`n========================================" -Encoding UTF8
+            Add-Content -Path $Global:LogFile -Value "Finalización: $endTime" -Encoding UTF8
+            Add-Content -Path $Global:LogFile -Value "========================================" -Encoding UTF8
+        }
+        catch {
+            # Si falla escribir al log, continuar sin fallar
+        }
+    }
 
 }
 catch {
@@ -581,12 +675,21 @@ $($_ | Out-String)
 ========================================
 "@
 
-    Add-Content -Path $Global:LogFile -Value $errorLog -Encoding UTF8
+    # Intentar escribir al log solo si está inicializado
+    if ($Global:LogFile) {
+        try {
+            Add-Content -Path $Global:LogFile -Value $errorLog -Encoding UTF8
+        }
+        catch {
+            # Si falla escribir al log, continuar sin fallar
+        }
+    }
 
     # Mostrar error en consola con formato visible
     try {
         Show-Banner "❌ ERROR CRÍTICO NO MANEJADO" -BorderColor Red -TextColor White -Padding 2
-    } catch {
+    }
+    catch {
         Write-Host "`n╔══════════════════════════════════════╗" -ForegroundColor Red
         Write-Host "║    ❌ ERROR CRÍTICO NO MANEJADO      ║" -ForegroundColor Red
         Write-Host "╚══════════════════════════════════════╝" -ForegroundColor Red

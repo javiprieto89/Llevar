@@ -25,7 +25,7 @@ Import-Module (Join-Path $ModulesPath "Modules\System\Robocopy.psm1") -Force -Gl
 Import-Module (Join-Path $ModulesPath "Modules\Transfer\UNC.psm1") -Force -Global
 Import-Module (Join-Path $ModulesPath "Modules\Utilities\VolumeManagement.psm1") -Force -Global
 Import-Module (Join-Path $ModulesPath "Modules\Installation\ISO.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "Modules\Core\Logging.psm1") -Force -Global
+Import-Module (Join-Path $ModulesPath "Modules\Core\Logger.psm1") -Force -Global
 Import-Module (Join-Path $ModulesPath "Modules\UI\Menus.psm1") -Force -Global
 
 # ========================================================================== #

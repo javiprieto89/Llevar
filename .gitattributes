@@ -1,0 +1,3 @@
+﻿*.ps1 text working-tree-encoding=UTF-8-BOM
+*.psm1 text working-tree-encoding=UTF-8-BOM
+*.psd1 text working-tree-encoding=UTF-8-BOM

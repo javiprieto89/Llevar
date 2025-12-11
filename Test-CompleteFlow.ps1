@@ -65,17 +65,125 @@ if ($menuResult.Action -eq "Execute" -and $menuResult.ContainsKey('TransferConfi
     Write-Host "  Clave: $clave" -ForegroundColor White
     Write-Host "  UseNativeZip: $useNativeZip" -ForegroundColor White
     
-    # Simular obtención de paths
-    $origenPath = Get-TransferConfigOrigenPath -Config $tc
-    $destinoPath = Get-TransferConfigDestinoPath -Config $tc
+    # Simular obtención de paths usando with
+    $origenPath = switch ($tc.Origen.Tipo) {
+        "FTP" {
+            with $tc.Origen.FTP { .Directory }
+        }
+        "Local" {
+            with $tc.Origen.Local { .Path }
+        }
+        "UNC" {
+            with $tc.Origen.UNC { .Path }
+        }
+        "OneDrive" {
+            with $tc.Origen.OneDrive { .Path }
+        }
+        "Dropbox" {
+            with $tc.Origen.Dropbox { .Path }
+        }
+        default { $null }
+    }
+    
+    $destinoPath = switch ($tc.Destino.Tipo) {
+        "FTP" {
+            with $tc.Destino.FTP { .Directory }
+        }
+        "Local" {
+            with $tc.Destino.Local { .Path }
+        }
+        "USB" {
+            with $tc.Destino.USB { .Path }
+        }
+        "UNC" {
+            with $tc.Destino.UNC { .Path }
+        }
+        "OneDrive" {
+            with $tc.Destino.OneDrive { .Path }
+        }
+        "Dropbox" {
+            with $tc.Destino.Dropbox { .Path }
+        }
+        "ISO" {
+            with $tc.Destino.ISO { .OutputPath }
+        }
+        "Diskette" {
+            with $tc.Destino.Diskette { .OutputPath }
+        }
+        default { $null }
+    }
     
     Write-Host "`n[NORMALMODE] Paths construidos:" -ForegroundColor Yellow
     Write-Host "  Origen Path: $origenPath" -ForegroundColor White
     Write-Host "  Destino Path: $destinoPath" -ForegroundColor White
     
-    # Simular validación
+    # Simular validación usando with
     Write-Host "`n[NORMALMODE] Validando configuración..." -ForegroundColor Yellow
-    $isComplete = Test-TransferConfigComplete -Config $tc
+    $errors = @()
+    if (-not $tc.Origen.Tipo) {
+        $errors += "• Falta configurar el tipo de origen"
+    }
+    else {
+        $origenPathCheck = switch ($tc.Origen.Tipo) {
+            "FTP" {
+                with $tc.Origen.FTP { .Directory }
+            }
+            "Local" {
+                with $tc.Origen.Local { .Path }
+            }
+            "UNC" {
+                with $tc.Origen.UNC { .Path }
+            }
+            "OneDrive" {
+                with $tc.Origen.OneDrive { .Path }
+            }
+            "Dropbox" {
+                with $tc.Origen.Dropbox { .Path }
+            }
+            default { $null }
+        }
+        if (-not $origenPathCheck) {
+            $errors += "• Falta configurar la ruta de origen ($($tc.Origen.Tipo))"
+        }
+    }
+
+    if (-not $tc.Destino.Tipo) {
+        $errors += "• Falta configurar el tipo de destino"
+    }
+    else {
+        $destinoPathCheck = switch ($tc.Destino.Tipo) {
+            "FTP" {
+                with $tc.Destino.FTP { .Directory }
+            }
+            "Local" {
+                with $tc.Destino.Local { .Path }
+            }
+            "USB" {
+                with $tc.Destino.USB { .Path }
+            }
+            "UNC" {
+                with $tc.Destino.UNC { .Path }
+            }
+            "OneDrive" {
+                with $tc.Destino.OneDrive { .Path }
+            }
+            "Dropbox" {
+                with $tc.Destino.Dropbox { .Path }
+            }
+            "ISO" {
+                with $tc.Destino.ISO { .OutputPath }
+            }
+            "Diskette" {
+                with $tc.Destino.Diskette { .OutputPath }
+            }
+            default { $null }
+        }
+        if (-not $destinoPathCheck) {
+            $errors += "• Falta configurar la ruta de destino ($($tc.Destino.Tipo))"
+        }
+    }
+    
+    $isComplete = ($errors.Count -eq 0)
     
     if ($isComplete) {
         Write-Host "  ✓ Configuración VÁLIDA - Procedería a ejecutar transferencia" -ForegroundColor Green

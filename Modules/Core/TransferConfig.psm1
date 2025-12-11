@@ -252,6 +252,7 @@ function Set-TransferConfigValue {
     }
 }
 
+
 function Export-TransferConfig {
     <#
     .SYNOPSIS
@@ -460,6 +461,83 @@ function Copy-TransferConfigSection {
     Write-Log "Sección $From copiada a $To" "INFO"
 }
 
+# ========================================================================== #
+#                    HELPERS DE DSL PARA CONFIGURACIàN                       #
+# ========================================================================== #
+
+function New-ConfigNode {
+    param([hashtable]$Initial = @{})
+
+    $obj = [PSCustomObject]@{}
+    foreach ($k in $Initial.Keys) {
+        $obj | Add-Member -Name $k -Value $Initial[$k] -MemberType NoteProperty
+    }
+    return $obj
+}
+
+function with {
+    <#
+    .SYNOPSIS
+        Permite acceso directo a propiedades y métodos de un objeto usando sintaxis "." 
+    .DESCRIPTION
+        Permite leer y escribir propiedades, llamar métodos y acceder a propiedades anidadas.
+        Ejemplo:
+            with $obj {
+                .Prop = 123
+                $value = .Prop
+                .Method()
+                .Child.Sub.Value = "Hola"
+            }
+    #>
+    param(
+        [Parameter(Mandatory)]
+        $Object,
+
+        [Parameter(Mandatory)]
+        [ScriptBlock]$Block
+    )
+
+    # Crear variable $PSItem con el objeto para acceso directo
+    $PSItem = $Object
+    
+    # Crear contexto de ejecución donde "." es el objeto
+    # Esto permite usar "." para leer propiedades y llamar métodos
+    $context = @{
+        "." = $Object
+        "PSItem" = $Object
+    }
+    
+    # Para que las asignaciones funcionen, necesitamos modificar el ScriptBlock
+    # Obtener el texto del ScriptBlock y transformarlo usando regex
+    $blockText = $Block.ToString()
+    
+    # Reemplazar patrones como ".Prop" o ".FTP.Directory" con "$PSItem.Prop" o "$PSItem.FTP.Directory"
+    # Patrón que captura "." seguido de una o más propiedades separadas por "."
+    # (?<![A-Za-z0-9_$]) asegura que no hay un carácter alfanumérico antes (evita números como 3.14)
+    # ([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*) captura la cadena completa de propiedades
+    $modifiedScript = $blockText -replace '(?<![A-Za-z0-9_$])\.([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*)', '$PSItem.$1'
+    
+    # Crear nuevo ScriptBlock modificado
+    try {
+        $modifiedBlock = [ScriptBlock]::Create($modifiedScript)
+        
+        # Ejecutar el bloque modificado con el contexto
+        $result = $modifiedBlock.InvokeWithContext($null, $context)
+    }
+    catch {
+        # Si falla la modificación, intentar ejecutar el bloque original
+        # Esto puede no funcionar para asignaciones, pero al menos permite lectura
+        Write-Log "Error en función with: $($_.Exception.Message). Intentando ejecución directa." "WARNING" -ErrorRecord $_
+        $result = $Block.InvokeWithContext($null, $context)
+    }
+    
+    # Retornar el resultado (si hay uno solo, retornarlo directamente)
+    if ($result.Count -eq 1) {
+        return $result[0]
+    }
+    return $result
+}
+
 # Exportar funciones
 Export-ModuleMember -Function @(
     'New-TransferConfig',
@@ -467,13 +545,12 @@ Export-ModuleMember -Function @(
     'Set-TransferConfigDestino',
     'Get-TransferConfigOrigen',
     'Get-TransferConfigDestino',
-    'Get-TransferConfigOrigenPath',
-    'Get-TransferConfigDestinoPath',
-    'Test-TransferConfigComplete',
     'Get-TransferConfigValue',
     'Set-TransferConfigValue',
     'Export-TransferConfig',
     'Import-TransferConfig',
     'Reset-TransferConfigSection',
-    'Copy-TransferConfigSection'
+    'Copy-TransferConfigSection',
+    'New-ConfigNode',
+    'with'
 )

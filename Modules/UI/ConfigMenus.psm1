@@ -48,7 +48,14 @@ function Show-MainMenu {
             "(No configurado)"
         }
         
-        $origenPath = Get-TransferConfigOrigenPath -Config $llevar
+        $origenPath = switch ($llevar.Origen.Tipo) {
+            "Local"   { $llevar.Origen.Local.Path }
+            "UNC"     { $llevar.Origen.UNC.Path }
+            "FTP"     { $llevar.Origen.FTP.Directory }
+            "OneDrive"{ $llevar.Origen.OneDrive.Path }
+            "Dropbox" { $llevar.Origen.Dropbox.Path }
+            default   { $null }
+        }
         if ($origenPath) {
             $origenDisplay += " → $origenPath"
         }
@@ -61,7 +68,17 @@ function Show-MainMenu {
             "(No configurado)"
         }
         
-        $destinoPath = Get-TransferConfigDestinoPath -Config $llevar
+        $destinoPath = switch ($llevar.Destino.Tipo) {
+            "Local"    { $llevar.Destino.Local.Path }
+            "USB"      { $llevar.Destino.USB.Path }
+            "UNC"      { $llevar.Destino.UNC.Path }
+            "FTP"      { $llevar.Destino.FTP.Directory }
+            "OneDrive" { $llevar.Destino.OneDrive.Path }
+            "Dropbox"  { $llevar.Destino.Dropbox.Path }
+            "ISO"      { $llevar.Destino.ISO.OutputPath }
+            "Diskette" { $llevar.Destino.Diskette.OutputPath }
+            default    { $null }
+        }
         if ($destinoPath) {
             $destinoDisplay += " → $destinoPath"
         }
@@ -116,11 +133,76 @@ function Show-MainMenu {
             8 { return @{ Action = "Example" } }
             9 { return @{ Action = "Help" } }
             10 { 
-                # Validar configuración completa
-                $validation = Test-TransferConfigComplete -Config $llevar
-                
-                if (-not $validation.IsValid) {
-                    $mensaje = "Faltan parámetros requeridos:`n`n" + ($validation.Errors -join "`n")
+                # Validar configuración completa usando with y switch
+                $errors = @()
+
+                # Validar origen
+                if (-not $llevar.Origen.Tipo) {
+                    $errors += "• Falta configurar el tipo de origen"
+                }
+                else {
+                    $origenPath = switch ($llevar.Origen.Tipo) {
+                        "FTP" {
+                            with $llevar.Origen.FTP { .Directory }
+                        }
+                        "Local" {
+                            with $llevar.Origen.Local { .Path }
+                        }
+                        "UNC" {
+                            with $llevar.Origen.UNC { .Path }
+                        }
+                        "OneDrive" {
+                            with $llevar.Origen.OneDrive { .Path }
+                        }
+                        "Dropbox" {
+                            with $llevar.Origen.Dropbox { .Path }
+                        }
+                        default { $null }
+                    }
+                    if (-not $origenPath) {
+                        $errors += "• Falta configurar la ruta de origen ($($llevar.Origen.Tipo))"
+                    }
+                }
+
+                # Validar destino
+                if (-not $llevar.Destino.Tipo) {
+                    $errors += "• Falta configurar el tipo de destino"
+                }
+                else {
+                    $destinoPath = switch ($llevar.Destino.Tipo) {
+                        "FTP" {
+                            with $llevar.Destino.FTP { .Directory }
+                        }
+                        "Local" {
+                            with $llevar.Destino.Local { .Path }
+                        }
+                        "USB" {
+                            with $llevar.Destino.USB { .Path }
+                        }
+                        "UNC" {
+                            with $llevar.Destino.UNC { .Path }
+                        }
+                        "OneDrive" {
+                            with $llevar.Destino.OneDrive { .Path }
+                        }
+                        "Dropbox" {
+                            with $llevar.Destino.Dropbox { .Path }
+                        }
+                        "ISO" {
+                            with $llevar.Destino.ISO { .OutputPath }
+                        }
+                        "Diskette" {
+                            with $llevar.Destino.Diskette { .OutputPath }
+                        }
+                        default { $null }
+                    }
+                    if (-not $destinoPath) {
+                        $errors += "• Falta configurar la ruta de destino ($($llevar.Destino.Tipo))"
+                    }
+                }
+
+                if ($errors.Count -gt 0) {
+                    $mensaje = "Faltan parámetros requeridos:`n`n" + ($errors -join "`n")
                     Show-ConsolePopup -Title "Configuración Incompleta" -Message $mensaje -Options @("*OK") | Out-Null
                     continue
                 }

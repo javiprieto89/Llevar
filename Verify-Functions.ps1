@@ -132,7 +132,7 @@ Write-Host "📂 Verificando ubicación de funciones según categoría..." -Fore
 
 $categoryRules = @{
     'System/'       = @('Test-Path', 'Get-', 'Format-FileSize', 'Invoke-Robocopy')
-    'UI/'           = @('Show-', 'Write-', 'Select-Path', 'Resize-Console')
+    'UI/'           = @('Show-', 'Write-', 'Select-Path', 'Set-ConsoleSize')
     'Transfer/'     = @('Copy-Llevar', 'Send-', 'Receive-', 'Mount-', 'Connect-')
     'Compression/'  = @('Compress-', 'Expand-', 'Split-', 'Join-', 'Get-Blocks')
     'Installation/' = @('Install-', 'New-Installer')

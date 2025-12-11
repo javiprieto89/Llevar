@@ -191,6 +191,7 @@ function Show-WelcomeMessage {
     function ConvertTo-BigLetters {
         param([string]$Text)
         
+        Clear-Host
         if ([string]::IsNullOrWhiteSpace($text)) { return @("", "", "", "", "") }
         
         # Asegurar que $text es string y no null
@@ -321,6 +322,36 @@ function Show-AsciiLogo {
         return 
     }
 
+    # === VALIDAR SI HAY CONSOLA INTERACTIVA DISPONIBLE ===
+    $consoleAvailable = $true
+    try {
+        # Intentar varias formas de detectar consola válida
+        if (-not $host.UI -or -not $host.UI.RawUI) {
+            $consoleAvailable = $false
+        }
+        else {
+            $testWidth = [Console]::WindowWidth
+            $testHeight = [Console]::WindowHeight
+            if ($testWidth -le 0 -or $testHeight -le 0) {
+                $consoleAvailable = $false
+            }
+        }
+    }
+    catch {
+        $consoleAvailable = $false
+    }
+    
+    if (-not $consoleAvailable) {
+        # No hay consola interactiva disponible (ej: redirected output, script job)
+        # Mostrar logo simplificado en texto plano
+        Write-Host ""
+        Write-Host "═══════════════════════════════════════════" -ForegroundColor Cyan
+        Write-Host "         LLEVAR.PS1 - ALEXSOFT" -ForegroundColor Yellow
+        Write-Host "═══════════════════════════════════════════" -ForegroundColor Cyan
+        Write-Host ""
+        return
+    }
+
     # === CONFIGURAR UTF-8 ===
     $originalOutputEncoding = [Console]::OutputEncoding
     [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -442,7 +473,7 @@ function Show-AsciiLogo {
         } 
         catch { continue }
 
-        # === ESCRIBIR L�NEA ===
+        # === ESCRIBIR LINEA ===
         Write-Host $line -ForegroundColor $ForegroundColor -BackgroundColor $BackgroundColor -NoNewline
         
         # === REPRODUCIR SONIDO ESTILO DOS ===

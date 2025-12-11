@@ -12,7 +12,7 @@ using module "Q:\Utilidad\LLevar\Modules\Core\TransferConfig.psm1"
 $ModulesPath = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 Import-Module (Join-Path $ModulesPath "Modules\UI\Banners.psm1") -Force -Global
 Import-Module (Join-Path $ModulesPath "Modules\UI\ProgressBar.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "Modules\Core\Logging.psm1") -Force -Global
+Import-Module (Join-Path $ModulesPath "Modules\Core\Logger.psm1") -Force -Global
 Import-Module (Join-Path $ModulesPath "Modules\UI\Menus.psm1") -Force -Global
 
 # ========================================================================== #
@@ -30,6 +30,59 @@ function Test-IsDropboxPath {
     #>
     param([string]$Path)
     return $Path -match '^dropbox://|^DROPBOX:'
+}
+
+function Send-LlevarDropboxFile {
+    <#
+    .SYNOPSIS
+        Sube un archivo local a Dropbox usando la configuraci¢n de TransferConfig
+    .PARAMETER Llevar
+        Objeto TransferConfig con Destino.Tipo = "Dropbox" y tokens configurados
+    .PARAMETER LocalPath
+        Ruta local del archivo a subir
+    .PARAMETER RemotePath
+        Ruta remota base en Dropbox (ej: /Carpeta)
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [TransferConfig]$Llevar,
+
+        [Parameter(Mandatory = $true)]
+        [string]$LocalPath,
+
+        [Parameter(Mandatory = $true)]
+        [string]$RemotePath
+    )
+
+    if (-not (Test-Path $LocalPath)) {
+        throw "Send-LlevarDropboxFile: archivo local no encontrado: $LocalPath"
+    }
+
+    $token = $Llevar.Destino.Dropbox.Token
+    if (-not $token) {
+        throw "Send-LlevarDropboxFile: falta Token en Destino.Dropbox"
+    }
+
+    # Normalizar ruta remota (evitar // y asegurar / inicial)
+    $remoteFolder = $RemotePath
+    if (-not $remoteFolder.StartsWith('/')) {
+        $remoteFolder = "/$remoteFolder"
+    }
+    $remoteFolder = $remoteFolder.Replace('//','/')
+
+    $fileName       = [System.IO.Path]::GetFileName($LocalPath)
+    $remoteFullPath = "$remoteFolder/$fileName".Replace('//','/')
+
+    $bytes = [System.IO.File]::ReadAllBytes($LocalPath)
+
+    $headers = @{
+        "Authorization"   = "Bearer $token"
+        "Dropbox-API-Arg" = '{"path":"' + $remoteFullPath + '","mode":"overwrite"}'
+        "Content-Type"    = "application/octet-stream"
+    }
+
+    Invoke-RestMethod -Uri "https://content.dropboxapi.com/2/files/upload" `
+        -Method Post -Headers $headers -Body $bytes | Out-Null
 }
 
 function Get-DropboxConfigFromUser {
@@ -173,7 +226,7 @@ function Copy-LlevarLocalToDropbox {
         Import-Module $dispatcherPath -Force -Global
     }
     
-    return Invoke-TransferDispatcher -Llevar $Llevar -ExpectedSource "Local" -ExpectedDest "Dropbox" `
+    return Invoke-TransferDispatcher -Llevar $Llevar `
         -ShowProgress $ShowProgress -ProgressTop $ProgressTop
 }
 
@@ -204,7 +257,7 @@ function Copy-LlevarDropboxToLocal {
         Import-Module $dispatcherPath -Force -Global
     }
     
-    return Invoke-TransferDispatcher -Llevar $Llevar -ExpectedSource "Dropbox" -ExpectedDest "Local" `
+    return Invoke-TransferDispatcher -Llevar $Llevar `
         -ShowProgress $ShowProgress -ProgressTop $ProgressTop
 }
 # ========================================================================== #

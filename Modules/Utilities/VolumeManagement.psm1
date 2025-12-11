@@ -237,9 +237,9 @@ function Copy-BlocksToUSB {
     .PARAMETER CompressionType
         Tipo de compresión ("7ZIP" o "NATIVE_ZIP")
     .PARAMETER DestinationPath
-        Ruta de destino (para FTP incluye prefijo FTP:)
-    .PARAMETER IsFtp
-        Si es $true, sube a FTP en lugar de copiar a USB
+        Ruta de destino para carpetas locales (cuando no es FTP)
+    .PARAMETER TransferConfig
+        Objeto TransferConfig completo cuando el destino es FTP
     #>
     param(
         $Blocks,
@@ -247,11 +247,74 @@ function Copy-BlocksToUSB {
         [string]$SevenZPath,
         [string]$CompressionType = "7ZIP",
         [string]$DestinationPath = $null,
-        [bool]$IsFtp = $false
+        $TransferConfig
     )
 
+    # Si el destino es FTP, usar TransferConfig y el dispatcher unificado
+    if ($TransferConfig -and $TransferConfig.Destino.Tipo -eq "FTP") {
+        Write-Host "`nSubiendo bloques a FTP usando TransferConfig..." -ForegroundColor Cyan
+
+        # Crear carpeta temporal que contenga todos los archivos a subir
+        $uploadRoot = Join-Path $env:TEMP "LLEVAR_FTP_UPLOAD"
+        if (Test-Path $uploadRoot) {
+            Remove-Item $uploadRoot -Recurse -Force -ErrorAction SilentlyContinue
+        }
+        New-Item -ItemType Directory -Path $uploadRoot | Out-Null
+
+        try {
+            # Copiar bloques al directorio temporal
+            foreach ($block in $Blocks) {
+                $fileName = [System.IO.Path]::GetFileName($block)
+                Copy-Item -Path $block -Destination (Join-Path $uploadRoot $fileName) -Force
+            }
+
+            # Copiar INSTALAR.ps1 si existe
+            if ($InstallerPath -and (Test-Path $InstallerPath)) {
+                $installerName = [System.IO.Path]::GetFileName($InstallerPath)
+                Copy-Item -Path $InstallerPath -Destination (Join-Path $uploadRoot $installerName) -Force
+            }
+
+            # Copiar 7-Zip si es necesario
+            if ($SevenZPath -and $CompressionType -ne "NATIVE_ZIP" -and (Test-Path $SevenZPath)) {
+                $sevenZName = [System.IO.Path]::GetFileName($SevenZPath)
+                Copy-Item -Path $SevenZPath -Destination (Join-Path $uploadRoot $sevenZName) -Force
+            }
+
+            # Construir TransferConfig específico para Local -> FTP
+            $ftpConfig = New-TransferConfig
+            $ftpConfig.Origen.Tipo = "Local"
+            $ftpConfig.Origen.Local.Path = $uploadRoot
+
+            $ftpConfig.Destino.Tipo = "FTP"
+            foreach ($prop in $TransferConfig.Destino.FTP.PSObject.Properties) {
+                $ftpConfig.Destino.FTP.$($prop.Name) = $prop.Value
+            }
+
+            # Mantener opciones generales relevantes
+            $ftpConfig.Opciones.BlockSizeMB = $TransferConfig.Opciones.BlockSizeMB
+            $ftpConfig.Opciones.Clave = $TransferConfig.Opciones.Clave
+
+            # Usar dispatcher unificado
+            $modulesRoot = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
+            $dispatcherPath = Join-Path $modulesRoot "Modules\Transfer\Unified.psm1"
+            if (-not (Get-Command Copy-LlevarFiles -ErrorAction SilentlyContinue)) {
+                Import-Module $dispatcherPath -Force -Global
+            }
+
+            $null = Copy-LlevarFiles -TransferConfig $ftpConfig
+            Write-Host "`nV Todos los archivos subidos a FTP correctamente" -ForegroundColor Green
+        }
+        finally {
+            if (Test-Path $uploadRoot) {
+                Remove-Item $uploadRoot -Recurse -Force -ErrorAction SilentlyContinue
+            }
+        }
+
+        return
+    }
+
     # Si el destino es una carpeta local existente, copiar directamente
-    if ($DestinationPath -and -not $IsFtp -and (Test-Path $DestinationPath -PathType Container)) {
+    if ($DestinationPath -and (Test-Path $DestinationPath -PathType Container)) {
         Write-Host "`nCopiando bloques a carpeta local: $DestinationPath" -ForegroundColor Cyan
         
         $totalBytes = 0L
@@ -289,8 +352,8 @@ function Copy-BlocksToUSB {
         return
     }
     
-    # Si el destino es FTP, subir archivos directamente
-    if ($IsFtp -and $DestinationPath -match '^FTP:(.+)$') {
+    # Si el destino es FTP, subir archivos directamente (rama legacy deshabilitada)
+    if ($false -and $DestinationPath -match '^FTP:(.+)$') {
         $driveName = $Matches[1]
         Write-Host "`nSubiendo bloques a FTP..." -ForegroundColor Cyan
         

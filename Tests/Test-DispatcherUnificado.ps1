@@ -199,8 +199,15 @@ try {
         New-Item -Type Directory $destConfig.Path | Out-Null
     }
     
-    # Llamar con formato legacy
-    $result = Copy-LlevarFiles -SourceConfig $sourceConfig -DestinationConfig $destConfig
+    # Construir TransferConfig equivalente al formato legacy
+    $llevarLegacy = [TransferConfig]::new()
+    $llevarLegacy.Origen.Tipo = "Local"
+    $llevarLegacy.Origen.Local.Path = $sourceConfig.Path
+    $llevarLegacy.Destino.Tipo = "Local"
+    $llevarLegacy.Destino.Local.Path = $destConfig.Path
+
+    # Llamar con nuevo formato basado en TransferConfig
+    $result = Copy-LlevarFiles -TransferConfig $llevarLegacy
     
     Write-Host "  ✓ Formato legacy convertido correctamente" -ForegroundColor Green
     $passed++

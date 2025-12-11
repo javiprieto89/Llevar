@@ -27,7 +27,12 @@ function Test-IsRunningInIDE {
         'Default Host'  # Host genérico usado por muchos IDEs
     )
 
-    # Verificar variables de entorno de VSCode (aplica incluso en terminal integrado)
+    # Si es consola clásica, trátalo como no-IDE (evita falsos positivos por env vars heredadas)
+    if ($hostName -like '*ConsoleHost*') {
+        return $false
+    }
+
+    # Verificar variables de entorno de VSCode (solo si no estamos en consola clásica)
     if ($env:VSCODE_PID -or $env:TERM_PROGRAM -eq 'vscode') {
         return $true
     }
@@ -37,11 +42,6 @@ function Test-IsRunningInIDE {
         if ($hostName -like "*$ide*") {
             return $true
         }
-    }
-    
-    # Si estamos en un host de consola estándar, tratarlo como sesión normal
-    if ($hostName -like '*ConsoleHost*') {
-        return $false
     }
 
     # Verificar si está en modo debug
@@ -60,16 +60,7 @@ function Test-IsRunningInIDE {
         }
     }
     catch {
-        Write-Host "[ERROR] No se pudo obtener el proceso padre para detectar si es IDE: $($_.Exception.Message)" -ForegroundColor Red
-
-        if ($host.UI -and $host.UI.RawUI) {
-            Write-Host "Presiona cualquier tecla para continuar..." -ForegroundColor Yellow
-            $null = $host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
-        }
-    }
-    finally {
-        $ErrorActionPreference = $previousErrorActionPreference
-        $WarningPreference = $previousWarningPreference
+        # Ignorar errores al obtener proceso padre
     }
 
     return $false
@@ -106,13 +97,13 @@ function Test-IsFtpPath {
     .SYNOPSIS
         Detecta si una ruta es de tipo FTP
     .DESCRIPTION
-        Verifica si la ruta comienza con FTP: o ftp://
+        Verifica si la ruta comienza con ftp:// o ftps://
     .PARAMETER Path
         Ruta a evaluar
     #>
     param([string]$Path)
     
-    return ($Path -match '^FTP:' -or $Path -match '^ftp://')
+    return ($Path -match '^ftp://|^ftps://')
 }
 
 function Test-IsOneDrivePath {
@@ -173,10 +164,6 @@ function Test-DestinoType {
         if ($drive -and $drive.DriveType -eq 'Removable') {
             return "USB"
         }
-    }
-    
-    if ($Destino -match '^FTP:') {
-        return "FTP"
     }
     
     if (Test-Path $Destino -PathType Container) {

@@ -11,7 +11,7 @@
 # Imports necesarios
 $ModulesPath = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 Import-Module (Join-Path $ModulesPath "Modules\UI\ProgressBar.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "Modules\Core\Logging.psm1") -Force -Global
+Import-Module (Join-Path $ModulesPath "Modules\Core\Logger.psm1") -Force -Global
 
 function Copy-LlevarLocalToLocal {
     <#

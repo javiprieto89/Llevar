@@ -7,6 +7,13 @@
     comprimidos a diskettes de 1.44MB con formateo, verificación y reintento automático.
 #>
 
+# Imports necesarios
+$ModulesPath = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
+Import-Module (Join-Path $ModulesPath "Modules\Compression\SevenZip.psm1") -Force -Global
+Import-Module (Join-Path $ModulesPath "Modules\Compression\BlockSplitter.psm1") -Force -Global
+Import-Module (Join-Path $ModulesPath "Modules\UI\Banners.psm1") -Force -Global
+Import-Module (Join-Path $ModulesPath "Modules\Core\Logger.psm1") -Force -Global
+
 # ========================================================================== #
 #                    CONSTANTES Y CONFIGURACIÓN                              #
 # ========================================================================== #
@@ -661,6 +668,278 @@ EXIT
 }
 
 # ========================================================================== #
+#                    FUNCIONES DE LECTURA DESDE DISKETTES                     #
+# ========================================================================== #
+
+function Request-NextFloppy {
+    <#
+    .SYNOPSIS
+        Solicita insertar el siguiente diskette
+    #>
+    param(
+        [string]$ExpectedBlock = "siguiente diskette",
+        [int]$DiskNumber = 1
+    )
+    
+    Write-Host ""
+    Write-Host "Inserte el diskette $DiskNumber" -ForegroundColor Yellow
+    if ($ExpectedBlock -ne "siguiente diskette") {
+        Write-Host "Falta el bloque: $ExpectedBlock" -ForegroundColor Yellow
+    }
+    Write-Host "Presione ENTER cuando esté listo o ESC para cancelar..." -ForegroundColor Gray
+    
+    $key = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
+    if ($key.VirtualKeyCode -eq 27) {
+        return $null
+    }
+    
+    # Esperar a que se detecte el diskette
+    $maxWait = 30
+    $waited = 0
+    while (-not (Test-FloppyInserted -DriveLetter $Script:FloppyDrive) -and $waited -lt $maxWait) {
+        Start-Sleep -Seconds 1
+        $waited++
+    }
+    
+    if (Test-FloppyInserted -DriveLetter $Script:FloppyDrive) {
+        return $Script:FloppyDrive
+    }
+    
+    Write-Host "No se detectó diskette en la unidad" -ForegroundColor Red
+    return $null
+}
+
+function Get-BlocksFromFloppy {
+    <#
+    .SYNOPSIS
+        Obtiene bloques desde el diskette actual
+    #>
+    param([string]$FloppyPath = "A:\")
+    
+    if (-not (Test-FloppyInserted -DriveLetter $FloppyPath)) {
+        return @()
+    }
+    
+    try {
+        $files = Get-ChildItem $FloppyPath -File -ErrorAction Stop | Where-Object {
+            $_.Name -match '\.(zip|7z|alx)\d+$' -or 
+            $_.Name -match '\.zip\.\d{3}$' -or 
+            $_.Name -match '\.7z\.\d{3}$' -or
+            $_.Name -match '\.alx\d{4}$'
+        }
+        return $files | Sort-Object Name | Select-Object -ExpandProperty FullName
+    }
+    catch {
+        Write-Log "Error leyendo diskette: $($_.Exception.Message)" "WARNING"
+        return @()
+    }
+}
+
+function Get-AllBlocksFromFloppies {
+    <#
+    .SYNOPSIS
+        Recopila todos los bloques desde múltiples diskettes
+    .DESCRIPTION
+        Lee diskettes secuencialmente hasta encontrar __EOF__
+    #>
+    param([string]$TempDir)
+    
+    if (-not (Test-FloppyDriveAvailable)) {
+        throw "No se detectó unidad de diskette"
+    }
+    
+    $blocks = @{}
+    $diskNumber = 1
+    $floppyPath = $Script:FloppyDrive
+    
+    Write-Host ""
+    Write-Host "Leyendo bloques desde diskettes..." -ForegroundColor Cyan
+    Write-Host "Inserte el diskette 1 y presione ENTER..." -ForegroundColor Yellow
+    
+    $null = Read-Host
+    
+    while ($true) {
+        # Verificar si hay diskette insertado
+        if (-not (Test-FloppyInserted -DriveLetter $floppyPath)) {
+            $nextFloppy = Request-NextFloppy -DiskNumber $diskNumber
+            if (-not $nextFloppy) {
+                break
+            }
+            $floppyPath = $nextFloppy
+        }
+        
+        # Leer bloques del diskette actual
+        $currentBlocks = Get-BlocksFromFloppy -FloppyPath $floppyPath
+        
+        foreach ($block in $currentBlocks) {
+            $name = Split-Path $block -Leaf
+            if (-not $blocks.ContainsKey($name)) {
+                # Copiar bloque a temporal
+                $tempBlock = Join-Path $TempDir $name
+                Copy-Item -Path $block -Destination $tempBlock -Force
+                $blocks[$name] = $tempBlock
+                Write-Host "  ✓ Bloque encontrado: $name" -ForegroundColor Green
+            }
+        }
+        
+        # Verificar si hay __EOF__
+        $eofPath = Join-Path $floppyPath "__EOF__"
+        if (Test-Path $eofPath) {
+            Write-Host ""
+            Write-Host "✓ Marcador __EOF__ encontrado - todos los bloques leídos" -ForegroundColor Green
+            break
+        }
+        
+        # Determinar siguiente bloque esperado
+        $sortedKeys = $blocks.Keys | Sort-Object
+        if ($sortedKeys.Count -eq 0) {
+            Write-Host "No se encontraron bloques en el diskette $diskNumber" -ForegroundColor Yellow
+            $nextFloppy = Request-NextFloppy -DiskNumber ($diskNumber + 1)
+            if (-not $nextFloppy) {
+                break
+            }
+            $floppyPath = $nextFloppy
+            $diskNumber++
+            continue
+        }
+        
+        $lastBlock = $sortedKeys[-1]
+        
+        # Inferir siguiente bloque
+        $nextBlock = $null
+        if ($lastBlock -match '\.alx(\d{4})$') {
+            $num = [int]$matches[1]
+            $nextNum = $num + 1
+            $nextBlock = $lastBlock -replace '\.alx\d{4}$', ('.alx{0:D4}' -f $nextNum)
+        }
+        elseif ($lastBlock -match '\.(zip|7z)\.(\d{3})$') {
+            $ext = $matches[1]
+            $num = [int]$matches[2]
+            $nextNum = $num + 1
+            $nextBlock = $lastBlock -replace '\.(zip|7z)\.\d{3}$', (".$ext.{0:D3}" -f $nextNum)
+        }
+        elseif ($lastBlock -match '\.(\d{3})$') {
+            $num = [int]$matches[1]
+            $nextNum = $num + 1
+            $nextBlock = $lastBlock -replace '\.\d{3}$', ('.{0:D3}' -f $nextNum)
+        }
+        
+        if ($nextBlock) {
+            $nextBlockPath = Join-Path $floppyPath $nextBlock
+            if (Test-Path $nextBlockPath) {
+                # El bloque existe en el diskette actual
+                continue
+            }
+        }
+        
+        # Solicitar siguiente diskette
+        $diskNumber++
+        $nextFloppy = Request-NextFloppy -ExpectedBlock $nextBlock -DiskNumber $diskNumber
+        if (-not $nextFloppy) {
+            break
+        }
+        $floppyPath = $nextFloppy
+    }
+    
+    return $blocks
+}
+
+function Restore-FromFloppyBlocks {
+    <#
+    .SYNOPSIS
+        Restaura archivo comprimido desde bloques de diskettes y lo descomprime
+    #>
+    param(
+        [hashtable]$Blocks,
+        [string]$TempDir,
+        [string]$Password = $null
+    )
+    
+    if ($Blocks.Count -eq 0) {
+        throw "No hay bloques para restaurar"
+    }
+    
+    # Ordenar bloques
+    $sortedBlocks = $Blocks.Values | Sort-Object
+    
+    # Determinar tipo de archivo y nombre base
+    $firstBlock = $sortedBlocks[0]
+    $firstBlockName = Split-Path $firstBlock -Leaf
+    
+    $archivePath = $null
+    $compressionType = $null
+    
+    if ($firstBlockName -match '^(.+?)\.(zip|7z)\.\d{3}$') {
+        # Volúmenes 7-Zip o ZIP
+        $baseName = $matches[1]
+        $ext = $matches[2]
+        $compressionType = if ($ext -eq "7z") { "7ZIP" } else { "ZIP" }
+        
+        # Para volúmenes 7-Zip/ZIP, usar el primer volumen directamente
+        # 7-Zip puede leer volúmenes automáticamente si están en la misma carpeta
+        $firstVolume = $sortedBlocks[0]
+        $archivePath = $firstVolume
+        
+        # Si los bloques están en TempDir pero el primer volumen tiene otro path,
+        # copiar todos los volúmenes a TempDir para que 7-Zip los encuentre
+        $firstVolumeName = Split-Path $firstVolume -Leaf
+        $expectedFirstVolume = Join-Path $TempDir $firstVolumeName
+        if ($firstVolume -ne $expectedFirstVolume) {
+            # Copiar todos los volúmenes a TempDir
+            Write-Host "Copiando volúmenes a directorio temporal..." -ForegroundColor Cyan
+            foreach ($block in $sortedBlocks) {
+                $blockName = Split-Path $block -Leaf
+                $destBlock = Join-Path $TempDir $blockName
+                Copy-Item -Path $block -Destination $destBlock -Force
+            }
+            $archivePath = $expectedFirstVolume
+        }
+    }
+    elseif ($firstBlockName -match '^(.+?)\.alx\d{4}$') {
+        # Bloques .alx (ZIP nativo dividido)
+        $baseName = $matches[1]
+        $archivePath = Join-Path $TempDir "$baseName.zip"
+        $compressionType = "NATIVE_ZIP"
+        
+        # Reconstruir ZIP desde bloques
+        Write-Host "Reconstruyendo archivo $baseName.zip desde bloques..." -ForegroundColor Cyan
+        Join-FromBlocks -Blocks $sortedBlocks -OutputFile $archivePath
+    }
+    else {
+        throw "Formato de bloque no reconocido: $firstBlockName"
+    }
+    
+    # Descomprimir
+    Write-Host "Descomprimiendo archivo..." -ForegroundColor Cyan
+    $extractPath = Join-Path $TempDir "EXTRACTED"
+    New-Item -ItemType Directory -Path $extractPath -Force | Out-Null
+    
+    if ($compressionType -eq "7ZIP") {
+        $sevenZ = Get-SevenZipLlevar
+        if (-not $sevenZ -or $sevenZ -eq "NATIVE_ZIP") {
+            throw "Se requiere 7-Zip para descomprimir"
+        }
+        
+        $sevenArgs = @("x", "-o`"$extractPath`"", "-y")
+        if ($Password) {
+            $sevenArgs += "-p$Password"
+        }
+        $sevenArgs += "`"$archivePath`""
+        
+        $process = Start-Process -FilePath $sevenZ -ArgumentList $sevenArgs -Wait -NoNewWindow -PassThru
+        if ($process.ExitCode -ne 0) {
+            throw "Error descomprimiendo con 7-Zip (código: $($process.ExitCode))"
+        }
+    }
+    elseif ($compressionType -eq "NATIVE_ZIP" -or $compressionType -eq "ZIP") {
+        Add-Type -AssemblyName System.IO.Compression.FileSystem
+        [System.IO.Compression.ZipFile]::ExtractToDirectory($archivePath, $extractPath, $true)
+    }
+    
+    return $extractPath
+}
+
+# ========================================================================== #
 #                    EXPORTAR FUNCIONES                                      #
 # ========================================================================== #
 
@@ -670,5 +949,9 @@ Export-ModuleMember -Function @(
     'Format-FloppyDisk',
     'Copy-FileToFloppy',
     'Test-FloppyArchiveIntegrity',
-    'Copy-ToFloppyDisks'
+    'Copy-ToFloppyDisks',
+    'Request-NextFloppy',
+    'Get-BlocksFromFloppy',
+    'Get-AllBlocksFromFloppies',
+    'Restore-FromFloppyBlocks'
 )

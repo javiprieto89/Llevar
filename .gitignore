@@ -13,6 +13,7 @@ earthbl2.png
 llevarbienascci.png
 
 # Backups y versiones antiguas del script
+*.bak_*
 *.backup
 *.ps1_
 *.ps1~
@@ -21,10 +22,19 @@ llevar2.ps1_
 llevar.ps1.backup2
 llevar.ps1.backup
 llevar.ps1_
+test_output.txt
+
 
 # Carpetas
 alex-cool/
 logs/
+.vs/
+bin/
+obj/
+Llevar/
+.vscode/
+
+
 
 # Archivos de ayuda
 7-zip.chm

@@ -12,7 +12,7 @@ using module "Q:\Utilidad\LLevar\Modules\Core\TransferConfig.psm1"
 $ModulesPath = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 Import-Module (Join-Path $ModulesPath "Modules\UI\Banners.psm1") -Force -Global
 Import-Module (Join-Path $ModulesPath "Modules\UI\ProgressBar.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "Modules\Core\Logging.psm1") -Force -Global
+Import-Module (Join-Path $ModulesPath "Modules\Core\Logger.psm1") -Force -Global
 Import-Module (Join-Path $ModulesPath "Modules\UI\Menus.psm1") -Force -Global
 
 # ========================================================================== #
@@ -250,7 +250,7 @@ function Copy-LlevarLocalToFtp {
         Import-Module $dispatcherPath -Force -Global
     }
     
-    return Invoke-TransferDispatcher -Llevar $Llevar -ExpectedSource "Local" -ExpectedDest "FTP" `
+    return Invoke-TransferDispatcher -Llevar $Llevar `
         -ShowProgress $ShowProgress -ProgressTop $ProgressTop
 }
 
@@ -282,7 +282,7 @@ function Copy-LlevarFtpToLocal {
         Import-Module $dispatcherPath -Force -Global
     }
     
-    return Invoke-TransferDispatcher -Llevar $Llevar -ExpectedSource "FTP" -ExpectedDest "Local" `
+    return Invoke-TransferDispatcher -Llevar $Llevar `
         -ShowProgress $ShowProgress -ProgressTop $ProgressTop
 }
 

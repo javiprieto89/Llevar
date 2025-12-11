@@ -14,7 +14,7 @@ function Test-PathWritable {
     .SYNOPSIS
         Verifica si una ruta es escribible
     .DESCRIPTION
-        Comprueba si se puede escribir en un directorio, soporta rutas FTP.
+        Comprueba si se puede escribir en un directorio local.
         Intenta crear el directorio si no existe y verifica permisos de escritura.
     .PARAMETER Path
         Ruta a validar
@@ -27,7 +27,7 @@ function Test-PathWritable {
     )
 
     # Si es FTP, verificar la conexi�n
-    if ($Path -match '^FTP:(.+)$') {
+    if ($false -and $Path -match '^FTP:(.+)$') {
         $driveName = $Matches[1]
         try {
             $ftpInfo = Get-FtpConnection -DriveName $driveName

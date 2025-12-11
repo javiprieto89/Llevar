@@ -83,49 +83,132 @@ function Invoke-NormalMode {
         }
 
         # Validar origen si viene del menú contextual o parámetros legacy
-        $Origen = Get-TransferConfigOrigenPath -Config $TransferConfig
-        $Destino = Get-TransferConfigDestinoPath -Config $TransferConfig
-        
-        if ($Origen) {
-            # Solo validar paths locales con Test-Path
-            if ($TransferConfig.Origen.Tipo -in @("Local", "USB")) {
-                if (Test-Path $Origen) {
-                    Show-Banner "ORIGEN PRESELECCIONADO DESDE MENÚ CONTEXTUAL" -BorderColor Cyan -TextColor Cyan
-                    
-                    $item = Get-Item $Origen
-                    if ($item.PSIsContainer) {
-                        Write-Host "Carpeta seleccionada: $Origen" -ForegroundColor Green
+        # Usar with para acceder directamente a las propiedades sin crear variables intermedias
+        with ($TransferConfig.Origen) {
+            switch ($PSItem.Tipo) {
+                "Local" {
+                    if ($PSItem.Local.Path -and (Test-Path $PSItem.Local.Path)) {
+                        Show-Banner "ORIGEN PRESELECCIONADO DESDE MENÚ CONTEXTUAL" -BorderColor Cyan -TextColor Cyan
+                        $item = Get-Item $PSItem.Local.Path
+                        if ($item.PSIsContainer) {
+                            Write-Host "Carpeta seleccionada: $($PSItem.Local.Path)" -ForegroundColor Green
+                        }
+                        else {
+                            Write-Host "Archivo seleccionado: $($PSItem.Local.Path)" -ForegroundColor Green
+                            Write-Host ""
+                            Write-Host "NOTA: Se comprimirá el archivo individual." -ForegroundColor Yellow
+                        }
+                        Write-Host ""
+                    }
+                    elseif ($PSItem.Local.Path) {
+                        Write-Host ""
+                        Write-Host "El origen especificado no existe: $($PSItem.Local.Path)" -ForegroundColor Yellow
+                        Write-Host ""
                     }
                     else {
-                        Write-Host "Archivo seleccionado: $Origen" -ForegroundColor Green
-                        Write-Host ""
-                        Write-Host "NOTA: Se comprimirá el archivo individual." -ForegroundColor Yellow
+                        $nuevoOrigen = Get-PathOrPrompt $null "ORIGEN"
+                        Set-TransferConfigOrigen -Config $TransferConfig -Tipo "Local" -Parametros @{ Path = $nuevoOrigen }
                     }
-                    Write-Host ""
                 }
-                else {
-                    Write-Host ""
-                    Write-Host "? El origen especificado no existe: $Origen" -ForegroundColor Yellow
-                    Write-Host ""
-                    $Origen = $null
+                "UNC" {
+                    if ($PSItem.UNC.Path) {
+                        Write-Host "Origen UNC configurado: $($PSItem.UNC.Path)" -ForegroundColor Green
+                    }
+                    else {
+                        $nuevoOrigen = Get-PathOrPrompt $null "ORIGEN"
+                        Set-TransferConfigOrigen -Config $TransferConfig -Tipo "Local" -Parametros @{ Path = $nuevoOrigen }
+                    }
                 }
-            }
-            else {
-                # Es FTP, OneDrive, Dropbox, UNC - mostrar configurado
-                Write-Host "Origen $($TransferConfig.Origen.Tipo) configurado: $Origen" -ForegroundColor Green
+                "FTP" {
+                    if ($PSItem.FTP.Directory) {
+                        Write-Host "Origen FTP configurado: $($PSItem.FTP.Directory)" -ForegroundColor Green
+                    }
+                    else {
+                        $nuevoOrigen = Get-PathOrPrompt $null "ORIGEN"
+                        Set-TransferConfigOrigen -Config $TransferConfig -Tipo "Local" -Parametros @{ Path = $nuevoOrigen }
+                    }
+                }
+                "OneDrive" {
+                    if ($PSItem.OneDrive.Path) {
+                        Write-Host "Origen OneDrive configurado: $($PSItem.OneDrive.Path)" -ForegroundColor Green
+                    }
+                    else {
+                        $nuevoOrigen = Get-PathOrPrompt $null "ORIGEN"
+                        Set-TransferConfigOrigen -Config $TransferConfig -Tipo "Local" -Parametros @{ Path = $nuevoOrigen }
+                    }
+                }
+                "Dropbox" {
+                    if ($PSItem.Dropbox.Path) {
+                        Write-Host "Origen Dropbox configurado: $($PSItem.Dropbox.Path)" -ForegroundColor Green
+                    }
+                    else {
+                        $nuevoOrigen = Get-PathOrPrompt $null "ORIGEN"
+                        Set-TransferConfigOrigen -Config $TransferConfig -Tipo "Local" -Parametros @{ Path = $nuevoOrigen }
+                    }
+                }
+                default {
+                    $nuevoOrigen = Get-PathOrPrompt $null "ORIGEN"
+                    Set-TransferConfigOrigen -Config $TransferConfig -Tipo "Local" -Parametros @{ Path = $nuevoOrigen }
+                }
             }
         }
 
-        # Si no hay origen válido, pedirlo
-        if (-not $Origen) {
-            $Origen = Get-PathOrPrompt $Origen "ORIGEN"
-            Set-TransferConfigOrigen -Config $TransferConfig -Tipo "Local" -Parametros @{ Path = $Origen }
-        }
-        
-        # Si no hay destino válido, pedirlo
-        if (-not $Destino) {
-            $Destino = Get-PathOrPrompt $Destino "DESTINO"
-            Set-TransferConfigDestino -Config $TransferConfig -Tipo "Local" -Parametros @{ Path = $Destino }
+        # Usar with para acceder directamente a las propiedades de destino sin crear variables intermedias
+        with ($TransferConfig.Destino) {
+            switch ($PSItem.Tipo) {
+                "FTP" {
+                    if (-not $PSItem.FTP.Directory) {
+                        $nuevoDestino = Get-PathOrPrompt $null "DESTINO"
+                        Set-TransferConfigDestino -Config $TransferConfig -Tipo "Local" -Parametros @{ Path = $nuevoDestino }
+                    }
+                }
+                "Local" {
+                    if (-not $PSItem.Local.Path) {
+                        $nuevoDestino = Get-PathOrPrompt $null "DESTINO"
+                        Set-TransferConfigDestino -Config $TransferConfig -Tipo "Local" -Parametros @{ Path = $nuevoDestino }
+                    }
+                }
+                "USB" {
+                    if (-not $PSItem.USB.Path) {
+                        $nuevoDestino = Get-PathOrPrompt $null "DESTINO"
+                        Set-TransferConfigDestino -Config $TransferConfig -Tipo "Local" -Parametros @{ Path = $nuevoDestino }
+                    }
+                }
+                "UNC" {
+                    if (-not $PSItem.UNC.Path) {
+                        $nuevoDestino = Get-PathOrPrompt $null "DESTINO"
+                        Set-TransferConfigDestino -Config $TransferConfig -Tipo "Local" -Parametros @{ Path = $nuevoDestino }
+                    }
+                }
+                "OneDrive" {
+                    if (-not $PSItem.OneDrive.Path) {
+                        $nuevoDestino = Get-PathOrPrompt $null "DESTINO"
+                        Set-TransferConfigDestino -Config $TransferConfig -Tipo "Local" -Parametros @{ Path = $nuevoDestino }
+                    }
+                }
+                "Dropbox" {
+                    if (-not $PSItem.Dropbox.Path) {
+                        $nuevoDestino = Get-PathOrPrompt $null "DESTINO"
+                        Set-TransferConfigDestino -Config $TransferConfig -Tipo "Local" -Parametros @{ Path = $nuevoDestino }
+                    }
+                }
+                "ISO" {
+                    if (-not $PSItem.ISO.OutputPath) {
+                        $nuevoDestino = Get-PathOrPrompt $null "DESTINO"
+                        Set-TransferConfigDestino -Config $TransferConfig -Tipo "Local" -Parametros @{ Path = $nuevoDestino }
+                    }
+                }
+                "Diskette" {
+                    if (-not $PSItem.Diskette.OutputPath) {
+                        $nuevoDestino = Get-PathOrPrompt $null "DESTINO"
+                        Set-TransferConfigDestino -Config $TransferConfig -Tipo "Local" -Parametros @{ Path = $nuevoDestino }
+                    }
+                }
+                default {
+                    $nuevoDestino = Get-PathOrPrompt $null "DESTINO"
+                    Set-TransferConfigDestino -Config $TransferConfig -Tipo "Local" -Parametros @{ Path = $nuevoDestino }
+                }
+            }
         }
 
         # ========================================================================== #
@@ -156,22 +239,19 @@ function Invoke-NormalMode {
             return
         }
         
-        # Determinar tipos desde TransferConfig
-        $origenEsFtp = ($TransferConfig.Origen.Tipo -eq "FTP")
-        $destinoEsFtp = ($TransferConfig.Destino.Tipo -eq "FTP")
-        $origenEsOneDrive = ($TransferConfig.Origen.Tipo -eq "OneDrive")
-        $destinoEsOneDrive = ($TransferConfig.Destino.Tipo -eq "OneDrive")
-        $origenEsDropbox = ($TransferConfig.Origen.Tipo -eq "Dropbox")
-        $destinoEsDropbox = ($TransferConfig.Destino.Tipo -eq "Dropbox")
-        
-        # Si alguno es FTP, OneDrive o Dropbox, preguntar modo de transferencia
+        # Determinar si se usa FTP, OneDrive o Dropbox accediendo directamente a TransferConfig
         $TransferMode = "Compress" # Por defecto comprimir
-        if ($origenEsFtp -or $destinoEsFtp -or $origenEsOneDrive -or $destinoEsOneDrive -or $origenEsDropbox -or $destinoEsDropbox) {
-            $tipoTransfer = "FTP"
-            if ($origenEsOneDrive -or $destinoEsOneDrive) { $tipoTransfer = "OneDrive/FTP" }
-            if ($origenEsDropbox -or $destinoEsDropbox) { $tipoTransfer = "Dropbox/OneDrive/FTP" }
-            
-            $mensaje = @"
+        with ($TransferConfig) {
+            # Si alguno es FTP, OneDrive o Dropbox, preguntar modo de transferencia
+            if (($PSItem.Origen.Tipo -eq "FTP" -or $PSItem.Destino.Tipo -eq "FTP") -or 
+                ($PSItem.Origen.Tipo -eq "OneDrive" -or $PSItem.Destino.Tipo -eq "OneDrive") -or 
+                ($PSItem.Origen.Tipo -eq "Dropbox" -or $PSItem.Destino.Tipo -eq "Dropbox")) {
+                
+                $tipoTransfer = "FTP"
+                if ($PSItem.Origen.Tipo -eq "OneDrive" -or $PSItem.Destino.Tipo -eq "OneDrive") { $tipoTransfer = "OneDrive/FTP" }
+                if ($PSItem.Origen.Tipo -eq "Dropbox" -or $PSItem.Destino.Tipo -eq "Dropbox") { $tipoTransfer = "Dropbox/OneDrive/FTP" }
+                
+                $mensaje = @"
 ¿Cómo desea realizar la transferencia?
 
 • Transferir Directamente: Copia archivos sin comprimir
@@ -179,61 +259,75 @@ function Invoke-NormalMode {
 
 Nota: Si elige comprimir, los archivos temporales se eliminarán automáticamente.
 "@
-            
-            $opciones = @("*Transferir Directamente", "*Comprimir Primero")
-            # DefaultIndex es base 0: 0=Directo, 1=Comprimir (dejamos Directo por defecto)
-            $seleccion = Show-ConsolePopup -Title "Modo de Transferencia $tipoTransfer" -Message $mensaje -Options $opciones -DefaultIndex 0
+                
+                $opciones = @("*Transferir Directamente", "*Comprimir Primero")
+                # DefaultIndex es base 0: 0=Directo, 1=Comprimir (dejamos Directo por defecto)
+                $seleccion = Show-ConsolePopup -Title "Modo de Transferencia $tipoTransfer" -Message $mensaje -Options $opciones -DefaultIndex 0
 
-            $TransferMode = if ($seleccion -eq 0) { "Direct" } else { "Compress" }
-            Write-Host "Modo seleccionado: $TransferMode" -ForegroundColor Cyan
-        }
-        
-        # Autenticar con OneDrive si es necesario
-        if ($origenEsOneDrive -or $destinoEsOneDrive) {
-            if (-not (Test-MicrosoftGraphModule)) {
-                Write-Host ""
-                Write-Host "✗ No se pueden usar funciones de OneDrive sin los módulos Microsoft.Graph" -ForegroundColor Red
-                Write-Host ""
-                return
+                $TransferMode = if ($seleccion -eq 0) { "Direct" } else { "Compress" }
+                Write-Host "Modo seleccionado: $TransferMode" -ForegroundColor Cyan
             }
             
-            Show-Banner "AUTENTICACIÓN ONEDRIVE" -BorderColor Cyan -TextColor Yellow
-            
-            if (-not (Connect-GraphSession)) {
-                Write-Host "No se pudo autenticar con OneDrive. Cancelando." -ForegroundColor Red
-                return
+            # Autenticar con OneDrive si es necesario
+            if ($PSItem.Origen.Tipo -eq "OneDrive" -or $PSItem.Destino.Tipo -eq "OneDrive") {
+                if (-not (Test-MicrosoftGraphModule)) {
+                    Write-Host ""
+                    Write-Host "✗ No se pueden usar funciones de OneDrive sin los módulos Microsoft.Graph" -ForegroundColor Red
+                    Write-Host ""
+                    return
+                }
+                
+                Show-Banner "AUTENTICACIÓN ONEDRIVE" -BorderColor Cyan -TextColor Yellow
+                
+                if (-not (Connect-GraphSession)) {
+                    Write-Host "No se pudo autenticar con OneDrive. Cancelando." -ForegroundColor Red
+                    return
+                }
             }
-        }
-        
-        # Autenticar con Dropbox si es necesario
-        if ($origenEsDropbox -or $destinoEsDropbox) {
-            Show-Banner "AUTENTICACIÓN DROPBOX" -BorderColor Cyan -TextColor Yellow
             
-            if (-not (Connect-DropboxSession)) {
-                Write-Host "No se pudo autenticar con Dropbox. Cancelando." -ForegroundColor Red
-                return
+            # Autenticar con Dropbox si es necesario
+            if ($PSItem.Origen.Tipo -eq "Dropbox" -or $PSItem.Destino.Tipo -eq "Dropbox") {
+                Show-Banner "AUTENTICACIÓN DROPBOX" -BorderColor Cyan -TextColor Yellow
+                
+                if (-not (Connect-DropboxSession)) {
+                    Write-Host "No se pudo autenticar con Dropbox. Cancelando." -ForegroundColor Red
+                    return
+                }
             }
         }
 
-        # Procesar rutas especiales (UNC, FTP, OneDrive, Dropbox)
-        $result = Initialize-TransferPaths -Origen $Origen -Destino $Destino `
-            -OrigenEsOneDrive $origenEsOneDrive -DestinoEsOneDrive $destinoEsOneDrive `
-            -OrigenEsDropbox $origenEsDropbox -DestinoEsDropbox $destinoEsDropbox `
-            -OrigenEsFtp $origenEsFtp -DestinoEsFtp $destinoEsFtp `
-            -TransferConfig $TransferConfig
+        # Procesar rutas especiales (UNC, OneDrive, Dropbox) usando solo TransferConfig
+        $result = Initialize-TransferPaths -TransferConfig $TransferConfig
         
         if (-not $result) {
-            $msg = "Error inicializando rutas de transferencia.`n`n" + `
-                "Origen:  $Origen`nDestino: $Destino`n`n" + `
-                "Revise credenciales, conectividad o permisos de red."
+            # Acceder directamente a las propiedades con with para construir el mensaje de error
+            $origenMsg = with ($TransferConfig.Origen) {
+                switch ($PSItem.Tipo) {
+                    "FTP" { $PSItem.FTP.Directory }
+                    "Local" { $PSItem.Local.Path }
+                    "UNC" { $PSItem.UNC.Path }
+                    "OneDrive" { $PSItem.OneDrive.Path }
+                    "Dropbox" { $PSItem.Dropbox.Path }
+                    default { "No configurado" }
+                }
+            }
+            $destinoMsg = with ($TransferConfig.Destino) {
+                switch ($PSItem.Tipo) {
+                    "FTP" { $PSItem.FTP.Directory }
+                    "Local" { $PSItem.Local.Path }
+                    "USB" { $PSItem.USB.Path }
+                    "UNC" { $PSItem.UNC.Path }
+                    "OneDrive" { $PSItem.OneDrive.Path }
+                    "Dropbox" { $PSItem.Dropbox.Path }
+                    "ISO" { $PSItem.ISO.OutputPath }
+                    "Diskette" { $PSItem.Diskette.OutputPath }
+                    default { "No configurado" }
+                }
+            }
+            $msg = "Error inicializando rutas de transferencia.`nOrigen:  $origenMsg`nDestino: $destinoMsg`nRevise credenciales, conectividad o permisos de red."
             Show-ConsolePopup -Title "Error de Transferencia" -Message $msg -Options @("*OK") | Out-Null
             return
         }
-        
-        $origenMontado = $result.OrigenMontado
-        $destinoMontado = $result.DestinoMontado
-        $origenDrive = $result.OrigenDrive
-        $destinoDrive = $result.DestinoDrive
 
         # Determinar método de compresión
         if ($UseNativeZip) {
@@ -249,43 +343,46 @@ Nota: Si elige comprimir, los archivos temporales se eliminarán automáticament
         }
 
         # Validar que el destino sea escribible (solo para rutas locales)
-        if (-not $destinoEsFtp -and -not $destinoEsOneDrive -and -not $destinoEsDropbox) {
-            if (-not (Test-PathWritable -Path $destinoMontado)) {
-                Write-Host "Destino no es escribible. Cancelando." -ForegroundColor Red
-                Clear-TransferPaths -OrigenDrive $origenDrive -DestinoDrive $destinoDrive
-                return
+        with ($TransferConfig.Destino) {
+            if ($PSItem.Tipo -notin @("FTP", "OneDrive", "Dropbox")) {
+                if (-not (Test-PathWritable -Path $result.DestinoMontado)) {
+                    Write-Host "Destino no es escribible. Cancelando." -ForegroundColor Red
+                    Clear-TransferPaths -OrigenDrive $result.OrigenDrive -DestinoDrive $result.DestinoDrive
+                    return
+                }
             }
         }
 
         # El destino ISO ya está determinado en línea 82 desde TransferConfig
         # Modo ISO (solo si el destino es realmente ISO)
-        if ($esDestinoISO) {
-            New-LlevarIsoMain -Origen $origenMontado -Destino $destinoMontado -Temp $Temp -SevenZ $SevenZ -BlockSizeMB $BlockSizeMB -Clave $Clave -IsoDestino $IsoDestino
-            Clear-TransferPaths -OrigenDrive $origenDrive -DestinoDrive $destinoDrive
-            return
+        with ($TransferConfig.Destino) {
+            if ($PSItem.Tipo -eq "ISO") {
+                New-LlevarIsoMain -Origen $result.OrigenMontado -Destino $result.DestinoMontado -Temp $Temp -SevenZ $SevenZ -BlockSizeMB $BlockSizeMB -Clave $Clave -IsoDestino $IsoDestino
+                Clear-TransferPaths -OrigenDrive $result.OrigenDrive -DestinoDrive $result.DestinoDrive
+                return
+            }
         }
 
         # Ejecutar transferencia según el modo seleccionado
         if ($TransferMode -eq "Direct") {
-            Invoke-DirectTransfer -TransferConfig $TransferConfig -OrigenMontado $origenMontado -DestinoMontado $destinoMontado `
-                -OrigenEsFtp $origenEsFtp -DestinoEsFtp $destinoEsFtp `
-                -OrigenEsOneDrive $origenEsOneDrive -DestinoEsOneDrive $destinoEsOneDrive `
-                -OrigenEsDropbox $origenEsDropbox -DestinoEsDropbox $destinoEsDropbox
+            with ($TransferConfig) {
+                Invoke-DirectTransfer -TransferConfig $TransferConfig -OrigenMontado $result.OrigenMontado -DestinoMontado $result.DestinoMontado `
+                    -OrigenEsFtp ($PSItem.Origen.Tipo -eq "FTP") -DestinoEsFtp ($PSItem.Destino.Tipo -eq "FTP") `
+                    -OrigenEsOneDrive ($PSItem.Origen.Tipo -eq "OneDrive") -DestinoEsOneDrive ($PSItem.Destino.Tipo -eq "OneDrive") `
+                    -OrigenEsDropbox ($PSItem.Origen.Tipo -eq "Dropbox") -DestinoEsDropbox ($PSItem.Destino.Tipo -eq "Dropbox")
+            }
             
-            Clear-TransferPaths -OrigenDrive $origenDrive -DestinoDrive $destinoDrive
-            Write-Host "`n✓ Finalizado (Modo Directo)."
+            Clear-TransferPaths -OrigenDrive $result.OrigenDrive -DestinoDrive $result.DestinoDrive
+            Write-Host "✓ Finalizado (Modo Directo)."
             return
         }
 
         # Modo Compresión y Transferencia
-        Invoke-CompressedTransfer -TransferConfig $TransferConfig -OrigenMontado $origenMontado -DestinoMontado $destinoMontado `
-            -Temp $Temp -SevenZ $SevenZ -Clave $Clave -BlockSizeMB $BlockSizeMB `
-            -OrigenEsOneDrive $origenEsOneDrive -DestinoEsOneDrive $destinoEsOneDrive `
-            -OrigenEsDropbox $origenEsDropbox -DestinoEsDropbox $destinoEsDropbox `
-            -DestinoEsFtp $destinoEsFtp
+        Invoke-CompressedTransfer -TransferConfig $TransferConfig -OrigenMontado $result.OrigenMontado -DestinoMontado $result.DestinoMontado `
+            -Temp $Temp -SevenZ $SevenZ -Clave $Clave -BlockSizeMB $BlockSizeMB
         
-        Clear-TransferPaths -OrigenDrive $origenDrive -DestinoDrive $destinoDrive -TempDir $Temp
-        Write-Host "`n✓ Finalizado (Modo Comprimido)."
+        Clear-TransferPaths -OrigenDrive $result.OrigenDrive -DestinoDrive $result.DestinoDrive -TempDir $Temp
+        Write-Host "✓ Finalizado (Modo Comprimido)."
     }
     catch {
         Write-ErrorLog "Error en modo normal de ejecución." $_
@@ -296,20 +393,38 @@ Nota: Si elige comprimir, los archivos temporales se eliminarán automáticament
 # Función auxiliar para inicializar rutas de transferencia
 function Initialize-TransferPaths {
     param(
-        $Origen, $Destino,
-        $OrigenEsOneDrive, $DestinoEsOneDrive,
-        $OrigenEsDropbox, $DestinoEsDropbox,
-        $OrigenEsFtp, $DestinoEsFtp,
         [TransferConfig]$TransferConfig
     )
     
+    # Derivar rutas base directamente desde TransferConfig
+    switch ($TransferConfig.Origen.Tipo) {
+        "Local"   { $Origen = $TransferConfig.Origen.Local.Path }
+        "UNC"     { $Origen = $TransferConfig.Origen.UNC.Path }
+        "FTP"     { $Origen = $TransferConfig.Origen.FTP.Directory }
+        "OneDrive"{ $Origen = $TransferConfig.Origen.OneDrive.Path }
+        "Dropbox" { $Origen = $TransferConfig.Origen.Dropbox.Path }
+        default   { $Origen = $null }
+    }
+
+    switch ($TransferConfig.Destino.Tipo) {
+        "Local"   { $Destino = $TransferConfig.Destino.Local.Path }
+        "USB"     { $Destino = $TransferConfig.Destino.USB.Path }
+        "UNC"     { $Destino = $TransferConfig.Destino.UNC.Path }
+        "FTP"     { $Destino = $TransferConfig.Destino.FTP.Directory }
+        "OneDrive"{ $Destino = $TransferConfig.Destino.OneDrive.Path }
+        "Dropbox" { $Destino = $TransferConfig.Destino.Dropbox.Path }
+        "ISO"     { $Destino = $TransferConfig.Destino.ISO.OutputPath }
+        "Diskette"{ $Destino = $TransferConfig.Destino.Diskette.OutputPath }
+        default   { $Destino = $null }
+    }
+
     $origenMontado = $Origen
     $destinoMontado = $Destino
     $origenDrive = $null
     $destinoDrive = $null
-    
+
     # Manejar origen OneDrive
-    if ($OrigenEsOneDrive) {
+    if ($TransferConfig.Origen.Tipo -eq "OneDrive") {
         Write-Host "Configurando origen OneDrive..." -ForegroundColor Cyan
         if ($Origen -match '^onedrive://(.+)$' -or $Origen -match '^ONEDRIVE:(.+)$') {
             $origenMontado = $Matches[1]
@@ -321,7 +436,7 @@ function Initialize-TransferPaths {
         Write-Host "✓ Origen OneDrive configurado: $origenMontado" -ForegroundColor Green
     }
     # Manejar origen Dropbox
-    elseif ($OrigenEsDropbox) {
+    elseif ($TransferConfig.Origen.Tipo -eq "Dropbox") {
         Write-Host "Configurando origen Dropbox..." -ForegroundColor Cyan
         if ($Origen -match '^dropbox://(.+)$' -or $Origen -match '^DROPBOX:(.+)$') {
             $origenMontado = $Matches[1]
@@ -332,18 +447,13 @@ function Initialize-TransferPaths {
         }
         Write-Host "✓ Origen Dropbox configurado: $origenMontado" -ForegroundColor Green
     }
-    elseif ($Origen -match '^\\\\' -or $OrigenEsFtp) {
-        $tipoOrigen = if ($OrigenEsFtp) { "FTP" } else { "UNC" }
-        Write-Host "Montando ruta $tipoOrigen de origen..." -ForegroundColor Cyan
+    elseif ($TransferConfig.Origen.Tipo -eq "UNC") {
+        Write-Host "Montando ruta UNC de origen..." -ForegroundColor Cyan
         $origenDrive = "LLEVAR_ORIGEN"
         try {
             # Obtener credenciales desde TransferConfig
             $credOrigen = $null
-            if ($OrigenEsFtp -and $TransferConfig.Origen.FTP.User) {
-                $securePass = ConvertTo-SecureString $TransferConfig.Origen.FTP.Password -AsPlainText -Force
-                $credOrigen = New-Object System.Management.Automation.PSCredential($TransferConfig.Origen.FTP.User, $securePass)
-            }
-            elseif ($TransferConfig.Origen.UNC.Credentials) {
+            if ($TransferConfig.Origen.UNC.Credentials) {
                 $credOrigen = $TransferConfig.Origen.UNC.Credentials
             }
             
@@ -357,7 +467,7 @@ function Initialize-TransferPaths {
     }
     
     # Manejar destino OneDrive
-    if ($DestinoEsOneDrive) {
+    if ($TransferConfig.Destino.Tipo -eq "OneDrive") {
         Write-Host "Configurando destino OneDrive..." -ForegroundColor Cyan
         if ($Destino -match '^onedrive://(.+)$' -or $Destino -match '^ONEDRIVE:(.+)$') {
             $destinoMontado = $Matches[1]
@@ -369,7 +479,7 @@ function Initialize-TransferPaths {
         Write-Host "✓ Destino OneDrive configurado: $destinoMontado" -ForegroundColor Green
     }
     # Manejar destino Dropbox
-    elseif ($DestinoEsDropbox) {
+    elseif ($TransferConfig.Destino.Tipo -eq "Dropbox") {
         Write-Host "Configurando destino Dropbox..." -ForegroundColor Cyan
         if ($Destino -match '^dropbox://(.+)$' -or $Destino -match '^DROPBOX:(.+)$') {
             $destinoMontado = $Matches[1]
@@ -380,18 +490,13 @@ function Initialize-TransferPaths {
         }
         Write-Host "✓ Destino Dropbox configurado: $destinoMontado" -ForegroundColor Green
     }
-    elseif ($Destino -match '^\\\\' -or $DestinoEsFtp) {
-        $tipoDestino = if ($DestinoEsFtp) { "FTP" } else { "UNC" }
-        Write-Host "Montando ruta $tipoDestino de destino..." -ForegroundColor Cyan
+    elseif ($TransferConfig.Origen.Tipo -eq "UNC") {
+        Write-Host "Montando ruta UNC de destino..." -ForegroundColor Cyan
         $destinoDrive = "LLEVAR_DESTINO"
         try {
             # Obtener credenciales desde TransferConfig
             $credDestino = $null
-            if ($DestinoEsFtp -and $TransferConfig.Destino.FTP.User) {
-                $securePass = ConvertTo-SecureString $TransferConfig.Destino.FTP.Password -AsPlainText -Force
-                $credDestino = New-Object System.Management.Automation.PSCredential($TransferConfig.Destino.FTP.User, $securePass)
-            }
-            elseif ($TransferConfig.Destino.UNC.Credentials) {
+            if ($TransferConfig.Destino.UNC.Credentials) {
                 $credDestino = $TransferConfig.Destino.UNC.Credentials
             }
             
@@ -418,131 +523,25 @@ function Initialize-TransferPaths {
 # Función auxiliar para transferencia directa
 function Invoke-DirectTransfer {
     param(
-        [TransferConfig]$TransferConfig,
-        $OrigenMontado, $DestinoMontado,
-        $OrigenEsFtp, $DestinoEsFtp, $OrigenEsOneDrive, $DestinoEsOneDrive,
-        $OrigenEsDropbox, $DestinoEsDropbox
+        [TransferConfig]$TransferConfig
     )
     
-    Write-Host "`nIniciando transferencia directa..." -ForegroundColor Cyan
+    Write-Host "Iniciando transferencia directa..." -ForegroundColor Cyan
     
     try {
         # Extraer configuración de origen y destino directamente de TransferConfig
         Write-Log "Usando TransferConfig para Copy-LlevarFiles" "INFO"
         
-        $useRobocopy = $false
-        if ($TransferConfig.Origen.Tipo -eq "Local" -and $TransferConfig.Destino.Tipo -in @("Local", "UNC")) {
-            $useRobocopy = $TransferConfig.Opciones.RobocopyMirror -or $false
-        }
+        # Ejecutar transferencia directa usando TransferConfig unificado
+        $copyResult = Copy-LlevarFiles -TransferConfig $TransferConfig -ShowProgress $true -ProgressTop -1
         
-        # Construir sub-configs desde TransferConfig como PSCustomObject
-        # IMPORTANTE: Incluir Tipo + todos los datos de la subestructura correspondiente
-        if ($TransferConfig.Origen.Tipo -eq "FTP") {
-            $sourceConfig = [PSCustomObject]@{
-                Tipo      = "FTP"
-                Server    = $TransferConfig.Origen.FTP.Server
-                Port      = $TransferConfig.Origen.FTP.Port
-                User      = $TransferConfig.Origen.FTP.User
-                Password  = $TransferConfig.Origen.FTP.Password
-                UseSsl    = $TransferConfig.Origen.FTP.UseSsl
-                Directory = $TransferConfig.Origen.FTP.Directory
-                Path      = Get-TransferConfigOrigenPath -Config $TransferConfig
-            }
-        }
-        elseif ($TransferConfig.Origen.Tipo -eq "OneDrive") {
-            $sourceConfig = [PSCustomObject]@{
-                Tipo         = "OneDrive"
-                Path         = $TransferConfig.Origen.OneDrive.Path
-                Token        = $TransferConfig.Origen.OneDrive.Token
-                RefreshToken = $TransferConfig.Origen.OneDrive.RefreshToken
-                Email        = $TransferConfig.Origen.OneDrive.Email
-                ApiUrl       = $TransferConfig.Origen.OneDrive.ApiUrl
-            }
-        }
-        elseif ($TransferConfig.Origen.Tipo -eq "Dropbox") {
-            $sourceConfig = [PSCustomObject]@{
-                Tipo         = "Dropbox"
-                Path         = $TransferConfig.Origen.Dropbox.Path
-                Token        = $TransferConfig.Origen.Dropbox.Token
-                RefreshToken = $TransferConfig.Origen.Dropbox.RefreshToken
-                Email        = $TransferConfig.Origen.Dropbox.Email
-                ApiUrl       = $TransferConfig.Origen.Dropbox.ApiUrl
-            }
-        }
-        elseif ($TransferConfig.Origen.Tipo -in @("Local", "UNC", "USB")) {
-            $sourceConfig = [PSCustomObject]@{
-                Tipo = $TransferConfig.Origen.Tipo
-                Path = Get-TransferConfigOrigenPath -Config $TransferConfig
-            }
-            if ($TransferConfig.Origen.Tipo -eq "UNC") {
-                $sourceConfig | Add-Member -NotePropertyName "Credentials" -NotePropertyValue $TransferConfig.Origen.UNC.Credentials
-            }
-        }
-        else {
-            throw "Tipo de origen no soportado: $($TransferConfig.Origen.Tipo)"
-        }
-        
-        # Construir destino de la misma manera
-        if ($TransferConfig.Destino.Tipo -eq "FTP") {
-            $destConfig = [PSCustomObject]@{
-                Tipo      = "FTP"
-                Server    = $TransferConfig.Destino.FTP.Server
-                Port      = $TransferConfig.Destino.FTP.Port
-                User      = $TransferConfig.Destino.FTP.User
-                Password  = $TransferConfig.Destino.FTP.Password
-                UseSsl    = $TransferConfig.Destino.FTP.UseSsl
-                Directory = $TransferConfig.Destino.FTP.Directory
-                Path      = Get-TransferConfigDestinoPath -Config $TransferConfig
-            }
-        }
-        elseif ($TransferConfig.Destino.Tipo -eq "OneDrive") {
-            $destConfig = [PSCustomObject]@{
-                Tipo         = "OneDrive"
-                Path         = $TransferConfig.Destino.OneDrive.Path
-                Token        = $TransferConfig.Destino.OneDrive.Token
-                RefreshToken = $TransferConfig.Destino.OneDrive.RefreshToken
-                Email        = $TransferConfig.Destino.OneDrive.Email
-                ApiUrl       = $TransferConfig.Destino.OneDrive.ApiUrl
-            }
-        }
-        elseif ($TransferConfig.Destino.Tipo -eq "Dropbox") {
-            $destConfig = [PSCustomObject]@{
-                Tipo         = "Dropbox"
-                Path         = $TransferConfig.Destino.Dropbox.Path
-                Token        = $TransferConfig.Destino.Dropbox.Token
-                RefreshToken = $TransferConfig.Destino.Dropbox.RefreshToken
-                Email        = $TransferConfig.Destino.Dropbox.Email
-                ApiUrl       = $TransferConfig.Destino.Dropbox.ApiUrl
-            }
-        }
-        elseif ($TransferConfig.Destino.Tipo -in @("Local", "UNC", "USB")) {
-            $destConfig = [PSCustomObject]@{
-                Tipo = $TransferConfig.Destino.Tipo
-                Path = Get-TransferConfigDestinoPath -Config $TransferConfig
-            }
-            if ($TransferConfig.Destino.Tipo -eq "UNC") {
-                $destConfig | Add-Member -NotePropertyName "Credentials" -NotePropertyValue $TransferConfig.Destino.UNC.Credentials
-            }
-        }
-        else {
-            throw "Tipo de destino no soportado: $($TransferConfig.Destino.Tipo)"
-        }
-
-        Write-Log "DEBUG: SourceConfig.Tipo=$($sourceConfig.Tipo) DestConfig.Tipo=$($destConfig.Tipo)" "INFO"
-        Write-Host "DEBUG Origen: $($sourceConfig.Tipo) -> $($sourceConfig.Path)" -ForegroundColor Yellow
-        Write-Host "DEBUG Destino: $($destConfig.Tipo) -> $($destConfig.Path)" -ForegroundColor Yellow
-        
-        $copyResult = Copy-LlevarFiles -SourceConfig $sourceConfig -DestinationConfig $destConfig `
-            -SourcePath $OrigenMontado -ShowProgress $true -ProgressTop -1 `
-            -UseRobocopy $useRobocopy -RobocopyMirror $TransferConfig.Opciones.RobocopyMirror
-        
-        Show-Banner "✓ TRANSFERENCIA COMPLETADA" -BorderColor Green -TextColor Green
+        Show-Banner "TRANSFERENCIA COMPLETADA" -BorderColor Green -TextColor Green
         Write-Host "Archivos copiados: $($copyResult.FileCount)" -ForegroundColor White
         Write-Host "Bytes transferidos: $([Math]::Round($copyResult.BytesCopied/1MB, 2)) MB" -ForegroundColor White
         Write-Host "Tiempo transcurrido: $([Math]::Round($copyResult.ElapsedSeconds, 2)) segundos" -ForegroundColor White
         Write-Host ""
         
-        Write-Host "✓ Transferencia directa completada." -ForegroundColor Green
+        Write-Host "Transferencia directa completada." -ForegroundColor Green
     }
     catch {
         Write-Host "Error durante transferencia directa: $($_.Exception.Message)" -ForegroundColor Red
@@ -554,17 +553,15 @@ function Invoke-DirectTransfer {
 function Invoke-CompressedTransfer {
     param(
         [TransferConfig]$TransferConfig,
-        $OrigenMontado, $DestinoMontado, $Temp, $SevenZ, $Clave, $BlockSizeMB,
-        $OrigenEsOneDrive, $DestinoEsOneDrive, $OrigenEsDropbox, $DestinoEsDropbox,
-        $DestinoEsFtp
+        $OrigenMontado, $DestinoMontado, $Temp, $SevenZ, $Clave, $BlockSizeMB
     )    
-    Write-Host "`nIniciando compresión y transferencia..." -ForegroundColor Cyan
+    Write-Host "Iniciando compresión y transferencia..." -ForegroundColor Cyan
     
-    # Si origen es OneDrive o Dropbox, descargar primero a temporal
+    # Si origen es OneDrive, Dropbox o FTP, descargar primero a temporal
     $origenParaComprimir = $OrigenMontado
     $tempOrigenCloud = $null
     
-    if ($OrigenEsOneDrive) {
+    if ($TransferConfig.Origen.Tipo -eq "OneDrive") {
         Write-Host "Descargando desde OneDrive a carpeta temporal..." -ForegroundColor Cyan
         $tempOrigenCloud = Join-Path $env:TEMP "LLEVAR_ONEDRIVE_ORIGEN"
         if (Test-Path $tempOrigenCloud) {
@@ -574,19 +571,19 @@ function Invoke-CompressedTransfer {
         
         # CORREGIDO: Usar Copy-LlevarOneDriveToLocal con objeto config
         $oneDriveConfig = [PSCustomObject]@{
-            Tipo              = "OneDrive"
-            Path              = $OrigenMontado
-            Token             = $TransferConfig.Origen.OneDrive.Token
-            RefreshToken      = $TransferConfig.Origen.OneDrive.RefreshToken
-            Email             = $TransferConfig.Origen.OneDrive.Email
-            ApiUrl            = $TransferConfig.Origen.OneDrive.ApiUrl
-            UseLocal          = $false
-            DestinationPath   = $tempOrigenCloud
+            Tipo            = "OneDrive"
+            Path            = $OrigenMontado
+            Token           = $TransferConfig.Origen.OneDrive.Token
+            RefreshToken    = $TransferConfig.Origen.OneDrive.RefreshToken
+            Email           = $TransferConfig.Origen.OneDrive.Email
+            ApiUrl          = $TransferConfig.Origen.OneDrive.ApiUrl
+            UseLocal        = $false
+            DestinationPath = $tempOrigenCloud
         }
         Copy-LlevarOneDriveToLocal -OneDriveConfig $oneDriveConfig
         $origenParaComprimir = $tempOrigenCloud
     }
-    elseif ($OrigenEsDropbox) {
+    elseif ($TransferConfig.Origen.Tipo -eq "Dropbox") {
         Write-Host "Descargando desde Dropbox a carpeta temporal..." -ForegroundColor Cyan
         $tempOrigenCloud = Join-Path $env:TEMP "LLEVAR_DROPBOX_ORIGEN"
         if (Test-Path $tempOrigenCloud) {
@@ -596,19 +593,44 @@ function Invoke-CompressedTransfer {
         
         # CORREGIDO: Usar Copy-LlevarDropboxToLocal con objeto config
         $dropboxConfig = [PSCustomObject]@{
-            Tipo              = "Dropbox"
-            Path              = $OrigenMontado
-            Token             = $TransferConfig.Origen.Dropbox.Token
-            RefreshToken      = $TransferConfig.Origen.Dropbox.RefreshToken
-            Email             = $TransferConfig.Origen.Dropbox.Email
-            ApiUrl            = $TransferConfig.Origen.Dropbox.ApiUrl
-            UseLocal          = $false
-            DestinationPath   = $tempOrigenCloud
+            Tipo            = "Dropbox"
+            Path            = $OrigenMontado
+            Token           = $TransferConfig.Origen.Dropbox.Token
+            RefreshToken    = $TransferConfig.Origen.Dropbox.RefreshToken
+            Email           = $TransferConfig.Origen.Dropbox.Email
+            ApiUrl          = $TransferConfig.Origen.Dropbox.ApiUrl
+            UseLocal        = $false
+            DestinationPath = $tempOrigenCloud
         }
         Copy-LlevarDropboxToLocal -DropboxConfig $dropboxConfig
         $origenParaComprimir = $tempOrigenCloud
     }
-    
+    elseif ($TransferConfig.Origen.Tipo -eq "FTP") {
+        Write-Host "Descargando desde FTP a carpeta temporal..." -ForegroundColor Cyan
+        $tempOrigenCloud = Join-Path $env:TEMP "LLEVAR_FTP_ORIGEN"
+        if (Test-Path $tempOrigenCloud) {
+            Remove-Item $tempOrigenCloud -Recurse -Force
+        }
+        New-Item -Type Directory $tempOrigenCloud | Out-Null
+
+        # Construir TransferConfig específico para FTP -> Local (descarga)
+        $ftpToLocal = New-TransferConfig
+        $ftpToLocal.Origen.Tipo = "FTP"
+        foreach ($prop in $TransferConfig.Origen.FTP.PSObject.Properties) {
+            $ftpToLocal.Origen.FTP.$($prop.Name) = $prop.Value
+        }
+        $ftpToLocal.Destino.Tipo = "Local"
+        $ftpToLocal.Destino.Local.Path = $tempOrigenCloud
+
+        # Usar dispatcher unificado
+        $ftpDownloadResult = Copy-LlevarFiles -TransferConfig $ftpToLocal
+        if (-not $ftpDownloadResult) {
+            throw "No se pudo descargar datos desde FTP al origen temporal para compresión."
+        }
+
+        $origenParaComprimir = $tempOrigenCloud
+    }
+
     $compressionResult = Compress-Folder $origenParaComprimir $Temp $SevenZ $Clave $BlockSizeMB $DestinoMontado
     $blocks = $compressionResult.Files
     $compressionType = $compressionResult.CompressionType
@@ -617,156 +639,85 @@ function Invoke-CompressedTransfer {
     $installerScript = New-InstallerScript -Temp $Temp -CompressionType $compressionType
 
     # Si destino es OneDrive o Dropbox, subir bloques
-    if ($DestinoEsOneDrive) {
-        # CORREGIDO: Subir bloques usando API directa o local según config
-        Write-Host "`nSubiendo bloques a OneDrive..." -ForegroundColor Cyan
-        
+    if ($TransferConfig.Destino.Tipo -eq "OneDrive") {
+        Write-Host "Subiendo bloques a OneDrive..." -ForegroundColor Cyan
+
         $totalBlocks = $Blocks.Count
         $currentBlock = 0
-        
-        $token = $TransferConfig.Destino.OneDrive.Token
-        $remotePath = $DestinoMontado
-        
+
         foreach ($block in $Blocks) {
             $currentBlock++
             $fileName = [System.IO.Path]::GetFileName($block)
             Write-Host "[$currentBlock/$totalBlocks] Subiendo: $fileName" -ForegroundColor Gray
-            
-            # Upload usando API directamente
-            $fileContent = [System.IO.File]::ReadAllBytes($block)
-            $uploadUrl = "https://graph.microsoft.com/v1.0/me/drive/root:${remotePath}/${fileName}:/content"
-            $uploadHeaders = @{
-                "Authorization" = "Bearer $token"
-                "Content-Type"  = "application/octet-stream"
-            }
-            
             try {
-                Invoke-RestMethod -Uri $uploadUrl -Headers $uploadHeaders -Method Put -Body $fileContent | Out-Null
+                Send-LlevarOneDriveFile -Llevar $TransferConfig -LocalPath $block -RemotePath $DestinoMontado
             }
             catch {
-                Write-Host "  ✗ Error subiendo $fileName" -ForegroundColor Red
+                Write-Host "Error subiendo $fileName" -ForegroundColor Red
             }
         }
-        
-        # Subir INSTALAR.ps1
+
         if ($InstallerScript -and (Test-Path $InstallerScript)) {
             Write-Host "Subiendo INSTALAR.ps1..." -ForegroundColor Gray
-            $fileName = [System.IO.Path]::GetFileName($InstallerScript)
-            $fileContent = [System.IO.File]::ReadAllBytes($InstallerScript)
-            $uploadUrl = "https://graph.microsoft.com/v1.0/me/drive/root:${remotePath}/${fileName}:/content"
-            
             try {
-                Invoke-RestMethod -Uri $uploadUrl -Headers $uploadHeaders -Method Put -Body $fileContent | Out-Null
+                Send-LlevarOneDriveFile -Llevar $TransferConfig -LocalPath $InstallerScript -RemotePath $DestinoMontado
             }
             catch {
-                Write-Host "  ✗ Error subiendo $fileName" -ForegroundColor Red
+                Write-Host "Error subiendo INSTALAR.ps1" -ForegroundColor Red
             }
         }
-        
-        # Subir 7z.exe si necesario
+
         if ($SevenZ -and $CompressionType -ne "NATIVE_ZIP" -and (Test-Path $SevenZ)) {
             Write-Host "Subiendo 7z.exe..." -ForegroundColor Gray
-            $fileName = "7z.exe"
-            $fileContent = [System.IO.File]::ReadAllBytes($SevenZ)
-            $uploadUrl = "https://graph.microsoft.com/v1.0/me/drive/root:${remotePath}/${fileName}:/content"
-            
             try {
-                Invoke-RestMethod -Uri $uploadUrl -Headers $uploadHeaders -Method Put -Body $fileContent | Out-Null
+                Send-LlevarOneDriveFile -Llevar $TransferConfig -LocalPath $SevenZ -RemotePath $DestinoMontado
             }
             catch {
-                Write-Host "  ✗ Error subiendo $fileName" -ForegroundColor Red
+                Write-Host "Error subiendo 7z.exe" -ForegroundColor Red
             }
         }
-        
-        Write-Host "`n✓ Todos los archivos subidos a OneDrive" -ForegroundColor Green
+
+        Write-Host "Todos los archivos subidos a OneDrive" -ForegroundColor Green
     }
-    elseif ($DestinoEsDropbox) {
-        # CORREGIDO: Subir bloques usando API directa de Dropbox
-        Write-Host "`nSubiendo bloques a Dropbox..." -ForegroundColor Cyan
-        
+    elseif ($TransferConfig.Destino.Tipo -eq "Dropbox") {
+        Write-Host "Subiendo bloques a Dropbox..." -ForegroundColor Cyan
+
         $totalBlocks = $Blocks.Count
         $currentBlock = 0
-        
-        $token = $TransferConfig.Destino.Dropbox.Token
-        $remotePath = $DestinoMontado
-        
+
         foreach ($block in $Blocks) {
             $currentBlock++
             $fileName = [System.IO.Path]::GetFileName($block)
-            $remoteFullPath = "$remotePath/$fileName".Replace('//', '/')
-            if (-not $remoteFullPath.StartsWith('/')) {
-                $remoteFullPath = "/$remoteFullPath"
-            }
-            
             Write-Host "[$currentBlock/$totalBlocks] Subiendo: $fileName" -ForegroundColor Gray
-            
             try {
-                $bytes = [System.IO.File]::ReadAllBytes($block)
-                
-                $headers = @{
-                    "Authorization"   = "Bearer $token"
-                    "Dropbox-API-Arg" = '{"path":"' + $remoteFullPath + '","mode":"overwrite"}'
-                    "Content-Type"    = "application/octet-stream"
-                }
-                
-                Invoke-RestMethod -Uri "https://content.dropboxapi.com/2/files/upload" `
-                    -Method Post -Headers $headers -Body $bytes | Out-Null
+                Send-LlevarDropboxFile -Llevar $TransferConfig -LocalPath $block -RemotePath $DestinoMontado
             }
             catch {
-                Write-Host "  ✗ Error subiendo $fileName" -ForegroundColor Red
+                Write-Host "Error subiendo $fileName" -ForegroundColor Red
             }
         }
-        
-        # Subir INSTALAR.ps1
+
         if ($InstallerScript -and (Test-Path $InstallerScript)) {
             Write-Host "Subiendo INSTALAR.ps1..." -ForegroundColor Gray
-            $fileName = [System.IO.Path]::GetFileName($InstallerScript)
-            $remoteFullPath = "$remotePath/$fileName".Replace('//', '/')
-            if (-not $remoteFullPath.StartsWith('/')) {
-                $remoteFullPath = "/$remoteFullPath"
-            }
-            
             try {
-                $bytes = [System.IO.File]::ReadAllBytes($InstallerScript)
-                $headers = @{
-                    "Authorization"   = "Bearer $token"
-                    "Dropbox-API-Arg" = '{"path":"' + $remoteFullPath + '","mode":"overwrite"}'
-                    "Content-Type"    = "application/octet-stream"
-                }
-                
-                Invoke-RestMethod -Uri "https://content.dropboxapi.com/2/files/upload" `
-                    -Method Post -Headers $headers -Body $bytes | Out-Null
+                Send-LlevarDropboxFile -Llevar $TransferConfig -LocalPath $InstallerScript -RemotePath $DestinoMontado
             }
             catch {
-                Write-Host "  ✗ Error subiendo $fileName" -ForegroundColor Red
+                Write-Host "Error subiendo INSTALAR.ps1" -ForegroundColor Red
             }
         }
-        
-        # Subir 7z.exe si necesario
+
         if ($SevenZ -and $CompressionType -ne "NATIVE_ZIP" -and (Test-Path $SevenZ)) {
             Write-Host "Subiendo 7z.exe..." -ForegroundColor Gray
-            $remoteFullPath = "$remotePath/7z.exe".Replace('//', '/')
-            if (-not $remoteFullPath.StartsWith('/')) {
-                $remoteFullPath = "/$remoteFullPath"
-            }
-            
             try {
-                $bytes = [System.IO.File]::ReadAllBytes($SevenZ)
-                $headers = @{
-                    "Authorization"   = "Bearer $token"
-                    "Dropbox-API-Arg" = '{"path":"' + $remoteFullPath + '","mode":"overwrite"}'
-                    "Content-Type"    = "application/octet-stream"
-                }
-                
-                Invoke-RestMethod -Uri "https://content.dropboxapi.com/2/files/upload" `
-                    -Method Post -Headers $headers -Body $bytes | Out-Null
+                Send-LlevarDropboxFile -Llevar $TransferConfig -LocalPath $SevenZ -RemotePath $DestinoMontado
             }
             catch {
-                Write-Host "  ✗ Error subiendo 7z.exe" -ForegroundColor Red
+                Write-Host "Error subiendo 7z.exe" -ForegroundColor Red
             }
         }
-        
-        Write-Host "`n✓ Todos los archivos subidos a Dropbox" -ForegroundColor Green
+
+        Write-Host "Todos los archivos subidos a Dropbox" -ForegroundColor Green
     }
     elseif ($TransferConfig.Destino.Tipo -eq "Diskette") {
         $floppySuccess = Copy-ToFloppyDisks `
@@ -777,18 +728,18 @@ function Invoke-CompressedTransfer {
             -VerifyDisks
         
         if (-not $floppySuccess) {
-            Write-Host "✗ Error copiando a diskettes" -ForegroundColor Red
+            Write-Host "Error copiando a diskettes" -ForegroundColor Red
             return
         }
     }
     else {
         Copy-BlocksToUSB -Blocks $blocks -InstallerPath $installerScript -SevenZPath $SevenZ `
-            -CompressionType $compressionType -DestinationPath $DestinoMontado -IsFtp $DestinoEsFtp
+            -CompressionType $compressionType -DestinationPath $DestinoMontado -TransferConfig $TransferConfig
     }
     
     # Limpiar temporal de cloud origen si existe
     if ($tempOrigenCloud -and (Test-Path $tempOrigenCloud)) {
-        Write-Host "`nLimpiando descarga temporal de cloud..." -ForegroundColor Cyan
+        Write-Host "Limpiando descarga temporal de cloud..." -ForegroundColor Cyan
         Remove-Item $tempOrigenCloud -Recurse -Force -ErrorAction SilentlyContinue
     }
 }
@@ -805,11 +756,11 @@ function Clear-TransferPaths {
     }
     
     if ($TempDir) {
-        Write-Host "`nLimpiando archivos temporales..." -ForegroundColor Cyan
+        Write-Host "Limpiando archivos temporales..." -ForegroundColor Cyan
         try {
             if (Test-Path $TempDir) {
                 Remove-Item -Path $TempDir -Recurse -Force -ErrorAction Stop
-                Write-Host "✓ Archivos temporales eliminados de: $TempDir" -ForegroundColor Green
+                Write-Host "Archivos temporales eliminados de: $TempDir" -ForegroundColor Green
             }
         }
         catch {

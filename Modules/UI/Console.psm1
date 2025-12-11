@@ -225,6 +225,5 @@ function Set-ConsoleSize {
 Export-ModuleMember -Function @(
     'Write-ColorOutput',
     'Get-AsciiScalingRatios',
-    'Resize-Console',
     'Set-ConsoleSize'
 )

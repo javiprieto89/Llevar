@@ -13,7 +13,7 @@
 
 # Imports necesarios
 $ModulesPath = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
-Import-Module (Join-Path $ModulesPath "Modules\Core\Logging.psm1") -Force -Global
+Import-Module (Join-Path $ModulesPath "Modules\Core\Logger.psm1") -Force -Global
 
 function Get-NetworkComputers {
     <#
@@ -375,7 +375,7 @@ function Mount-LlevarNetworkPath {
     )
     
     # Verificar si es FTP (delegar a módulo FTP)
-    if (Test-IsFtpPath -Path $Path) {
+    if ($false -and (Test-IsFtpPath -Path $Path)) {
         return Mount-FtpPath -Path $Path -Credential $Credential -DriveName $DriveName
     }
     
