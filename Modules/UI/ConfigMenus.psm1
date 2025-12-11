@@ -1,4 +1,4 @@
-﻿# Importar TransferConfig al inicio del módulo
+# Importar TransferConfig al inicio del módulo
 using module "Q:\Utilidad\LLevar\Modules\Core\TransferConfig.psm1"
 
 # ========================================================================== #
@@ -49,12 +49,12 @@ function Show-MainMenu {
         }
         
         $origenPath = switch ($llevar.Origen.Tipo) {
-            "Local"   { $llevar.Origen.Local.Path }
-            "UNC"     { $llevar.Origen.UNC.Path }
-            "FTP"     { $llevar.Origen.FTP.Directory }
-            "OneDrive"{ $llevar.Origen.OneDrive.Path }
+            "Local" { $llevar.Origen.Local.Path }
+            "UNC" { $llevar.Origen.UNC.Path }
+            "FTP" { $llevar.Origen.FTP.Directory }
+            "OneDrive" { $llevar.Origen.OneDrive.Path }
             "Dropbox" { $llevar.Origen.Dropbox.Path }
-            default   { $null }
+            default { $null }
         }
         if ($origenPath) {
             $origenDisplay += " → $origenPath"
@@ -69,15 +69,15 @@ function Show-MainMenu {
         }
         
         $destinoPath = switch ($llevar.Destino.Tipo) {
-            "Local"    { $llevar.Destino.Local.Path }
-            "USB"      { $llevar.Destino.USB.Path }
-            "UNC"      { $llevar.Destino.UNC.Path }
-            "FTP"      { $llevar.Destino.FTP.Directory }
+            "Local" { $llevar.Destino.Local.Path }
+            "USB" { $llevar.Destino.USB.Path }
+            "UNC" { $llevar.Destino.UNC.Path }
+            "FTP" { $llevar.Destino.FTP.Directory }
             "OneDrive" { $llevar.Destino.OneDrive.Path }
-            "Dropbox"  { $llevar.Destino.Dropbox.Path }
-            "ISO"      { $llevar.Destino.ISO.OutputPath }
+            "Dropbox" { $llevar.Destino.Dropbox.Path }
+            "ISO" { $llevar.Destino.ISO.OutputPath }
             "Diskette" { $llevar.Destino.Diskette.OutputPath }
-            default    { $null }
+            default { $null }
         }
         if ($destinoPath) {
             $destinoDisplay += " → $destinoPath"
@@ -254,17 +254,17 @@ function Show-OrigenMenu {
         }
         2 {
             # ✅ LLAMADA CORRECTA: PASA $Llevar y "Origen"
-            $success = Get-FtpConfigFromUser -Llevar $Llevar -Cual "Origen"
+            if (-not (Get-FtpConfigFromUser -Llevar $Llevar -Cual "Origen")) { return }
             # ✅ $Llevar.Origen.FTP.* YA ESTÁ CONFIGURADO
         }
         3 {
             # ✅ LLAMADA CORRECTA: PASA $Llevar y "Origen"
-            $success = Get-OneDriveConfigFromUser -Llevar $Llevar -Cual "Origen"
+            if (-not (Get-OneDriveConfigFromUser -Llevar $Llevar -Cual "Origen")) { return }
             # ✅ $Llevar.Origen.OneDrive.* YA ESTÁ CONFIGURADO
         }
         4 {
             # ✅ LLAMADA CORRECTA: PASA $Llevar y "Origen"
-            $success = Get-DropboxConfigFromUser -Llevar $Llevar -Cual "Origen"
+            if (-not (Get-DropboxConfigFromUser -Llevar $Llevar -Cual "Origen")) { return }
             # ✅ $Llevar.Origen.Dropbox.* YA ESTÁ CONFIGURADO
         }
         5 {
@@ -333,17 +333,17 @@ function Show-DestinoMenu {
         }
         4 {
             # ✅ LLAMADA CORRECTA: PASA $Llevar y "Destino"
-            $success = Get-FtpConfigFromUser -Llevar $Llevar -Cual "Destino"
+            if (-not (Get-FtpConfigFromUser -Llevar $Llevar -Cual "Destino")) { return }
             # ✅ $Llevar.Destino.FTP.* YA ESTÁ CONFIGURADO
         }
         5 {
             # ✅ LLAMADA CORRECTA: PASA $Llevar y "Destino"
-            $success = Get-OneDriveConfigFromUser -Llevar $Llevar -Cual "Destino"
+            if (-not (Get-OneDriveConfigFromUser -Llevar $Llevar -Cual "Destino")) { return }
             # ✅ $Llevar.Destino.OneDrive.* YA ESTÁ CONFIGURADO
         }
         6 {
             # ✅ LLAMADA CORRECTA: PASA $Llevar y "Destino"
-            $success = Get-DropboxConfigFromUser -Llevar $Llevar -Cual "Destino"
+            if (-not (Get-DropboxConfigFromUser -Llevar $Llevar -Cual "Destino")) { return }
             # ✅ $Llevar.Destino.Dropbox.* YA ESTÁ CONFIGURADO
         }
         7 {

@@ -1,4 +1,4 @@
-﻿# ========================================================================== #
+# ========================================================================== #
 #                  MÓDULO: CONFIGURACIÓN DE TRANSFERENCIA                    #
 # ========================================================================== #
 # Propósito: Objeto unificado para toda la configuración de transferencia
@@ -40,6 +40,10 @@ class TransferConfig {
             RefreshToken = $null
             Email        = $null
             ApiUrl       = "https://graph.microsoft.com/v1.0/me/drive"
+            UseLocal     = $false
+            LocalPath    = $null
+            DriveId      = $null
+            RootId       = $null
         }
         
         # Subestructura Dropbox
@@ -87,6 +91,10 @@ class TransferConfig {
             RefreshToken = $null
             Email        = $null
             ApiUrl       = "https://graph.microsoft.com/v1.0/me/drive"
+            UseLocal     = $false
+            LocalPath    = $null
+            DriveId      = $null
+            RootId       = $null
         }
         
         # Subestructura Dropbox
@@ -497,38 +505,33 @@ function with {
         [ScriptBlock]$Block
     )
 
-    # Crear variable $PSItem con el objeto para acceso directo
-    $PSItem = $Object
-    
-    # Crear contexto de ejecución donde "." es el objeto
-    # Esto permite usar "." para leer propiedades y llamar métodos
-    $context = @{
-        "." = $Object
-        "PSItem" = $Object
-    }
+    # Crear contexto de ejecución donde "." es el objeto y "ContextItem" lo referencia
+    $psVars = New-Object 'System.Collections.Generic.List[System.Management.Automation.PSVariable]'
+    $psVars.Add((New-Object System.Management.Automation.PSVariable(".", $Object)))
+    $psVars.Add((New-Object System.Management.Automation.PSVariable("ContextItem", $Object)))
     
     # Para que las asignaciones funcionen, necesitamos modificar el ScriptBlock
     # Obtener el texto del ScriptBlock y transformarlo usando regex
     $blockText = $Block.ToString()
     
-    # Reemplazar patrones como ".Prop" o ".FTP.Directory" con "$PSItem.Prop" o "$PSItem.FTP.Directory"
+    # Reemplazar patrones como ".Prop" o ".FTP.Directory" con "$ContextItem.Prop" o "$ContextItem.FTP.Directory"
     # Patrón que captura "." seguido de una o más propiedades separadas por "."
     # (?<![A-Za-z0-9_$]) asegura que no hay un carácter alfanumérico antes (evita números como 3.14)
     # ([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*) captura la cadena completa de propiedades
-    $modifiedScript = $blockText -replace '(?<![A-Za-z0-9_$])\.([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*)', '$PSItem.$1'
+    $modifiedScript = $blockText -replace '(?<![A-Za-z0-9_$])\.([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*)', '$ContextItem.$1'
     
     # Crear nuevo ScriptBlock modificado
     try {
         $modifiedBlock = [ScriptBlock]::Create($modifiedScript)
         
         # Ejecutar el bloque modificado con el contexto
-        $result = $modifiedBlock.InvokeWithContext($null, $context)
+        $result = $modifiedBlock.InvokeWithContext($psVars, $null)
     }
     catch {
         # Si falla la modificación, intentar ejecutar el bloque original
         # Esto puede no funcionar para asignaciones, pero al menos permite lectura
         Write-Log "Error en función with: $($_.Exception.Message). Intentando ejecución directa." "WARNING" -ErrorRecord $_
-        $result = $Block.InvokeWithContext($null, $context)
+        $result = $Block.InvokeWithContext($psVars, $null)
     }
     
     # Retornar el resultado (si hay uno solo, retornarlo directamente)

@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     Suite de tests para las funciones de Llevar.ps1
 
@@ -13,20 +13,21 @@
 # ==========================================
 #  TESTS UNITARIOS
 # ==========================================
+try {
 $parentProcess = (Get-Process -Id $PID).Parent
 if ($parentProcess) {
     $parentName = $parentProcess.ProcessName
     if ($parentName -match 'code|devenv|rider|powershell_ise') {
         return $true
     }
-}
+}    
 }
 catch {
     # Ignorar errores
 }
-    
+
 return $false
-}
+
 
 # ==========================================
 #  COLORES Y HELPERS

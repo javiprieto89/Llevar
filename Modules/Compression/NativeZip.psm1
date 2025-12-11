@@ -1,4 +1,4 @@
-﻿# ============================================================================ #
+# ============================================================================ #
 # Archivo: Q:\Utilidad\LLevar\Modules\Compression\NativeZip.psm1
 # Descripción: Funciones para compresión/descompresión con ZIP nativo de Windows
 # ============================================================================ #

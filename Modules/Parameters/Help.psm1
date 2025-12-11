@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     Maneja el parámetro -Ayuda para mostrar la ayuda del programa.
 

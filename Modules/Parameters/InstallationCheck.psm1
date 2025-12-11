@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     Verifica si el script está instalado en C:\Llevar y ofrece instalarlo si no lo está.
 

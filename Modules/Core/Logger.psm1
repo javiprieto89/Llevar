@@ -1,4 +1,4 @@
-﻿# Q:\Utilidad\LLevar\Modules\Core\Logger.psm1
+# Q:\Utilidad\LLevar\Modules\Core\Logger.psm1
 # Módulo de gestión de logs para Llevar.ps1
 # Proporciona funciones para escribir logs con diferentes niveles (INFO, WARNING, ERROR, DEBUG)
 # y manejo de errores con detalles completos incluyendo stack traces

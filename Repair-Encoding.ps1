@@ -1,4 +1,4 @@
-﻿param(
+param(
     [Parameter(Mandatory)]
     [string]$Path,
 
@@ -9,15 +9,15 @@
 $FixTable = @{
 
     # Acentos y caracteres latinos mal decodificados
-    ([string][char]0xC3 + [char]0xA1) = "á";   # Ã¡
-    ([string][char]0xC3 + [char]0xA9) = "é";   # Ã©
-    ([string][char]0xC3 + [char]0xAD) = "í";   # Ã­
-    ([string][char]0xC3 + [char]0xB3) = "ó";   # Ã³
-    ([string][char]0xC3 + [char]0xBA) = "ú";   # Ãº
-    ([string][char]0xC3 + [char]0xB1) = "ñ";   # Ã±
-    ([string][char]0xC3 + [char]0x91) = "Ñ";   # Ã‘
-    ([string][char]0xC3 + [char]0xBC) = "ü";   # Ã¼
-    ([string][char]0xC3 + [char]0x9C) = "Ü";   # Ãœ
+    ([string][char]0xC3 + [char]0xA1)              = "á";   # Ã¡
+    ([string][char]0xC3 + [char]0xA9)              = "é";   # Ã©
+    ([string][char]0xC3 + [char]0xAD)              = "í";   # Ã­
+    ([string][char]0xC3 + [char]0xB3)              = "ó";   # Ã³
+    ([string][char]0xC3 + [char]0xBA)              = "ú";   # Ãº
+    ([string][char]0xC3 + [char]0xB1)              = "ñ";   # Ã±
+    ([string][char]0xC3 + [char]0x91)              = "Ñ";   # Ã‘
+    ([string][char]0xC3 + [char]0xBC)              = "ü";   # Ã¼
+    ([string][char]0xC3 + [char]0x9C)              = "Ü";   # Ãœ
 
     # Puntuación maldecodificada
     ([string][char]0xE2 + [char]0x80 + [char]0x94) = "—";   # â€” 
@@ -26,7 +26,7 @@ $FixTable = @{
     ([string][char]0xE2 + [char]0x80 + [char]0xA2) = "•";   # â€¢
     ([string][char]0xE2 + [char]0x9C + [char]0x93) = "✓";   # âœ“
 	
-	# -----------------------------
+    # -----------------------------
     # LÍNEAS SIMPLES (U+2500–U+257F)
     # -----------------------------
     ([string][char]0xE2 + [char]0x94 + [char]0x80) = "─";  # BOX DRAWINGS LIGHT HORIZONTAL
@@ -160,7 +160,7 @@ function Repair-File {
     # 4) Caso: archivo ya está OK → se saltea sin preguntar
     if ($bomInfo.HasBOM -and -not $containsCorruption) {
         Write-Host ("   ✔ Archivo OK (UTF-8 con BOM, sin patrones corruptos). " +
-                    "BOM: {0}" -f ($bomInfo.Bytes -join ', ')) -ForegroundColor Green
+            "BOM: {0}" -f ($bomInfo.Bytes -join ', ')) -ForegroundColor Green
         return
     }
 
@@ -174,7 +174,7 @@ function Repair-File {
 
     # 6) Preguntar si se quiere reparar
     $answer = Read-Host "¿Deseás reparar este archivo? (s/n)"
-    if ($answer -notin @('s','S')) {
+    if ($answer -notin @('s', 'S')) {
         Write-Host "   → Archivo saltado por el usuario." -ForegroundColor DarkYellow
         return
     }
@@ -209,7 +209,7 @@ if (-not (Test-Path $Path)) {
     exit 1
 }
 
-$extensions = @(".ps1",".psm1",".psd1")
+$extensions = @(".ps1", ".psm1", ".psd1")
 
 if (Test-Path $Path -PathType Leaf) {
     $files = @(Get-Item -LiteralPath $Path)
@@ -217,11 +217,11 @@ if (Test-Path $Path -PathType Leaf) {
 else {
     if ($Recurse) {
         $files = Get-ChildItem -LiteralPath $Path -Recurse -File |
-                 Where-Object { $extensions -contains $_.Extension.ToLower() }
+        Where-Object { $extensions -contains $_.Extension.ToLower() }
     }
     else {
         $files = Get-ChildItem -LiteralPath $Path -File |
-                 Where-Object { $extensions -contains $_.Extension.ToLower() }
+        Where-Object { $extensions -contains $_.Extension.ToLower() }
     }
 }
 
@@ -239,7 +239,7 @@ $partial = 0
 foreach ($f in $files) {
     $r = Repair-File $f.FullName
     switch ($r) {
-        "FIXED"   { $fixed++ }
+        "FIXED" { $fixed++ }
         "SKIPPED" { $skipped++ }
         "PARTIAL" { $partial++ }
     }

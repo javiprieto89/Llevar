@@ -1,4 +1,4 @@
-﻿# ========================================================================== #
+# ========================================================================== #
 #                     MÓDULO: NAVEGADOR NORTON COMMANDER                     #
 # ========================================================================== #
 # Propósito: Explorador de archivos/carpetas estilo Norton Commander
@@ -32,6 +32,9 @@ function Select-PathNavigator {
         Título del explorador
     .PARAMETER AllowFiles
         Si es $true, permite seleccionar archivos. Si es $false, solo carpetas.
+    .PARAMETER ProviderOptions
+        Hashtable usado para personalizar comportamientos del navegador (permite deshabilitar F2/F3 y definir el
+        proveedor de tamaños). Claves: AllowDriveSelector, AllowNetworkDiscovery, SizeCalculator, Token, DriveId, ModulePath.
     .OUTPUTS
         String con la ruta completa seleccionada, o $null si se cancela
     .EXAMPLE
@@ -41,18 +44,32 @@ function Select-PathNavigator {
     #>
     param(
         [string]$Prompt = "Seleccionar ubicación",
-        [bool]$AllowFiles = $false
+        [bool]$AllowFiles = $false,
+        [scriptblock]$ItemProvider,
+        [string]$InitialPath,
+        [hashtable]$ProviderOptions
     )
     
     # Obtener todas las unidades disponibles (solo letras de unidad A-Z)
     $drives = Get-PSDrive -PSProvider FileSystem | Where-Object { $_.Root -and $_.Name -match '^[A-Z]$' }
-    $currentPath = $PWD.Path
+    $currentPath = if ($InitialPath) { $InitialPath } else { $PWD.Path }
     $selectedIndex = 0
     $scrollOffset = 0
     $searchMode = $false
     $searchPattern = ""
     $allItems = @()
     $filteredItems = @()
+    
+    if (-not $ProviderOptions) {
+        $ProviderOptions = @{}
+    }
+    
+    $allowDriveSelector = if ($ProviderOptions.ContainsKey('AllowDriveSelector')) { [bool]$ProviderOptions.AllowDriveSelector } else { $true }
+    $allowNetworkDiscovery = if ($ProviderOptions.ContainsKey('AllowNetworkDiscovery')) { [bool]$ProviderOptions.AllowNetworkDiscovery } else { $true }
+    $providerToken = $ProviderOptions.Token
+    $providerDriveId = $ProviderOptions.DriveId
+    $modulePath = $ProviderOptions.ModulePath
+    $useRemoteSizeCalculator = if ($ProviderOptions.ContainsKey('UseRemoteSizeCalculator')) { [bool]$ProviderOptions.UseRemoteSizeCalculator } else { $false }
     
     # Función auxiliar para mostrar selector de unidades
     function Show-DriveSelector {
@@ -203,16 +220,33 @@ function Select-PathNavigator {
             $instructions = "Escriba para buscar │ ESC:Salir búsqueda │ Enter:Aplicar"
         }
         else {
-            $instructions = "↑↓:Nav │ Enter │ ←:Atrás │ ESPACIO:Tamaño │ F2:Unit │ F3:Red │ F4:Buscar │ F10:Sel │ ESC"
+            $tokens = @(
+                "↑↓:Nav",
+                "Enter",
+                "←:Atrás",
+                "ESPACIO:Tamaño",
+                "F4:Buscar",
+                "F10:Sel",
+                "ESC"
+            )
+            if ($allowDriveSelector) {
+                $tokens += "F2:Unidad"
+            }
+            if ($allowNetworkDiscovery) {
+                $tokens += "F3:Red"
+            }
+            $instructions = ($tokens -join " │ ")
         }
         
         if ($instructions.Length -gt $width) {
-            if ($SearchMode) {
-                $instructions = "Escriba para buscar │ ESC:Salir │ Enter"
+            $tokens = @("↑↓", "Enter", "ESPACIO:Tamaño", "F4", "F10", "ESC")
+            if ($allowDriveSelector) {
+                $tokens += "F2"
             }
-            else {
-                $instructions = "↑↓ │ Enter │ SPC:Size │ F2 │ F3 │ F4:🔍 │ F10 │ ESC"
+            if ($allowNetworkDiscovery) {
+                $tokens += "F3"
             }
+            $instructions = ($tokens -join " │ ")
         }
         
         # Centrar las instrucciones
@@ -254,7 +288,12 @@ function Select-PathNavigator {
             $pathDisplay = "Seleccione una unidad"
         }
         else {
-            $allItems = Get-DirectoryItems -Path $currentPath -AllowFiles $AllowFiles -SizeCache $script:DirectorySizeCache
+            if ($ItemProvider) {
+                $allItems = & $ItemProvider -Path $currentPath -AllowFiles $AllowFiles -SizeCache $script:DirectorySizeCache
+            }
+            else {
+                $allItems = Get-DirectoryItems -Path $currentPath -AllowFiles $AllowFiles -SizeCache $script:DirectorySizeCache
+            }
             $pathDisplay = $currentPath
         }
         
@@ -391,15 +430,78 @@ function Select-PathNavigator {
                     
                     # Iniciar cálculo en background
                     $job = Start-Job -ScriptBlock {
-                        param($Path)
-                        
+                        param($Path, $SelectedItem, $Token, $DriveId, $ModulePath, $UseRemote)
+
+                        if ($ModulePath) {
+                            try {
+                                Import-Module -LiteralPath $ModulePath -Force -ErrorAction Stop | Out-Null
+                            }
+                            catch {
+                            }
+                        }
+
+                        if ($UseRemote -and $SelectedItem) {
+                            $folderSizeCmd = Get-Command Get-OneDriveFolderSize -ErrorAction SilentlyContinue
+                            if ($folderSizeCmd) {
+                                return Get-OneDriveFolderSize -Token $Token -DriveId $DriveId -ItemId $SelectedItem.ItemId
+                            }
+                            
+                            function Get-OneDriveFolderSizeInline {
+                                param(
+                                    [string]$Token,
+                                    [string]$DriveId,
+                                    [string]$ItemId
+                                )
+                                if (-not $Token -or -not $DriveId -or -not $ItemId) {
+                                    return @{ Size = 0; Files = 0; Dirs = 0 }
+                                }
+
+                                $headers = @{ "Authorization" = "Bearer $Token" }
+                                $queue = @($ItemId)
+                                $totalSize = 0
+                                $fileCount = 0
+                                $dirCount = 0
+
+                                while ($queue.Count -gt 0) {
+                                    $currentId = $queue[0]
+                                    $queue = if ($queue.Count -gt 1) { $queue[1..($queue.Count - 1)] } else { @() }
+                                    $url = "https://graph.microsoft.com/v1.0/drives/$DriveId/items/$currentId/children?`$select=id,size,folder"
+                                    do {
+                                        try {
+                                            $response = Invoke-RestMethod -Uri $url -Headers $headers -Method Get -ErrorAction Stop
+                                        }
+                                        catch {
+                                            return @{ Size = $totalSize; Files = $fileCount; Dirs = $dirCount }
+                                        }
+
+                                        foreach ($child in $response.value) {
+                                            if ($child.folder) {
+                                                $dirCount++
+                                                $queue += $child.id
+                                            }
+                                            elseif ($child.size) {
+                                                $totalSize += [int64]$child.size
+                                                $fileCount++
+                                            }
+                                        }
+
+                                        $url = $response.'@odata.nextLink'
+                                    } while ($url)
+                                }
+
+                                return @{ Size = $totalSize; Files = $fileCount; Dirs = $dirCount }
+                            }
+
+                            return Get-OneDriveFolderSizeInline -Token $Token -DriveId $DriveId -ItemId $SelectedItem.ItemId
+                        }
+
                         function Get-DirSizeRecursive {
                             param($Path)
-                            
+
                             $size = 0
                             $files = 0
                             $dirs = 0
-                            
+
                             try {
                                 $items = Get-ChildItem -Path $Path -ErrorAction SilentlyContinue
                                 foreach ($item in $items) {
@@ -416,13 +518,13 @@ function Select-PathNavigator {
                                     }
                                 }
                             }
-                            catch { }
-                            
+                            catch {}
+
                             return @{ Size = $size; Files = $files; Dirs = $dirs }
                         }
-                        
-                        Get-DirSizeRecursive -Path $Path
-                    } -ArgumentList $dirPath
+
+                        return Get-DirSizeRecursive -Path $Path
+                    } -ArgumentList $dirPath, $selectedItem, $providerToken, $providerDriveId, $modulePath, $useRemoteSizeCalculator
                     
                     # Mostrar interfaz con spinner mientras calcula
                     while ($calculating) {
@@ -723,41 +825,45 @@ function Select-PathNavigator {
                 }
             }
             113 {
-                # F2 - Selector de unidades
-                $currentPath = " UNIDADES "
-                $selectedIndex = 0
-                $scrollOffset = 0
+                if ($allowDriveSelector) {
+                    # F2 - Selector de unidades
+                    $currentPath = " UNIDADES "
+                    $selectedIndex = 0
+                    $scrollOffset = 0
+                }
             }
             114 {
-                # F3 - Discovery de recursos UNC con credenciales
-                Write-Log "Usuario activó F3 para descubrir recursos de red" "INFO"
-                
-                # Guardar contexto actual
-                #$savedPath = $currentPath
-                
-                # Llamar a la función de discovery UNC
-                $uncResult = Select-NetworkPath -Purpose "NAVEGADOR"
-                
-                if ($uncResult -and $uncResult.Path) {
-                    # Si se seleccionó un recurso UNC, intentar acceder
-                    try {
-                        if (Test-Path $uncResult.Path) {
-                            $currentPath = $uncResult.Path
-                            $selectedIndex = 0
-                            $scrollOffset = 0
-                            Write-Log "Accedido exitosamente a: $($uncResult.Path)" "INFO"
+                if ($allowNetworkDiscovery) {
+                    # F3 - Discovery de recursos UNC con credenciales
+                    Write-Log "Usuario activó F3 para descubrir recursos de red" "INFO"
+                    
+                    # Guardar contexto actual
+                    #$savedPath = $currentPath
+                    
+                    # Llamar a la función de discovery UNC
+                    $uncResult = Select-NetworkPath -Purpose "NAVEGADOR"
+                    
+                    if ($uncResult -and $uncResult.Path) {
+                        # Si se seleccionó un recurso UNC, intentar acceder
+                        try {
+                            if (Test-Path $uncResult.Path) {
+                                $currentPath = $uncResult.Path
+                                $selectedIndex = 0
+                                $scrollOffset = 0
+                                Write-Log "Accedido exitosamente a: $($uncResult.Path)" "INFO"
+                            }
+                            else {
+                                Show-ConsolePopup -Title "Error de Acceso" -Message "No se puede acceder a:`n$($uncResult.Path)`n`nVerifique permisos o credenciales" -Options @("*OK") | Out-Null
+                                Write-Log "No se pudo acceder a: $($uncResult.Path)" "WARNING"
+                            }
                         }
-                        else {
-                            Show-ConsolePopup -Title "Error de Acceso" -Message "No se puede acceder a:`n$($uncResult.Path)`n`nVerifique permisos o credenciales" -Options @("*OK") | Out-Null
-                            Write-Log "No se pudo acceder a: $($uncResult.Path)" "WARNING"
+                        catch {
+                            Show-ConsolePopup -Title "Error" -Message "Error al acceder al recurso:`n$($_.Exception.Message)" -Options @("*OK") | Out-Null
+                            Write-Log "Error al acceder a recurso UNC: $($_.Exception.Message)" "ERROR" -ErrorRecord $_
                         }
                     }
-                    catch {
-                        Show-ConsolePopup -Title "Error" -Message "Error al acceder al recurso:`n$($_.Exception.Message)" -Options @("*OK") | Out-Null
-                        Write-Log "Error al acceder a recurso UNC: $($_.Exception.Message)" "ERROR" -ErrorRecord $_
-                    }
+                    # Si se canceló, mantener ruta actual
                 }
-                # Si se canceló, mantener ruta actual
             }
             121 {
                 # F10
@@ -792,8 +898,3 @@ function Select-PathNavigator {
 Export-ModuleMember -Function @(
     'Select-PathNavigator'
 )
-
-
-
-
-

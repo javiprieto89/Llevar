@@ -1,4 +1,4 @@
-﻿# Script de prueba automatizado para FTP
+# Script de prueba automatizado para FTP
 # Simula la interacción del usuario
 
 $inputs = @(

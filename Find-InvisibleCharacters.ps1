@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     Escanea todos los módulos .ps1 y .psm1 buscando caracteres invisibles
     y genera un archivo de reporte InvisibleCharsReport.txt

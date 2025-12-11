@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     Maneja el parámetro -RobocopyMirror para ejecutar copia espejo con Robocopy.
 

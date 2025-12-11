@@ -1,4 +1,4 @@
-﻿# ========================================================================== #
+# ========================================================================== #
 #                         MÓDULO: MENÚS INTERACTIVOS                         #
 # ========================================================================== #
 # Propósito: Menús DOS y popups para interfaces interactivas
@@ -114,8 +114,8 @@ function Show-DosMenu {
     ) + $meta
 
     # -----------------------------#
-# 3) CALCULAR TAMAÑOS         #
-# -----------------------------#
+    # 3) CALCULAR TAMAÑOS         #
+    # -----------------------------#
 
     $leftIndent = 2      # espacios después del borde izquierdo
     $rightMargin = 2      # margen a la derecha de la opción más larga

@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     Tests para funcionalidad de OneDrive en Llevar.ps1
 
@@ -28,6 +28,9 @@ param(
 
 # Importar módulo de Pester si está disponible
 $pesterAvailable = $null -ne (Get-Module -ListAvailable -Name Pester)
+if ($pesterAvailable) {
+    Import-Module Pester -Force -ErrorAction SilentlyContinue | Out-Null
+}
 
 Show-Banner "TESTS DE ONEDRIVE" -BorderColor Cyan -TextColor Yellow
 

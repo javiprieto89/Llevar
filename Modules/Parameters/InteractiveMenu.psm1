@@ -1,4 +1,4 @@
-﻿using module "Q:\Utilidad\LLevar\Modules\Core\TransferConfig.psm1"
+using module "Q:\Utilidad\LLevar\Modules\Core\TransferConfig.psm1"
 
 <#
 .SYNOPSIS
@@ -222,23 +222,23 @@ function Invoke-InteractiveMenu {
             if ($Global:VerboseLogging) {
                 Write-Log "=== CONFIGURACIÓN TRANSFERCONFIG ===" "DEBUG"
                 $origenPath = switch ($transferConfig.Origen.Tipo) {
-                    "Local"   { $transferConfig.Origen.Local.Path }
-                    "UNC"     { $transferConfig.Origen.UNC.Path }
-                    "FTP"     { $transferConfig.Origen.FTP.Directory }
-                    "OneDrive"{ $transferConfig.Origen.OneDrive.Path }
+                    "Local" { $transferConfig.Origen.Local.Path }
+                    "UNC" { $transferConfig.Origen.UNC.Path }
+                    "FTP" { $transferConfig.Origen.FTP.Directory }
+                    "OneDrive" { $transferConfig.Origen.OneDrive.Path }
                     "Dropbox" { $transferConfig.Origen.Dropbox.Path }
-                    default   { $null }
+                    default { $null }
                 }
                 $destinoPath = switch ($transferConfig.Destino.Tipo) {
-                    "Local"    { $transferConfig.Destino.Local.Path }
-                    "USB"      { $transferConfig.Destino.USB.Path }
-                    "UNC"      { $transferConfig.Destino.UNC.Path }
-                    "FTP"      { $transferConfig.Destino.FTP.Directory }
+                    "Local" { $transferConfig.Destino.Local.Path }
+                    "USB" { $transferConfig.Destino.USB.Path }
+                    "UNC" { $transferConfig.Destino.UNC.Path }
+                    "FTP" { $transferConfig.Destino.FTP.Directory }
                     "OneDrive" { $transferConfig.Destino.OneDrive.Path }
-                    "Dropbox"  { $transferConfig.Destino.Dropbox.Path }
-                    "ISO"      { $transferConfig.Destino.ISO.OutputPath }
+                    "Dropbox" { $transferConfig.Destino.Dropbox.Path }
+                    "ISO" { $transferConfig.Destino.ISO.OutputPath }
                     "Diskette" { $transferConfig.Destino.Diskette.OutputPath }
-                    default    { $null }
+                    default { $null }
                 }
                 Write-Log "Origen Tipo: $($transferConfig.Origen.Tipo) Path: $origenPath" "DEBUG"
                 Write-Log "Destino Tipo: $($transferConfig.Destino.Tipo) Path: $destinoPath" "DEBUG"

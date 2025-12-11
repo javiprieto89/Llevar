@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     Simulador de dispositivos USB para tests de Llevar.ps1
 

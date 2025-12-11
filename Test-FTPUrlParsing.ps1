@@ -1,4 +1,4 @@
-﻿using module ".\Modules\Core\TransferConfig.psm1"
+using module ".\Modules\Core\TransferConfig.psm1"
 
 # Test de parseo de URLs FTP
 Write-Host "`n========== TEST PARSEO URL FTP ==========" -ForegroundColor Magenta

@@ -1,4 +1,4 @@
-﻿using module "Q:\Utilidad\LLevar\Modules\Core\TransferConfig.psm1"
+using module "Q:\Utilidad\LLevar\Modules\Core\TransferConfig.psm1"
 
 $ErrorActionPreference = 'Stop'
 

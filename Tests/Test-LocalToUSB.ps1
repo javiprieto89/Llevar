@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     Test individual: Local → USB
 

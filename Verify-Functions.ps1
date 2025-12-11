@@ -1,4 +1,4 @@
-﻿# ========================================================================== #
+# ========================================================================== #
 #         SCRIPT DE VERIFICACIÓN DE FUNCIONES Y MODULARIZACIÓN              #
 # ========================================================================== #
 # Verifica:
@@ -32,8 +32,8 @@ Get-ChildItem "$PSScriptRoot\Modules" -Recurse -Filter "*.psm1" | ForEach-Object
     $content = Get-Content $modulePath -Raw
     
     # Extraer definiciones de funciones
-    $matches = [regex]::Matches($content, 'function\s+([\w-]+)')
-    foreach ($match in $matches) {
+    $matchInfo = [regex]::Matches($content, 'function\s+([\w-]+)')
+    foreach ($match in $matchInfo) {
         $funcName = $match.Groups[1].Value
         if (-not $functions.ContainsKey($funcName)) {
             $functions[$funcName] = @()

@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     Módulo para manejo de copias a diskettes (disquetes)
 

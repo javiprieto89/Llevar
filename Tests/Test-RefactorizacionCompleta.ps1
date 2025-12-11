@@ -1,4 +1,4 @@
-﻿# ========================================================================== #
+# ========================================================================== #
 #           PRUEBA INTEGRAL DE REFACTORIZACIÓN TRANSFERCONFIG               #
 # ========================================================================== #
 # Archivo: Tests\Test-RefactorizacionCompleta.ps1
@@ -191,7 +191,7 @@ try {
     
     # Validación manual temporal
     $isValid = (-not [string]::IsNullOrEmpty($llevar.Origen.Tipo)) -and 
-               (-not [string]::IsNullOrEmpty($llevar.Destino.Tipo))
+    (-not [string]::IsNullOrEmpty($llevar.Destino.Tipo))
     
     if ($isValid) {
         Write-Host "✓ Configuración válida y completa" -ForegroundColor Green

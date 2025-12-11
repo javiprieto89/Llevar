@@ -1,4 +1,4 @@
-﻿# Importar clases de TransferConfig (using module debe estar al inicio)
+# Importar clases de TransferConfig (using module debe estar al inicio)
 using module "Q:\Utilidad\LLevar\Modules\Core\TransferConfig.psm1"
 
 <#
@@ -398,24 +398,24 @@ function Initialize-TransferPaths {
     
     # Derivar rutas base directamente desde TransferConfig
     switch ($TransferConfig.Origen.Tipo) {
-        "Local"   { $Origen = $TransferConfig.Origen.Local.Path }
-        "UNC"     { $Origen = $TransferConfig.Origen.UNC.Path }
-        "FTP"     { $Origen = $TransferConfig.Origen.FTP.Directory }
-        "OneDrive"{ $Origen = $TransferConfig.Origen.OneDrive.Path }
+        "Local" { $Origen = $TransferConfig.Origen.Local.Path }
+        "UNC" { $Origen = $TransferConfig.Origen.UNC.Path }
+        "FTP" { $Origen = $TransferConfig.Origen.FTP.Directory }
+        "OneDrive" { $Origen = $TransferConfig.Origen.OneDrive.Path }
         "Dropbox" { $Origen = $TransferConfig.Origen.Dropbox.Path }
-        default   { $Origen = $null }
+        default { $Origen = $null }
     }
 
     switch ($TransferConfig.Destino.Tipo) {
-        "Local"   { $Destino = $TransferConfig.Destino.Local.Path }
-        "USB"     { $Destino = $TransferConfig.Destino.USB.Path }
-        "UNC"     { $Destino = $TransferConfig.Destino.UNC.Path }
-        "FTP"     { $Destino = $TransferConfig.Destino.FTP.Directory }
-        "OneDrive"{ $Destino = $TransferConfig.Destino.OneDrive.Path }
+        "Local" { $Destino = $TransferConfig.Destino.Local.Path }
+        "USB" { $Destino = $TransferConfig.Destino.USB.Path }
+        "UNC" { $Destino = $TransferConfig.Destino.UNC.Path }
+        "FTP" { $Destino = $TransferConfig.Destino.FTP.Directory }
+        "OneDrive" { $Destino = $TransferConfig.Destino.OneDrive.Path }
         "Dropbox" { $Destino = $TransferConfig.Destino.Dropbox.Path }
-        "ISO"     { $Destino = $TransferConfig.Destino.ISO.OutputPath }
-        "Diskette"{ $Destino = $TransferConfig.Destino.Diskette.OutputPath }
-        default   { $Destino = $null }
+        "ISO" { $Destino = $TransferConfig.Destino.ISO.OutputPath }
+        "Diskette" { $Destino = $TransferConfig.Destino.Diskette.OutputPath }
+        default { $Destino = $null }
     }
 
     $origenMontado = $Origen

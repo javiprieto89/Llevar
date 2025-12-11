@@ -1,4 +1,4 @@
-﻿# 📘 Arquitectura TransferConfig - Sistema Unificado de Transferencias
+# 📘 Arquitectura TransferConfig - Sistema Unificado de Transferencias
 
 ## 🎯 **Objetivo**
 

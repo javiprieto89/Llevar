@@ -1,4 +1,4 @@
-﻿# ============================================================================
+# ============================================================================
 # Instalar-MenuContextual.ps1
 # Instala el menú contextual "Llevar A..." en Windows 10/11
 # Ejecutar como ADMINISTRADOR

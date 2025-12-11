@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     Tests de integración para Llevar.ps1
 

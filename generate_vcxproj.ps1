@@ -1,4 +1,4 @@
-﻿# Script para generar automáticamente los Include en Llevar.vcxproj
+# Script para generar automáticamente los Include en Llevar.vcxproj
 # basándose en los archivos reales del disco
 
 param(

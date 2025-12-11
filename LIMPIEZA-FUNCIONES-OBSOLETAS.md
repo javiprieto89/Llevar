@@ -1,4 +1,4 @@
-﻿# 🧹 Limpieza de Funciones Obsoletas - OneDrive y Dropbox
+# 🧹 Limpieza de Funciones Obsoletas - OneDrive y Dropbox
 
 ## 📋 Resumen
 

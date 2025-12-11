@@ -1,4 +1,4 @@
-﻿# *********************************************************************************************
+# *********************************************************************************************
 # SE MANTIENE POR COMPATIBILIDAD CON LA TERCERA EDAD LO VIEJO SIRVE JUAN ehhhhhh ALEJANDRO xD #
 # ********************************************************************************************* 
 # Con el mayor de los respetos, para alguien por el que siempre senti mucha admiración, a modo homenaje, 
@@ -643,7 +643,7 @@ try {
     if ($Global:LogFile) {
         try {
             $endTime = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-            Add-Content -Path $Global:LogFile -Value "`n========================================" -Encoding UTF8
+            Add-Content -Path $Global:LogFile -Value "========================================" -Encoding UTF8
             Add-Content -Path $Global:LogFile -Value "Finalización: $endTime" -Encoding UTF8
             Add-Content -Path $Global:LogFile -Value "========================================" -Encoding UTF8
         }
@@ -690,7 +690,7 @@ $($_ | Out-String)
         Show-Banner "❌ ERROR CRÍTICO NO MANEJADO" -BorderColor Red -TextColor White -Padding 2
     }
     catch {
-        Write-Host "`n╔══════════════════════════════════════╗" -ForegroundColor Red
+        Write-Host "╔══════════════════════════════════════╗" -ForegroundColor Red
         Write-Host "║    ❌ ERROR CRÍTICO NO MANEJADO      ║" -ForegroundColor Red
         Write-Host "╚══════════════════════════════════════╝" -ForegroundColor Red
     }

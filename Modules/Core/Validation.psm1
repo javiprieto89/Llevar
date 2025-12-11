@@ -1,4 +1,4 @@
-﻿# Q:\Utilidad\LLevar\Modules\Core\Validation.psm1
+# Q:\Utilidad\LLevar\Modules\Core\Validation.psm1
 # Módulo de validaciones para Llevar.ps1
 # Proporciona funciones para validar rutas, permisos, versiones de Windows,
 # detección de IDEs y validación de tipos de rutas (FTP, OneDrive, Dropbox, etc.)

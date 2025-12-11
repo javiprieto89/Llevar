@@ -1,4 +1,4 @@
-﻿# ========================================================================== #
+# ========================================================================== #
 #                         MÓDULO: OPERACIONES DROPBOX                        #
 # ========================================================================== #
 # Propósito: Configuración, validación y operaciones con Dropbox
@@ -68,10 +68,10 @@ function Send-LlevarDropboxFile {
     if (-not $remoteFolder.StartsWith('/')) {
         $remoteFolder = "/$remoteFolder"
     }
-    $remoteFolder = $remoteFolder.Replace('//','/')
+    $remoteFolder = $remoteFolder.Replace('//', '/')
 
-    $fileName       = [System.IO.Path]::GetFileName($LocalPath)
-    $remoteFullPath = "$remoteFolder/$fileName".Replace('//','/')
+    $fileName = [System.IO.Path]::GetFileName($LocalPath)
+    $remoteFullPath = "$remoteFolder/$fileName".Replace('//', '/')
 
     $bytes = [System.IO.File]::ReadAllBytes($LocalPath)
 

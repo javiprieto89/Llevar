@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     Módulo común para importar todas las dependencias necesarias en los tests.
 

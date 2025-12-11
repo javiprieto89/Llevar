@@ -1,4 +1,4 @@
-﻿# ✅ Corrección Completa: Error FTP PSCustomObject → Hashtable
+# ✅ Corrección Completa: Error FTP PSCustomObject → Hashtable
 
 ## 🎯 **Problema Resuelto**
 

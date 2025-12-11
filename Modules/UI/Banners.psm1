@@ -1,4 +1,4 @@
-﻿# ============================================================================ #
+# ============================================================================ #
 # Archivo: Q:\Utilidad\LLevar\Modules\UI\Banners.psm1
 # Descripción: Funciones para mostrar banners, logos ASCII y mensajes de bienvenida
 # ============================================================================ #
@@ -444,7 +444,11 @@ function Show-AsciiLogo {
     
     # === CENTRAR VERTICALMENTE ===
     $verticalPadding = [Math]::Max(0, [Math]::Floor(($consoleHeight - $logoHeight - 2) / 2))
-    
+    # === REPRODUCIR SONIDO ESTILO DOS ===
+    if ($PlaySound) {
+        #Invoke-DOSBeep -Style 'GameBoy'
+        Start-DOSBeepAsync -Style 'GameBoy'
+    }
     # === DIBUJAR LOGO ===
     for ($i = 0; $i -lt $effectiveLines.Count; $i++) {
         $verticalPos = $verticalPadding + $i
@@ -477,9 +481,9 @@ function Show-AsciiLogo {
         Write-Host $line -ForegroundColor $ForegroundColor -BackgroundColor $BackgroundColor -NoNewline
         
         # === REPRODUCIR SONIDO ESTILO DOS ===
-        if ($PlaySound) {
-            Invoke-DOSBeep -LineIndex $i -TotalLines $effectiveLines.Count
-        }
+        #if ($PlaySound) {
+        #    Invoke-DOSBeep -LineIndex $i -TotalLines $effectiveLines.Count -Style 'GameBoy'
+        #
         
         # === LLAMAR A LA FUNCIÓN DE BARRA DE PROGRESO ===
         if ($ShowProgress) {

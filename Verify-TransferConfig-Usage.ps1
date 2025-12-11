@@ -1,4 +1,4 @@
-﻿# ========================================================================== #
+# ========================================================================== #
 #    VERIFICACIÓN DE USO CORRECTO DE TRANSFERCONFIG EN MÓDULOS               #
 # ========================================================================== #
 # Propósito: Detectar funciones que reciben parámetros individuales cuando
@@ -58,11 +58,11 @@ foreach ($module in $transferModules) {
                     foreach ($pattern in $problematicPatterns) {
                         if ($paramBlock -match $pattern.Pattern) {
                             $issue = @{
-                                Module      = $moduleName
-                                Function    = $funcName
-                                Issue       = $pattern.Description
-                                Severity    = "HIGH"
-                                Suggestion  = "Debería recibir [TransferConfig] en lugar de parámetros individuales"
+                                Module     = $moduleName
+                                Function   = $funcName
+                                Issue      = $pattern.Description
+                                Severity   = "HIGH"
+                                Suggestion = "Debería recibir [TransferConfig] en lugar de parámetros individuales"
                             }
                             $issues += $issue
                             
@@ -112,11 +112,11 @@ foreach ($module in (Get-ChildItem "$PSScriptRoot\Modules" -Filter "*.psm1" -Rec
                 Write-Host "      • $funcName" -ForegroundColor Yellow
                 
                 $issues += @{
-                    Module      = $moduleName
-                    Function    = $funcName
-                    Issue       = "Función definida DESPUÉS de Export-ModuleMember"
-                    Severity    = "HIGH"
-                    Suggestion  = "Mover la función ANTES de Export-ModuleMember"
+                    Module     = $moduleName
+                    Function   = $funcName
+                    Issue      = "Función definida DESPUÉS de Export-ModuleMember"
+                    Severity   = "HIGH"
+                    Suggestion = "Mover la función ANTES de Export-ModuleMember"
                 }
             }
         }
@@ -137,14 +137,14 @@ foreach ($module in (Get-ChildItem "$PSScriptRoot\Modules" -Filter "*.psm1" -Rec
     
     # Extraer funciones definidas
     $definedFunctions = [regex]::Matches($content, 'function\s+([\w-]+)') | 
-        ForEach-Object { $_.Groups[1].Value }
+    ForEach-Object { $_.Groups[1].Value }
     
     # Extraer funciones exportadas
     $exportedFunctions = @()
     if ($content -match "Export-ModuleMember.*?@\((.*?)\)") {
         $exportBlock = $Matches[1]
         $exportedFunctions = [regex]::Matches($exportBlock, "'([\w-]+)'") | 
-            ForEach-Object { $_.Groups[1].Value }
+        ForEach-Object { $_.Groups[1].Value }
     }
     
     # Buscar funciones públicas no exportadas (que empiezan con verbos aprobados)
@@ -163,11 +163,11 @@ foreach ($module in (Get-ChildItem "$PSScriptRoot\Modules" -Filter "*.psm1" -Rec
             Write-Host "      • $funcName" -ForegroundColor Gray
             
             $issues += @{
-                Module      = $moduleName
-                Function    = $funcName
-                Issue       = "Función pública sin exportar"
-                Severity    = "MEDIUM"
-                Suggestion  = "Agregar '$funcName' al Export-ModuleMember"
+                Module     = $moduleName
+                Function   = $funcName
+                Issue      = "Función pública sin exportar"
+                Severity   = "MEDIUM"
+                Suggestion = "Agregar '$funcName' al Export-ModuleMember"
             }
         }
     }
@@ -203,11 +203,11 @@ foreach ($module in $transferModules) {
                 Write-Host "$moduleName usa $funcName pero no importa $requiredModule" -ForegroundColor Yellow
                 
                 $issues += @{
-                    Module      = $moduleName
-                    Function    = "N/A"
-                    Issue       = "Falta import de $requiredModule para usar $funcName"
-                    Severity    = "MEDIUM"
-                    Suggestion  = "Agregar: Import-Module `"...\$requiredModule`""
+                    Module     = $moduleName
+                    Function   = "N/A"
+                    Issue      = "Falta import de $requiredModule para usar $funcName"
+                    Severity   = "MEDIUM"
+                    Suggestion = "Agregar: Import-Module `"...\$requiredModule`""
                 }
             }
         }

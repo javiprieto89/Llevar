@@ -1,4 +1,4 @@
-﻿using module ".\Modules\Core\TransferConfig.psm1"
+using module ".\Modules\Core\TransferConfig.psm1"
 
 # Test completo del flujo TransferConfig
 Write-Host "`n========== TEST TRANSFERCONFIG ==========" -ForegroundColor Magenta
@@ -162,8 +162,8 @@ if ($isComplete) {
 }
 else {
     Write-Host "   ✗ Configuración INCOMPLETA" -ForegroundColor Red
-    foreach ($error in $errors) {
-        Write-Host "     $error" -ForegroundColor Yellow
+    foreach ($err in $errors) {
+        Write-Host "     $err" -ForegroundColor Yellow
     }
 }
 

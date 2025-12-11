@@ -1,4 +1,4 @@
-﻿function Invoke-ExampleParameter {
+function Invoke-ExampleParameter {
     param(
         [switch]$Ejemplo,
         [ValidateSet("local", "iso-cd", "iso-dvd", "ftp", "onedrive", "dropbox")]

@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     Módulo de pruebas individuales para componentes de LLEVAR
 

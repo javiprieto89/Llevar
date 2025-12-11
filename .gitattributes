@@ -1,3 +1,8 @@
-﻿*.ps1 text working-tree-encoding=UTF-8-BOM
-*.psm1 text working-tree-encoding=UTF-8-BOM
-*.psd1 text working-tree-encoding=UTF-8-BOM
+# Normalizar line endings
+* text=auto eol=lf
+
+# Scripts de PowerShell siempre UTF-8 sin BOM
+*.ps1  text eol=lf
+*.psm1 text eol=lf
+*.psd1 text eol=lf
+

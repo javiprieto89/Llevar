@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     Demo de la función Show-Banner
 

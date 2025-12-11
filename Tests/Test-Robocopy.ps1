@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     Tests para funcionalidad de Robocopy Mirror en Llevar.ps1
 
@@ -63,8 +63,6 @@ Write-Host ""
 Write-Host "[TEST 2] Validación de parámetros de Robocopy" -ForegroundColor Cyan
 
 $expectedParams = @('/MIR', '/R:3', '/W:5', '/NP')
-$paramsValid = $true
-
 foreach ($param in $expectedParams) {
     Write-Host "  ✓ " -NoNewline -ForegroundColor Green
     Write-Host "Parámetro $param configurado" -ForegroundColor Gray

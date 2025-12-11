@@ -1,12 +1,9 @@
-﻿# ========================================================================== #
+# ========================================================================== #
 #                    MÓDULO: DISPATCHER UNIFICADO DE TRANSFERENCIAS          #
 # ========================================================================== #
 # Propósito: Orquestador inteligente que detecta todas las combinaciones posibles
 # Arquitectura: Funciones públicas legibles → Dispatcher genérico → Handlers específicos
 # ========================================================================== #
-
-# Importar TransferConfig
-using module "Q:\Utilidad\LLevar\Modules\Core\TransferConfig.psm1"
 
 # Imports necesarios
 $ModulesPath = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
@@ -17,6 +14,7 @@ Import-Module (Join-Path $ModulesPath "Modules\Transfer\UNC.psm1") -Force -Globa
 Import-Module (Join-Path $ModulesPath "Modules\Transfer\Floppy.psm1") -Force -Global
 Import-Module (Join-Path $ModulesPath "Modules\System\FileSystem.psm1") -Force -Global
 Import-Module (Join-Path $ModulesPath "Modules\Compression\SevenZip.psm1") -Force -Global
+Import-Module (Join-Path $ModulesPath ".\Modules\Core\TransferConfig.psm1") -Force -Global
 
 # ========================================================================== #
 #                  FUNCIONES PÚBLICAS (NOMBRES DESCRIPTIVOS)                 #
@@ -284,77 +282,88 @@ function Invoke-LocalToFtp {
     }
     
     # Obtener configuración FTP destino
-    $ftpServer = $null
-    $ftpPort = 21
-    $ftpUser = $null
-    $ftpPassword = $null
-    $ftpDirectory = "/"
-    $useSsl = $false
-    
-    with ($Llevar.Destino.FTP) {
-        $ftpServer = .Server
-        $ftpPort = if (.Port -gt 0) { .Port } else { 21 }
-        $ftpUser = .User
-        $ftpPassword = .Password
-        $ftpDirectory = if (.Directory) { .Directory } else { "/" }
-        $useSsl = .UseSsl
+    $ftpConfig = [PSCustomObject]@{
+        Server    = $null
+        Port      = 21
+        User      = $null
+        Password  = $null
+        Directory = "/"
+        UseSsl    = $false
     }
-    
-    if (-not $ftpServer -or -not $ftpUser) {
+
+    with ($Llevar.Destino.FTP) {
+        $ftpConfig.Server = .Server
+        $ftpConfig.Port = if (.Port -gt 0) { .Port } else { 21 }
+        $ftpConfig.User = .User
+        $ftpConfig.Password = .Password
+        $ftpConfig.Directory = if (.Directory) { .Directory } else { "/" }
+        $ftpConfig.UseSsl = .UseSsl
+    }
+
+    if (-not $ftpConfig.Server -or -not $ftpConfig.User) {
         throw "Local→FTP: Configuración FTP incompleta (falta Server o User)"
     }
-    
+
     # Normalizar servidor (agregar protocolo si falta)
-    if ($ftpServer -notlike "ftp://*" -and $ftpServer -notlike "ftps://*") {
-        $ftpServer = if ($useSsl) { "ftps://$ftpServer" } else { "ftp://$ftpServer" }
+    if ($ftpConfig.Server -notlike "ftp://*" -and $ftpConfig.Server -notlike "ftps://*") {
+        $ftpConfig.Server = if ($ftpConfig.UseSsl) { "ftps://$($ftpConfig.Server)" } else { "ftp://$($ftpConfig.Server)" }
     }
-    
+
     # Normalizar directorio (asegurar que comienza con /)
-    if (-not $ftpDirectory.StartsWith('/')) {
-        $ftpDirectory = "/$ftpDirectory"
+    if (-not $ftpConfig.Directory.StartsWith('/')) {
+        $ftpConfig.Directory = "/$($ftpConfig.Directory)"
+    }
+
+    if ($ftpConfig.Password -is [System.Security.SecureString]) {
+        $ftpConfig.SecurePassword = $ftpConfig.Password
+    }
+    elseif ($ftpConfig.Password) {
+        $ftpConfig.SecurePassword = ConvertTo-SecureString -String $ftpConfig.Password -AsPlainText -Force
+    }
+    else {
+        $ftpConfig.SecurePassword = $null
     }
     
-    Write-Log "Local→FTP: $sourcePath → $ftpServer$ftpDirectory" "INFO"
+    Write-Log "Local→FTP: $sourcePath → $($ftpConfig.Server)$($ftpConfig.Directory)" "INFO"
     
     if ($ShowProgress) {
         Write-LlevarProgressBar -Percent 0 -StartTime $StartTime -Label "Subiendo a FTP..." -Top $ProgressTop -Width 50
     }
     
     # Función auxiliar para subir un archivo
-    function Upload-FileToFtp {
+    function Send-LlevarFtpFile {
         param(
+            [Parameter(Mandatory = $true)]
             [string]$LocalPath,
+            [Parameter(Mandatory = $true)]
             [string]$RemotePath,
-            [string]$Server,
-            [int]$Port,
-            [string]$User,
-            [string]$Password,
-            [bool]$UseSsl
+            [Parameter(Mandatory = $true)]
+            [pscustomobject]$Config
         )
-        
+
         try {
-            $uri = [uri]"$Server$RemotePath"
+            $uri = [uri]"$($Config.Server)$RemotePath"
             $request = [System.Net.FtpWebRequest]::Create($uri)
             $request.Method = [System.Net.WebRequestMethods+Ftp]::UploadFile
-            $request.Credentials = New-Object System.Net.NetworkCredential($User, $Password)
+            $request.Credentials = New-Object System.Net.NetworkCredential($Config.User, $Config.SecurePassword)
             $request.UsePassive = $true
             $request.UseBinary = $true
             $request.KeepAlive = $false
-            
-            if ($UseSsl) {
+
+            if ($Config.UseSsl) {
                 $request.EnableSsl = $true
             }
-            
+
             $fileContent = [System.IO.File]::ReadAllBytes($LocalPath)
             $request.ContentLength = $fileContent.Length
-            
+
             $requestStream = $request.GetRequestStream()
             $requestStream.Write($fileContent, 0, $fileContent.Length)
             $requestStream.Close()
-            
+
             $response = $request.GetResponse()
             $response.Close()
-            
+
             return $true
         }
         catch {
@@ -362,29 +371,27 @@ function Invoke-LocalToFtp {
             return $false
         }
     }
-    
+
     # Función auxiliar para crear directorio en FTP
-    function Create-FtpDirectory {
+    function New-LlevarFtpDirectory {
         param(
+            [Parameter(Mandatory = $true)]
             [string]$RemotePath,
-            [string]$Server,
-            [int]$Port,
-            [string]$User,
-            [string]$Password,
-            [bool]$UseSsl
+            [Parameter(Mandatory = $true)]
+            [pscustomobject]$Config
         )
-        
+
         try {
-            $uri = [uri]"$Server$RemotePath"
+            $uri = [uri]"$($Config.Server)$RemotePath"
             $request = [System.Net.FtpWebRequest]::Create($uri)
             $request.Method = [System.Net.WebRequestMethods+Ftp]::MakeDirectory
-            $request.Credentials = New-Object System.Net.NetworkCredential($User, $Password)
+            $request.Credentials = New-Object System.Net.NetworkCredential($Config.User, $Config.SecurePassword)
             $request.UsePassive = $true
-            
-            if ($UseSsl) {
+
+            if ($Config.UseSsl) {
                 $request.EnableSsl = $true
             }
-            
+
             $response = $request.GetResponse()
             $response.Close()
             return $true
@@ -399,7 +406,7 @@ function Invoke-LocalToFtp {
     }
     
     # Asegurar que el directorio destino existe
-    Create-FtpDirectory -RemotePath $ftpDirectory -Server $ftpServer -Port $ftpPort -User $ftpUser -Password $ftpPassword -UseSsl $useSsl | Out-Null
+    New-LlevarFtpDirectory -RemotePath $ftpConfig.Directory -Config $ftpConfig | Out-Null
     
     # Obtener todos los archivos a subir
     $files = @()
@@ -422,17 +429,17 @@ function Invoke-LocalToFtp {
             $file.Name
         }
         
-        $remotePath = "$ftpDirectory/$relativePath".Replace('//', '/')
+        $remotePath = "$($ftpConfig.Directory)/$relativePath".Replace('//', '/')
         
         # Crear directorios padre si es necesario
         $remoteDir = Split-Path $remotePath -Parent
-        if ($remoteDir -and $remoteDir -ne $ftpDirectory) {
-            $dirParts = $remoteDir.Replace($ftpDirectory, '').TrimStart('/').Split('/')
-            $currentDir = $ftpDirectory
+        if ($remoteDir -and $remoteDir -ne $ftpConfig.Directory) {
+            $dirParts = $remoteDir.Replace($ftpConfig.Directory, '').TrimStart('/').Split('/')
+            $currentDir = $ftpConfig.Directory
             foreach ($dirPart in $dirParts) {
                 if ($dirPart) {
                     $currentDir = "$currentDir/$dirPart".Replace('//', '/')
-                    Create-FtpDirectory -RemotePath $currentDir -Server $ftpServer -Port $ftpPort -User $ftpUser -Password $ftpPassword -UseSsl $useSsl | Out-Null
+                    New-LlevarFtpDirectory -RemotePath $currentDir -Config $ftpConfig | Out-Null
                 }
             }
         }
@@ -442,8 +449,8 @@ function Invoke-LocalToFtp {
             Write-LlevarProgressBar -Percent $percent -StartTime $StartTime -Label "Subiendo: $($file.Name)..." -Top $ProgressTop -Width 50
         }
         
-        $success = Upload-FileToFtp -LocalPath $file.FullName -RemotePath $remotePath `
-            -Server $ftpServer -Port $ftpPort -User $ftpUser -Password $ftpPassword -UseSsl $useSsl
+        $success = Send-LlevarFtpFile -LocalPath $file.FullName -RemotePath $remotePath `
+            -Config $ftpConfig
         
         if (-not $success) {
             throw "Error al subir archivo: $($file.Name)"
@@ -754,17 +761,8 @@ function Invoke-LocalToISO {
     }
     
     # Obtener configuración ISO destino
-    $isoOutputPath = $null
-    $isoSize = "dvd"
-    $isoVolumeSize = 4500MB
-    $isoVolumeName = "LLEVAR"
-    
-    with ($Llevar.Destino.ISO) {
-        $isoOutputPath = .OutputPath
-        $isoSize = if (.Size) { .Size } else { "dvd" }
-        $isoVolumeSize = if (.VolumeSize -gt 0) { .VolumeSize } else { 4500MB }
-        $isoVolumeName = if (.VolumeName) { .VolumeName } else { "LLEVAR" }
-    }
+    $isoOutputPath = with ($Llevar.Destino.ISO) { .OutputPath }
+    $isoSize = with ($Llevar.Destino.ISO) { if (.Size) { .Size } else { "dvd" } }
     
     if (-not $isoOutputPath) {
         # Si no hay ruta de salida, usar el directorio del origen
