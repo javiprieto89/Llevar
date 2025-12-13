@@ -145,7 +145,14 @@ function Write-Log {
     
     # Escribir al archivo de log
     try {
-        Add-Content -Path $Global:LogFile -Value $logEntry -Encoding UTF8
+        if ($Global:LogFile) {
+            Add-Content -Path $Global:LogFile -Value $logEntry -Encoding UTF8
+        }
+        else {
+            # Si no hay LogFile global definido, usar TEMP
+            $tempLog = Join-Path $env:TEMP "LLEVAR_ERROR.log"
+            Add-Content -Path $tempLog -Value $logEntry -Encoding UTF8
+        }
     }
     catch {
         # Si falla el log, intentar escribir en TEMP

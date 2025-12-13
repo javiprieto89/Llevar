@@ -8,11 +8,6 @@
     Mapea la configuración del menú a las variables del script.
 #>
 
-$ModulesPath = Split-Path $PSScriptRoot -Parent
-if (-not (Get-Module -Name 'TransferConfig')) {
-    Import-Module (Join-Path $ModulesPath "Core\TransferConfig.psm1") -Force -Global
-}
-
 function Invoke-InteractiveMenu {
     <#
     .SYNOPSIS
@@ -52,7 +47,7 @@ function Invoke-InteractiveMenu {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory = $true)]
-        [TransferConfig]$TransferConfig,
+        $TransferConfig,
         
         [Parameter(Mandatory = $false)]
         [switch]$Ayuda,

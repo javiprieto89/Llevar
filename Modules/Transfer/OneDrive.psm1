@@ -32,6 +32,7 @@ Export-ModuleMember -Function @(
     'Receive-OneDriveFile',
     'Test-OneDriveConnection',
     'Send-LlevarOneDriveFile',
+    'New-OneDriveFolder',
     'Resolve-OneDrivePath',
     'Get-OneDriveParentPath',
     'Convert-GraphItemToNavigatorEntry',

@@ -5,6 +5,28 @@
 # Funciones refactorizadas para usar TransferConfig como única fuente de verdad
 # ========================================================================== #
 
+# Cargar clase TransferConfig si no está disponible
+$transferConfigTypeLoaded = $false
+try {
+    $null = [TransferConfig] -as [type]
+    $transferConfigTypeLoaded = $true
+}
+catch {
+    $transferConfigTypeLoaded = $false
+}
+
+if (-not $transferConfigTypeLoaded) {
+    $ModulesPath = Split-Path $PSScriptRoot -Parent
+    $transferConfigType = Join-Path $ModulesPath "Core\TransferConfig.Type.ps1"
+    
+    if (Test-Path $transferConfigType) {
+        . $transferConfigType
+    }
+    else {
+        throw "ERROR CRÍTICO: No se puede cargar TransferConfig.Type.ps1 desde $transferConfigType"
+    }
+}
+
 # Imports necesarios
 $ModulesPath = Split-Path $PSScriptRoot -Parent
 if (-not (Get-Module -Name 'TransferConfig')) {
@@ -108,22 +130,7 @@ function Get-FtpConfigFromUser {
         $server = "$($serverUri.Scheme)://$($serverUri.Host):$port"
     }
     
-    # Solicitar ruta
-    Write-Host "Ruta en servidor (ej: /carpeta/subcarpeta o presione ENTER para raíz): " -NoNewline -ForegroundColor Cyan
-    $path = Read-Host
-    
-    if ([string]::IsNullOrWhiteSpace($path)) {
-        $directory = "/"
-    }
-    else {
-        # Asegurar que comienza con /
-        if (-not $path.StartsWith('/')) {
-            $path = "/$path"
-        }
-        $directory = $path
-    }
-    
-    # Solicitar credenciales
+    # Solicitar credenciales ANTES de pedir la ruta
     Write-Host ""
     Write-Host "Credenciales FTP:" -ForegroundColor Yellow
     $credentials = Get-Credential -Message "Ingrese usuario y contraseña para $server"
@@ -185,6 +192,67 @@ function Get-FtpConfigFromUser {
             Write-Log "Usuario canceló configuración FTP tras error" "INFO"
             return $false
         }
+    }
+    
+    # Navegación FTP para seleccionar carpeta (AHORA con credenciales ya validadas)
+    Write-Host ""
+    Write-Host "Selección de carpeta en el servidor FTP:" -ForegroundColor Cyan
+    $respuesta = Show-ConsolePopup -Title "NAVEGACIÓN FTP" `
+        -Message "¿Navegar por el servidor o ingresar ruta manualmente?" `
+        -Options @("*Navegar", "Ingresar *Ruta", "Usar *Raíz (/)")
+    
+    $directory = "/"
+    
+    if ($respuesta -eq 0) {
+        # NAVEGAR
+        Write-Host "Abriendo navegador FTP..." -ForegroundColor Cyan
+        
+        try {
+            $selectedPath = Select-FtpFolder `
+                -Server $server `
+                -Port $port `
+                -Credential $credentials `
+                -UseSsl ($server -match '^ftps://') `
+                -Prompt "Seleccionar carpeta FTP en $server" `
+                -InitialPath "/"
+            
+            if ($selectedPath) {
+                $directory = $selectedPath
+                Write-Host "✓ Carpeta seleccionada: $directory" -ForegroundColor Green
+            }
+            else {
+                Write-Host "Navegación cancelada, usando raíz (/)" -ForegroundColor Yellow
+                $directory = "/"
+            }
+        }
+        catch {
+            Write-Host "Error al navegar FTP: $($_.Exception.Message)" -ForegroundColor Red
+            Write-Log "Error navegando FTP: $($_.Exception.Message)" "ERROR" -ErrorRecord $_
+            Write-Host "Usando raíz (/)" -ForegroundColor Yellow
+            $directory = "/"
+        }
+    }
+    elseif ($respuesta -eq 1) {
+        # INGRESAR RUTA MANUAL
+        Write-Host "Ruta en servidor (ej: /carpeta/subcarpeta): " -NoNewline -ForegroundColor Cyan
+        $path = Read-Host
+        
+        if ([string]::IsNullOrWhiteSpace($path)) {
+            $directory = "/"
+        }
+        else {
+            # Asegurar que comienza con /
+            if (-not $path.StartsWith('/')) {
+                $path = "/$path"
+            }
+            $directory = $path
+        }
+        Write-Host "✓ Ruta configurada: $directory" -ForegroundColor Green
+    }
+    else {
+        # USAR RAÍZ
+        $directory = "/"
+        Write-Host "✓ Usando raíz (/)" -ForegroundColor Green
     }
     
     # ✅✅✅ ASIGNAR SOLO LA SECCIÓN FTP CORRESPONDIENTE
@@ -437,6 +505,297 @@ function Receive-FtpFile {
     }
 }
 
+# ========================================================================== #
+#                      FUNCIONES DE NAVEGACIÓN FTP                           #
+# ========================================================================== #
+
+function Get-FtpNavigatorItems {
+    <#
+    .SYNOPSIS
+        Helper para Navigator genérico - Lista items de FTP
+    .DESCRIPTION
+        Esta función es llamada por el Navigator genérico cuando la fuente es FTP.
+        Retorna items en formato compatible con el Navigator.
+    .PARAMETER Server
+        Servidor FTP (ej: ftp://192.168.1.100)
+    .PARAMETER Port
+        Puerto FTP
+    .PARAMETER Username
+        Usuario FTP
+    .PARAMETER Credential
+        Credenciales FTP (PSCredential)
+    .PARAMETER CurrentPath
+        Ruta actual en FTP
+    .PARAMETER AllowFiles
+        Si permite seleccionar archivos o solo carpetas
+    .PARAMETER UseSsl
+        Si usar FTPS
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Server,
+
+        [int]$Port = 21,
+
+        [PSCredential]$Credential,
+
+        [string]$CurrentPath = "/",
+
+        [bool]$AllowFiles = $false,
+
+        [bool]$UseSsl = $false
+    )
+
+    # Normalizar ruta
+    if ([string]::IsNullOrWhiteSpace($CurrentPath)) {
+        $CurrentPath = "/"
+    }
+    if (-not $CurrentPath.StartsWith('/')) {
+        $CurrentPath = "/$CurrentPath"
+    }
+    if ($CurrentPath -ne "/" -and $CurrentPath.EndsWith('/')) {
+        $CurrentPath = $CurrentPath.TrimEnd('/')
+    }
+
+    # Construir URL FTP
+    $serverClean = $Server -replace '^ftp(s)?://', ''
+    $protocol = if ($UseSsl) { "ftps" } else { "ftp" }
+    $ftpUrl = "${protocol}://${serverClean}:${Port}${CurrentPath}"
+
+    Write-Log "Get-FtpNavigatorItems: Listando $ftpUrl" "DEBUG"
+
+    $items = @()
+
+    # Agregar item ".." si no estamos en raíz
+    if ($CurrentPath -ne "/") {
+        $parentPath = if ($CurrentPath.Contains('/')) {
+            $CurrentPath.Substring(0, $CurrentPath.LastIndexOf('/'))
+        }
+        else {
+            "/"
+        }
+        if ([string]::IsNullOrWhiteSpace($parentPath)) {
+            $parentPath = "/"
+        }
+
+        $items += [PSCustomObject]@{
+            Name            = ".."
+            FullName        = $parentPath
+            IsDirectory     = $true
+            IsParent        = $true
+            IsDriveSelector = $false
+            Size            = ""
+            Icon            = "↩"
+        }
+    }
+
+    # Listar contenido del directorio FTP
+    try {
+        $request = [System.Net.FtpWebRequest]::Create($ftpUrl)
+        $request.Method = [System.Net.WebRequestMethods+Ftp]::ListDirectoryDetails
+        
+        if ($Credential) {
+            $request.Credentials = $Credential.GetNetworkCredential()
+        }
+        
+        if ($UseSsl) {
+            $request.EnableSsl = $true
+            # Aceptar cualquier certificado SSL (para servidores con certificados autofirmados)
+            [System.Net.ServicePointManager]::ServerCertificateValidationCallback = { $true }
+        }
+
+        $response = $request.GetResponse()
+        $stream = $response.GetResponseStream()
+        $reader = New-Object System.IO.StreamReader($stream)
+        
+        $listing = @()
+        while (-not $reader.EndOfStream) {
+            $line = $reader.ReadLine()
+            if (-not [string]::IsNullOrWhiteSpace($line)) {
+                $listing += $line
+            }
+        }
+
+        $reader.Close()
+        $stream.Close()
+        $response.Close()
+
+        # Parsear listado FTP (formato Unix-like)
+        foreach ($line in $listing) {
+            # Formato típico Unix: drwxr-xr-x 2 user group 4096 Dec 13 10:00 carpeta
+            if ($line -match '^([d-])[rwx-]{9}\s+\d+\s+\S+\s+\S+\s+(\d+)\s+\S+\s+\S+\s+\S+\s+(.+)$') {
+                $isDir = $matches[1] -eq 'd'
+                $size = $matches[2]
+                $name = $matches[3].Trim()
+
+                # Ignorar . y ..
+                if ($name -eq '.' -or $name -eq '..') {
+                    continue
+                }
+
+                # Si no permitimos archivos y es archivo, saltar
+                if (-not $AllowFiles -and -not $isDir) {
+                    continue
+                }
+
+                $fullPath = if ($CurrentPath -eq "/") {
+                    "/$name"
+                }
+                else {
+                    "$CurrentPath/$name"
+                }
+
+                $items += [PSCustomObject]@{
+                    Name            = $name
+                    FullName        = $fullPath
+                    IsDirectory     = $isDir
+                    IsParent        = $false
+                    IsDriveSelector = $false
+                    Size            = if ($isDir) { "" } else { "$([int]($size/1KB)) KB" }
+                    Icon            = if ($isDir) { "📁" } else { "📄" }
+                }
+            }
+            # Formato Windows FTP: 12-13-25  12:40PM       <DIR>          Duke_3D
+            # O formato Windows archivo: 12-13-25  12:40PM              1234 archivo.txt
+            elseif ($line -match '^\d{2}-\d{2}-\d{2}\s+\d{1,2}:\d{2}[AP]M\s+(?:(<DIR>)|(\d+))\s+(.+)$') {
+                $isDir = -not [string]::IsNullOrEmpty($matches[1])  # <DIR> capturado
+                $size = if ($isDir) { 0 } else { [int]$matches[2] }
+                $name = $matches[3].Trim()
+                
+                if ($name -eq '.' -or $name -eq '..') {
+                    continue
+                }
+
+                if (-not $AllowFiles -and -not $isDir) {
+                    continue
+                }
+
+                $fullPath = if ($CurrentPath -eq "/") {
+                    "/$name"
+                }
+                else {
+                    "$CurrentPath/$name"
+                }
+
+                $items += [PSCustomObject]@{
+                    Name            = $name
+                    FullName        = $fullPath
+                    IsDirectory     = $isDir
+                    IsParent        = $false
+                    IsDriveSelector = $false
+                    Size            = if ($isDir) { "" } else { "$([int]($size/1KB)) KB" }
+                    Icon            = if ($isDir) { "📁" } else { "📄" }
+                }
+            }
+            # Formato simple (solo nombre)
+            elseif ($line -notmatch '^\s*$') {
+                $name = $line.Trim()
+                
+                if ($name -eq '.' -or $name -eq '..') {
+                    continue
+                }
+
+                $fullPath = if ($CurrentPath -eq "/") {
+                    "/$name"
+                }
+                else {
+                    "$CurrentPath/$name"
+                }
+
+                # En formato simple no podemos distinguir carpetas de archivos fácilmente
+                # Asumimos que es carpeta si no tiene extensión
+                $isDir = $name -notlike "*.*"
+
+                if (-not $AllowFiles -and -not $isDir) {
+                    continue
+                }
+
+                $items += [PSCustomObject]@{
+                    Name            = $name
+                    FullName        = $fullPath
+                    IsDirectory     = $isDir
+                    IsParent        = $false
+                    IsDriveSelector = $false
+                    Size            = ""
+                    Icon            = if ($isDir) { "📁" } else { "📄" }
+                }
+            }
+        }
+    }
+    catch {
+        Write-Log "Error listando FTP: $($_.Exception.Message)" "ERROR" -ErrorRecord $_
+        Write-Host "Error al listar directorio FTP: $($_.Exception.Message)" -ForegroundColor Red
+    }
+
+    return $items
+}
+
+function Select-FtpFolder {
+    <#
+    .SYNOPSIS
+        Navegar y seleccionar carpeta FTP usando interfaz Navigator
+    .PARAMETER Server
+        Servidor FTP
+    .PARAMETER Port
+        Puerto FTP
+    .PARAMETER Credential
+        Credenciales FTP (PSCredential)
+    .PARAMETER UseSsl
+        Usar FTPS
+    .PARAMETER Prompt
+        Mensaje para el usuario
+    .PARAMETER InitialPath
+        Ruta inicial
+    .OUTPUTS
+        Ruta seleccionada o $null si se cancela
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Server,
+
+        [int]$Port = 21,
+
+        [PSCredential]$Credential,
+
+        [bool]$UseSsl = $false,
+
+        [string]$Prompt = "Seleccionar carpeta FTP",
+
+        [string]$InitialPath = "/"
+    )
+
+    # Importar Navigator
+    $navigatorPath = Join-Path (Split-Path $PSScriptRoot -Parent) "UI\Navigator.psm1"
+    if (-not (Get-Module -Name Navigator)) {
+        Import-Module $navigatorPath -Force -Global
+    }
+
+    # Callback para obtener items de FTP - debe aceptar parámetros que Navigator pasa
+    # Usar GetNewClosure() para capturar variables del scope actual
+    $getItemsCallback = {
+        param(
+            [string]$Path,           # Navigator pasa -Path
+            [bool]$AllowFiles,       # Navigator pasa -AllowFiles
+            [hashtable]$SizeCache    # Navigator pasa -SizeCache (no usado en FTP)
+        )
+        
+        # Llamar a Get-FtpNavigatorItems con los parámetros correctos
+        Get-FtpNavigatorItems -Server $Server -Port $Port -Credential $Credential `
+            -CurrentPath $Path -AllowFiles $AllowFiles -UseSsl $UseSsl
+    }.GetNewClosure()
+
+    # Opciones del proveedor FTP (deshabilitar selectores locales)
+    $ftpProviderOptions = @{
+        AllowDriveSelector    = $false      # No mostrar F2:Unidad (es FTP, no local)
+        AllowNetworkDiscovery = $false   # No mostrar F3:Red (es FTP, no UNC)
+    }
+
+    return Select-PathNavigator -Prompt $Prompt -AllowFiles:$false `
+        -ItemProvider $getItemsCallback `
+        -InitialPath $InitialPath `
+        -ProviderOptions $ftpProviderOptions
+}
+
 # Exportar funciones
 Export-ModuleMember -Function @(
     'Test-IsFtpPath',
@@ -446,5 +805,7 @@ Export-ModuleMember -Function @(
     'Mount-FtpPath',
     'Get-FtpConnection',
     'Send-FtpFile',
-    'Receive-FtpFile'
+    'Receive-FtpFile',
+    'Get-FtpNavigatorItems',
+    'Select-FtpFolder'
 )

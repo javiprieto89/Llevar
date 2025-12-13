@@ -13,14 +13,29 @@ function Compress-WithNativeZip {
         [string]$Temp,
         [string]$Clave,
         [string]$DestinoFinal = "",
-        [int]$BlockSizeMB = 0
+        [int]$BlockSizeMB = 0,
+        [string]$CustomName = ""
     )
 
     if (-not (Test-Windows10OrLater)) {
         throw "La compresión nativa requiere Windows 10 o superior."
     }
 
-    $Name = Split-Path $Origen -Leaf
+    # Detectar si es un drive raíz (C:\, LLEVAR_ORIGEN:\, etc.)
+    $isDriveRoot = $Origen -match '^[A-Z_]+:\\?$'
+    
+    # Determinar el nombre del archivo
+    if ($CustomName) {
+        $Name = $CustomName
+    }
+    elseif ($isDriveRoot) {
+        # Si es drive raíz, usar el nombre del drive sin :\
+        $Name = ($Origen -replace ':\\?$', '')
+    }
+    else {
+        $Name = Split-Path $Origen -Leaf
+    }
+    
     $zipFile = Join-Path $Temp "$Name.zip"
 
     # Mostrar información de origen y destino

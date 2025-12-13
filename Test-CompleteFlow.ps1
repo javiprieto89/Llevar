@@ -68,47 +68,47 @@ if ($menuResult.Action -eq "Execute" -and $menuResult.ContainsKey('TransferConfi
     # Simular obtención de paths usando with
     $origenPath = switch ($tc.Origen.Tipo) {
         "FTP" {
-            with $tc.Origen.FTP { .Directory }
+            $tc.Origen.FTP.Directory
         }
         "Local" {
-            with $tc.Origen.Local { .Path }
+            $tc.Origen.Local.Path
         }
         "UNC" {
-            with $tc.Origen.UNC { .Path }
+            $tc.Origen.UNC.Path
         }
         "OneDrive" {
-            with $tc.Origen.OneDrive { .Path }
+            $tc.Origen.OneDrive.Path
         }
         "Dropbox" {
-            with $tc.Origen.Dropbox { .Path }
+            $tc.Origen.Dropbox.Path
         }
         default { $null }
     }
     
     $destinoPath = switch ($tc.Destino.Tipo) {
         "FTP" {
-            with $tc.Destino.FTP { .Directory }
+            $tc.Destino.FTP.Directory
         }
         "Local" {
-            with $tc.Destino.Local { .Path }
+            $tc.Destino.Local.Path
         }
         "USB" {
-            with $tc.Destino.USB { .Path }
+            $tc.Destino.USB.Path
         }
         "UNC" {
-            with $tc.Destino.UNC { .Path }
+            $tc.Destino.UNC.Path
         }
         "OneDrive" {
-            with $tc.Destino.OneDrive { .Path }
+            $tc.Destino.OneDrive.Path
         }
         "Dropbox" {
-            with $tc.Destino.Dropbox { .Path }
+            $tc.Destino.Dropbox.Path
         }
         "ISO" {
-            with $tc.Destino.ISO { .OutputPath }
+            $tc.Destino.ISO.OutputPath
         }
         "Diskette" {
-            with $tc.Destino.Diskette { .OutputPath }
+            $tc.Destino.Diskette.OutputPath
         }
         default { $null }
     }
@@ -126,19 +126,19 @@ if ($menuResult.Action -eq "Execute" -and $menuResult.ContainsKey('TransferConfi
     else {
         $origenPathCheck = switch ($tc.Origen.Tipo) {
             "FTP" {
-                with $tc.Origen.FTP { .Directory }
+                $tc.Origen.FTP.Directory
             }
             "Local" {
-                with $tc.Origen.Local { .Path }
+                $tc.Origen.Local.Path
             }
             "UNC" {
-                with $tc.Origen.UNC { .Path }
+                $tc.Origen.UNC.Path
             }
             "OneDrive" {
-                with $tc.Origen.OneDrive { .Path }
+                $tc.Origen.OneDrive.Path
             }
             "Dropbox" {
-                with $tc.Origen.Dropbox { .Path }
+                $tc.Origen.Dropbox.Path
             }
             default { $null }
         }
@@ -153,28 +153,28 @@ if ($menuResult.Action -eq "Execute" -and $menuResult.ContainsKey('TransferConfi
     else {
         $destinoPathCheck = switch ($tc.Destino.Tipo) {
             "FTP" {
-                with $tc.Destino.FTP { .Directory }
+                $tc.Destino.FTP.Directory
             }
             "Local" {
-                with $tc.Destino.Local { .Path }
+                $tc.Destino.Local.Path
             }
             "USB" {
-                with $tc.Destino.USB { .Path }
+                $tc.Destino.USB.Path
             }
             "UNC" {
-                with $tc.Destino.UNC { .Path }
+                $tc.Destino.UNC.Path
             }
             "OneDrive" {
-                with $tc.Destino.OneDrive { .Path }
+                $tc.Destino.OneDrive.Path
             }
             "Dropbox" {
-                with $tc.Destino.Dropbox { .Path }
+                $tc.Destino.Dropbox.Path
             }
             "ISO" {
-                with $tc.Destino.ISO { .OutputPath }
+                $tc.Destino.ISO.OutputPath
             }
             "Diskette" {
-                with $tc.Destino.Diskette { .OutputPath }
+                $tc.Destino.Diskette.OutputPath
             }
             default { $null }
         }

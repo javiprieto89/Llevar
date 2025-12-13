@@ -5,20 +5,36 @@
 # Funciones refactorizadas para usar TransferConfig como única fuente de verdad
 # ========================================================================== #
 
-# Importar módulos necesarios
+# Cargar clase TransferConfig si no está disponible (GLOBAL SCOPE)
+$transferConfigTypeLoaded = $false
+try {
+    $null = [TransferConfig] -as [type]
+    $transferConfigTypeLoaded = $true
+}
+catch {
+    $transferConfigTypeLoaded = $false
+}
+
+if (-not $transferConfigTypeLoaded) {
+    $ModulesPath = Split-Path $PSScriptRoot -Parent
+    $transferConfigType = Join-Path $ModulesPath "Core\TransferConfig.Type.ps1"
+    
+    if (Test-Path $transferConfigType) {
+        # Dot-source en GLOBAL scope para que el tipo esté disponible en toda la sesión
+        $global:__transferConfigScript = $transferConfigType
+        Invoke-Expression ". `$global:__transferConfigScript"
+    }
+    else {
+        throw "ERROR CRÍTICO: No se puede cargar TransferConfig.Type.ps1 desde $transferConfigType"
+    }
+}
+
+# Todos los módulos necesarios ya fueron importados por Llevar.ps1
+# Solo verificar que TransferConfig esté disponible
 $ModulesPath = Split-Path $PSScriptRoot -Parent
-#$ModulesPath = Join-Path $PSScriptRoot "Modules"
 if (-not (Get-Module -Name 'TransferConfig')) {
     Import-Module (Join-Path $ModulesPath "Core\TransferConfig.psm1") -Force -Global
 }
-Import-Module (Join-Path $ModulesPath "UI\Menus.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "UI\Banners.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "UI\Navigator.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "Transfer\FTP.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "Transfer\OneDrive.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "Transfer\Dropbox.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "Transfer\UNC.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "Transfer\Floppy.psm1") -Force -Global
 
 # ========================================================================== #
 #                          FUNCIÓN PRINCIPAL                                 #
@@ -117,54 +133,49 @@ function Show-MainMenu {
             }
             9 { return @{ Action = "Help" } }
             10 {
-                # Validar configuración completa usando with y switch
+                # Validar configuración completa
                 $errors = @()
 
                 # VALIDAR ORIGEN
-                with $TransferConfig.Origen {
-                    if (.Tipo) {
-                        
-                        $origenPath = switch (.Tipo) {
-                            "FTP" { .FTP.Directory }
-                            "Local" { .Local.Path }
-                            "UNC" { .UNC.Path }
-                            "OneDrive" { .OneDrive.Path }
-                            "Dropbox" { .Dropbox.Path }
-                            default { $null }
-                        }
+                if ($TransferConfig.Origen.Tipo) {
+                    $origenPath = switch ($TransferConfig.Origen.Tipo) {
+                        "FTP" { $TransferConfig.Origen.FTP.Directory }
+                        "Local" { $TransferConfig.Origen.Local.Path }
+                        "UNC" { $TransferConfig.Origen.UNC.Path }
+                        "OneDrive" { $TransferConfig.Origen.OneDrive.Path }
+                        "Dropbox" { $TransferConfig.Origen.Dropbox.Path }
+                        default { $null }
+                    }
 
-                        if (-not $origenPath) {
-                            $errors += "• Falta configurar la ruta de origen ($(.Tipo))"
-                        }
+                    if (-not $origenPath) {
+                        $errors += "• Falta configurar la ruta de origen ($($TransferConfig.Origen.Tipo))"
                     }
-                    else {
-                        $errors += "• Falta configurar el tipo de origen"
-                    }
-                    
                 }
-                # Validar destino
+                else {
+                    $errors += "• Falta configurar el tipo de origen"
+                }
+                
+                # VALIDAR DESTINO
                 $destinoPath = $null
-                with $TransferConfig.Destino {
-                    if (.Tipo) {                        
-                        $destinoPath = switch (.Tipo) {
-                            "FTP" { .FTP.Directory }
-                            "Local" { .Local.Path }
-                            "USB" { .USB.Path }
-                            "UNC" { .UNC.Path }
-                            "OneDrive" { .OneDrive.Path }
-                            "Dropbox" { .Dropbox.Path }
-                            "ISO" { .ISO.OutputPath }
-                            "Diskette" { .Diskette.OutputPath }
-                            default { $null }
-                        }
+                if ($TransferConfig.Destino.Tipo) {
+                    $destinoPath = switch ($TransferConfig.Destino.Tipo) {
+                        "FTP" { $TransferConfig.Destino.FTP.Directory }
+                        "Local" { $TransferConfig.Destino.Local.Path }
+                        "USB" { $TransferConfig.Destino.USB.Path }
+                        "UNC" { $TransferConfig.Destino.UNC.Path }
+                        "OneDrive" { $TransferConfig.Destino.OneDrive.Path }
+                        "Dropbox" { $TransferConfig.Destino.Dropbox.Path }
+                        "ISO" { $TransferConfig.Destino.ISO.OutputPath }
+                        "Diskette" { $TransferConfig.Destino.Diskette.OutputPath }
+                        default { $null }
+                    }
 
-                        if (-not $destinoPath) {
-                            $errors += "• Falta configurar la ruta de destino ($(.Tipo))"
-                        }
+                    if (-not $destinoPath) {
+                        $errors += "• Falta configurar la ruta de destino ($($TransferConfig.Destino.Tipo))"
                     }
-                    else {
-                        $errors += "• Falta configurar el tipo de destino"
-                    }
+                }
+                else {
+                    $errors += "• Falta configurar el tipo de destino"
                 }
 
                 # MOSTRAR ERRORES / CONTINUAR
@@ -255,10 +266,7 @@ function Show-OrigenDestinoMenu {
                 }
             }
             5 {
-                $uncPath = Select-NetworkPath -Purpose "ORIGEN"
-                if ($uncPath) {
-                    Set-TransferType -Config $TransferConfig -Section "Origen" -Type "UNC"
-                    Set-TransferPath -Config $TransferConfig -Section "Origen" -Value $uncPath
+                if (Get-UncConfigFromUser -Llevar $TransferConfig -Cual "Origen") {
                     Set-TransferConfigValue -Config $TransferConfig -Path "OrigenIsSet" -Value $true
                 }
             }
@@ -313,10 +321,7 @@ function Show-OrigenDestinoMenu {
                 }
             }
             7 {
-                $uncPath = Select-NetworkPath -Purpose "DESTINO"
-                if ($uncPath) {
-                    Set-TransferType -Config $TransferConfig -Section "Destino" -Type "UNC"
-                    Set-TransferPath -Config $TransferConfig -Section "Destino" -Value $uncPath
+                if (Get-UncConfigFromUser -Llevar $TransferConfig -Cual "Destino") {
                     Set-TransferConfigValue -Config $TransferConfig -Path "DestinoIsSet" -Value $true
                 }
             }

@@ -123,8 +123,10 @@ param(
     [string]$Test,
     [switch]$OnedriveOrigen,
     [switch]$OnedriveDestino,
+    [string]$OneDrivePath,
     [switch]$DropboxOrigen,
     [switch]$DropboxDestino,
+    [string]$DropboxPath,
     [switch]$RobocopyMirror,
     [switch]$Verbose,
     [switch]$ForceLogo
@@ -212,13 +214,33 @@ try {
     # ========================================================================== #
     
     # PowerShell NO exporta clases desde .psm1 con Import-Module
-    # Solución: cargar el módulo TransferConfig antes que el resto
+    # Solución: cargar el archivo TransferConfig.Type.ps1 antes que el resto para exponer el tipo
     $ModulesPath = Join-Path $PSScriptRoot "Modules"
-    #$ModulesPath = Split-Path $PSScriptRoot -Parent
+    # $ModulesPath = Split-Path $PSScriptRoot -Parent
 
+    $transferConfigType = Join-Path $ModulesPath "Core\TransferConfig.Type.ps1"
     $transferConfigModule = Join-Path $ModulesPath "Core\TransferConfig.psm1"
-    if (-not (Test-Path $transferConfigModule)) {
-        throw "ERROR CRÍTICO: No se encontró TransferConfig.psm1 en $transferConfigModule"
+
+    # 1️⃣ Verificar que el archivo exista
+    if (-not (Test-Path -LiteralPath $transferConfigType -PathType Leaf)) {
+        throw "ERROR CRÍTICO: No se encontró TransferConfig.Type.ps1 en $transferConfigType"
+    }
+
+    # 2️⃣ Cargar la clase EN SCOPE GLOBAL (OBLIGATORIO para que esté disponible en módulos)
+    $global:__transferConfigTypeScript = $transferConfigType
+    Invoke-Expression ". `$global:__transferConfigTypeScript"
+
+    # 3️⃣ Verificar que la clase TransferConfig esté disponible
+    $transferConfigClass = $null
+    try {
+        $transferConfigClass = [TransferConfig] -as [type]
+    }
+    catch {
+        $transferConfigClass = $null
+    }
+
+    if (-not $transferConfigClass) {
+        throw "ERROR CRÍTICO: La clase TransferConfig no está disponible luego de cargar $transferConfigType"
     }
 
     # ========================================================================== #
@@ -230,19 +252,18 @@ try {
     $importWarnings = @()
     $importErrors = @()
 
-    # Módulos Core (TransferConfig ya está cargado arriba)
+    # Módulos Core
     Import-Module $transferConfigModule -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
     Import-Module (Join-Path $ModulesPath "Core\Validation.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
     Import-Module (Join-Path $ModulesPath "Core\Logger.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
     
 
-    # Módulos UI
+    # Módulos UI (básicos - ConfigMenus se importa después de Transfer)
     Import-Module (Join-Path $ModulesPath "UI\Console.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
     Import-Module (Join-Path $ModulesPath "UI\ProgressBar.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
     Import-Module (Join-Path $ModulesPath "UI\Banners.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
     Import-Module (Join-Path $ModulesPath "UI\Navigator.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
     Import-Module (Join-Path $ModulesPath "UI\Menus.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
-    Import-Module (Join-Path $ModulesPath "UI\ConfigMenus.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
 
     # Módulos de Compresión
     Import-Module (Join-Path $ModulesPath "Compression\SevenZip.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
@@ -257,6 +278,9 @@ try {
     Import-Module (Join-Path $ModulesPath "Transfer\Dropbox.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
     Import-Module (Join-Path $ModulesPath "Transfer\Floppy.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
     Import-Module (Join-Path $ModulesPath "Transfer\Unified.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
+
+    # ConfigMenus se importa DESPUÉS de Transfer porque usa funciones de esos módulos
+    Import-Module (Join-Path $ModulesPath "UI\ConfigMenus.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
 
     # Módulos de Instalación
     Import-Module (Join-Path $ModulesPath "Installation\SystemInstall.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
@@ -303,9 +327,9 @@ try {
     }
 
     # Verificar que la clase TransferConfig esté disponible (si el módulo falló no existirá)
-    $transferConfigType = "TransferConfig" -as [type]
+    #$transferConfigType = "TransferConfig" -as [type]
     if (-not $transferConfigType) {
-        $typeErrorLog = "`n[ERROR CRITICO] No se pudo cargar la clase TransferConfig desde $transferConfigModule.`n"
+        $typeErrorLog = "`n[ERROR CRITICO] No se pudo cargar la clase TransferConfig desde $transferConfigType.`n"
 
         if ($importErrors -and $importErrors.Count -gt 0) {
             $typeErrorLog += "Detalles de errores de importacion:`n"
@@ -320,7 +344,7 @@ try {
             }
         }
         else {
-            $typeErrorLog += "No se registraron errores ni advertencias, verificar TransferConfig.psm1 manualmente." + "`n"
+            $typeErrorLog += "No se registraron errores ni advertencias, verificar TransferConfig.Type.ps1 manualmente." + "`n"
         }
 
         Write-InitLogSafe $typeErrorLog
@@ -615,7 +639,33 @@ try {
         }
         
         # ===== DETECTAR Y CONFIGURAR DESTINO =====
-        if ($Destino) {
+        if ($OnedriveDestino) {
+            # OneDrive especificado por parámetro - autenticar
+            $authResult = Get-OneDriveAuth
+            if ($authResult) {
+                $transferConfig.Destino.Tipo = "OneDrive"
+                $transferConfig.Destino.OneDrive.Path = if ($OneDrivePath) { $OneDrivePath } else { "/" }
+                $transferConfig.Destino.OneDrive.Token = $authResult.Token
+                $transferConfig.Destino.OneDrive.RefreshToken = $authResult.RefreshToken
+                $transferConfig.Destino.OneDrive.Email = $authResult.Email
+                $transferConfig.Destino.OneDrive.ApiUrl = $authResult.ApiUrl
+                $transferConfig.Destino.OneDrive.UseLocal = $authResult.UseLocal
+                $transferConfig.Destino.OneDrive.LocalPath = $authResult.LocalPath
+                $transferConfig.Destino.OneDrive.DriveId = $authResult.DriveId
+                $transferConfig.DestinoIsSet = $true
+            }
+            else {
+                Write-Host "No se pudo autenticar con OneDrive" -ForegroundColor Red
+                exit 1
+            }
+        }
+        elseif ($DropboxDestino) {
+            # Dropbox especificado por parámetro
+            $transferConfig.Destino.Tipo = "Dropbox"
+            $transferConfig.Destino.Dropbox.Path = if ($DropboxPath) { $DropboxPath } else { "/" }
+            $transferConfig.DestinoIsSet = $true
+        }
+        elseif ($Destino) {
             # Detectar tipo de destino según formato y parámetros
             if ($Iso) {
                 # ISO especificado explícitamente
@@ -651,18 +701,6 @@ try {
                 # Es UNC - ruta de red
                 $transferConfig.Destino.Tipo = "UNC"
                 $transferConfig.Destino.UNC.Path = $Destino
-                $transferConfig.DestinoIsSet = $true
-            }
-            elseif ($OnedriveDestino) {
-                # OneDrive especificado por parámetro
-                $transferConfig.Destino.Tipo = "OneDrive"
-                $transferConfig.Destino.OneDrive.Path = $Destino
-                $transferConfig.DestinoIsSet = $true
-            }
-            elseif ($DropboxDestino) {
-                # Dropbox especificado por parámetro
-                $transferConfig.Destino.Tipo = "Dropbox"
-                $transferConfig.Destino.Dropbox.Path = $Destino
                 $transferConfig.DestinoIsSet = $true
             }
             elseif ($Destino -ieq "FLOPPY") {

@@ -267,7 +267,7 @@ function Initialize-ExampleTransfer {
     #>
     param(
         [Parameter(Mandatory = $true)]
-        [TransferConfig]$TransferConfig,
+        $TransferConfig,
         
         [int]$FileCount = 5,
         [int]$FileSizeMB = 20

@@ -150,10 +150,24 @@ function Compress-Folder {
         $SevenZ, 
         $Clave, 
         [int]$BlockSizeMB,
-        [string]$DestinoFinal = ""
+        [string]$DestinoFinal = "",
+        [string]$CustomName = ""
     )
 
-    $Name = Split-Path $Origen -Leaf
+    # Detectar si es un drive raíz (C:\, LLEVAR_ORIGEN:\, etc.)
+    $isDriveRoot = $Origen -match '^[A-Z_]+:\\?$'
+    
+    # Determinar el nombre del archivo
+    if ($CustomName) {
+        $Name = $CustomName
+    }
+    elseif ($isDriveRoot) {
+        # Si es drive raíz, usar el nombre del drive sin :\
+        $Name = ($Origen -replace ':\\?$', '')
+    }
+    else {
+        $Name = Split-Path $Origen -Leaf
+    }
     
     # Verificar si se usa ZIP nativo
     if ($SevenZ -eq "NATIVE_ZIP") {
@@ -201,12 +215,33 @@ function Compress-Folder {
     if ($Clave) {
         $sevenArgs += ("-p$Clave")
     }
-    $sevenArgs += @($Out, $Origen)
-
-    & $SevenZ @sevenArgs 2>&1 | ForEach-Object {
-        if ($_ -match '(\d+)%') {
-            $pct = [double]$matches[1]
-            Write-LlevarProgressBar -Percent $pct -StartTime $startTime -Label "Compresión..." -Top $barTop
+    
+    # Si es drive raíz, cambiar al directorio y comprimir *
+    # Esto evita que 7-Zip cree un directorio con el nombre del drive
+    if ($isDriveRoot) {
+        Push-Location $Origen
+        try {
+            $sevenArgs += @($Out, "*")
+            
+            & $SevenZ @sevenArgs 2>&1 | ForEach-Object {
+                if ($_ -match '(\d+)%') {
+                    $pct = [double]$matches[1]
+                    Write-LlevarProgressBar -Percent $pct -StartTime $startTime -Label "Compresión..." -Top $barTop
+                }
+            }
+        }
+        finally {
+            Pop-Location
+        }
+    }
+    else {
+        $sevenArgs += @($Out, $Origen)
+        
+        & $SevenZ @sevenArgs 2>&1 | ForEach-Object {
+            if ($_ -match '(\d+)%') {
+                $pct = [double]$matches[1]
+                Write-LlevarProgressBar -Percent $pct -StartTime $startTime -Label "Compresión..." -Top $barTop
+            }
         }
     }
 

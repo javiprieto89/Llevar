@@ -11,9 +11,7 @@
 #   - Mount-LlevarNetworkPath: Monta ruta UNC como PSDrive
 # ========================================================================== #
 
-# Imports necesarios
-$ModulesPath = Join-Path (Split-Path (Split-Path $PSScriptRoot -Parent) -Parent) "Modules"
-Import-Module (Join-Path $ModulesPath "Core\Logger.psm1") -Force -Global
+# Logger.psm1 debe ser importado por Llevar.ps1 ANTES de este módulo
 
 function Get-NetworkComputers {
     <#
@@ -510,12 +508,142 @@ function Get-NetworkShares {
     return $shares
 }
 
+function Get-UncConfigFromUser {
+    <#
+    .SYNOPSIS
+        Solicita configuración UNC al usuario con validación y credenciales
+    .DESCRIPTION
+        Guía al usuario para:
+        1. Seleccionar ruta UNC (navegación o manual)
+        2. Solicitar credenciales si son necesarias
+        3. Validar acceso a la ruta
+        4. Guardar en TransferConfig
+    .PARAMETER Llevar
+        Objeto TransferConfig donde se guardarán los valores UNC
+    .PARAMETER Cual
+        "Origen" o "Destino" - indica qué sección configurar
+    .OUTPUTS
+        $true si la configuración fue exitosa, $false si se canceló
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [TransferConfig]$Llevar,
+        
+        [Parameter(Mandatory = $true)]
+        [ValidateSet("Origen", "Destino")]
+        [string]$Cual
+    )
+    
+    Show-Banner "CONFIGURACIÓN UNC - $Cual" -BorderColor Cyan -TextColor Yellow
+    
+    # Seleccionar ruta UNC
+    $uncPath = Select-NetworkPath -Purpose $Cual
+    
+    if (-not $uncPath) {
+        Write-Log "Usuario canceló selección de ruta UNC" "INFO"
+        return $false
+    }
+    
+    Write-Host ""
+    Write-Host "Ruta UNC seleccionada: $uncPath" -ForegroundColor Green
+    
+    # Preguntar si requiere credenciales
+    Write-Host ""
+    $needsCredentials = Show-ConsolePopup -Title "CREDENCIALES UNC" `
+        -Message "¿La ruta $uncPath requiere credenciales de autenticación?" `
+        -Options @("*Sí, solicitar credenciales", "*No, acceso anónimo/actual")
+    
+    $credentials = $null
+    
+    if ($needsCredentials -eq 0) {
+        # Solicitar credenciales
+        Write-Host ""
+        Write-Host "Ingrese credenciales para acceder a $uncPath" -ForegroundColor Yellow
+        $credentials = Get-Credential -Message "Credenciales para $uncPath"
+        
+        if (-not $credentials) {
+            Write-Host "✗ Credenciales requeridas" -ForegroundColor Red
+            return $false
+        }
+    }
+    
+    # Validar acceso
+    Write-Host ""
+    Write-Host "Validando acceso a $uncPath..." -ForegroundColor Cyan
+    
+    $accessResult = Test-UncPathAccess -UncPath $uncPath -Credential $credentials
+    
+    if (-not $accessResult.Success) {
+        Write-Host ""
+        Show-Banner "⚠ ERROR DE ACCESO UNC" -BorderColor Red -TextColor Red
+        Write-Host "Ruta: $uncPath" -ForegroundColor White
+        Write-Host "Detalle: $($accessResult.Message)" -ForegroundColor Yellow
+        Write-Host ""
+        Write-Log "Error de acceso a ruta UNC: $uncPath - $($accessResult.Message)" "ERROR"
+        
+        Write-Host "Posibles causas:" -ForegroundColor Yellow
+        Write-Host "  • Ruta no existe" -ForegroundColor DarkGray
+        Write-Host "  • Credenciales incorrectas" -ForegroundColor DarkGray
+        Write-Host "  • Sin permisos de acceso" -ForegroundColor DarkGray
+        Write-Host "  • Servidor no disponible" -ForegroundColor DarkGray
+        Write-Host ""
+        
+        # Reintentar
+        $respuesta = Show-ConsolePopup -Title "⚠ ERROR UNC" `
+            -Message "No se pudo acceder a $uncPath`n`n¿Desea reintentar?" `
+            -Options @("*Reintentar", "*Cancelar") -Beep
+        
+        if ($respuesta -eq 0) {
+            return Get-UncConfigFromUser -Llevar $Llevar -Cual $Cual
+        }
+        else {
+            Write-Log "Usuario canceló configuración UNC tras error" "INFO"
+            return $false
+        }
+    }
+    
+    Write-Host "✓ Acceso validado exitosamente" -ForegroundColor Green
+    
+    # Guardar configuración
+    if ($Cual -eq "Origen") {
+        $Llevar.Origen.Tipo = "UNC"
+        $Llevar.Origen.UNC.Path = $uncPath
+        if ($credentials) {
+            $Llevar.Origen.UNC.Credentials = $credentials
+            $Llevar.Origen.UNC.User = $credentials.UserName
+            $Llevar.Origen.UNC.Password = $credentials.GetNetworkCredential().Password
+        }
+        
+        $userInfo = if ($credentials) { "Usuario: $($credentials.UserName)" } else { "Sin credenciales" }
+        Write-Log "UNC Origen configurado: $uncPath ($userInfo)" "INFO"
+    }
+    else {
+        $Llevar.Destino.Tipo = "UNC"
+        $Llevar.Destino.UNC.Path = $uncPath
+        if ($credentials) {
+            $Llevar.Destino.UNC.Credentials = $credentials
+            $Llevar.Destino.UNC.User = $credentials.UserName
+            $Llevar.Destino.UNC.Password = $credentials.GetNetworkCredential().Password
+        }
+        
+        $userInfo = if ($credentials) { "Usuario: $($credentials.UserName)" } else { "Sin credenciales" }
+        Write-Log "UNC Destino configurado: $uncPath ($userInfo)" "INFO"
+    }
+    
+    Write-Host ""
+    Write-Host "✓ Configuración UNC guardada en \$Llevar.$Cual.UNC" -ForegroundColor Green
+    Write-Host ""
+    
+    return $true
+}
+
 # Exportar funciones
 Export-ModuleMember -Function @(
     'Get-NetworkComputers',
     'Test-UncPathAccess',
     'Get-ComputerShares',
     'Select-NetworkPath',
+    'Get-UncConfigFromUser',
     'Split-UncRootAndPath',
     'Mount-LlevarNetworkPath',
     'Get-NetworkShares'

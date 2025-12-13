@@ -22,6 +22,21 @@ if (-not (Get-Module -Name 'TransferConfig')) {
 Import-Module (Join-Path $ModulesPath "Utilities\PathSelectors.psm1") -Force -Global
 Import-Module (Join-Path $ModulesPath "Transfer\Unified.psm1") -Force -Global
 
+$onedriveTransferPath = Join-Path $ModulesPath "Transfer\OneDrive\OneDriveTransfer.psm1"
+if (Test-Path $onedriveTransferPath) {
+    Import-Module $onedriveTransferPath -Force -Global
+    Write-Verbose "OneDriveTransfer módulo importado desde: $onedriveTransferPath"
+}
+else {
+    Write-Warning "No se encontró OneDriveTransfer.psm1 en: $onedriveTransferPath"
+}
+
+$dropboxTransferPath = Join-Path $ModulesPath "Transfer\Dropbox\DropboxTransfer.psm1"
+if (Test-Path $dropboxTransferPath) {
+    Import-Module $dropboxTransferPath -Force -Global
+    Write-Verbose "DropboxTransfer módulo importado desde: $dropboxTransferPath"
+}
+
 function Invoke-NormalMode {
     <#
     .SYNOPSIS
@@ -137,18 +152,29 @@ function Invoke-NormalMode {
             return
         }
         
-        # Determinar si se usa FTP, OneDrive o Dropbox
-        $TransferMode = "Compress" # Por defecto comprimir
-        
         # Leer configuración para determinar modo de transferencia
         $origenTipo = Get-TransferType -Config $TransferConfig -Section "Origen"
         $destinoTipo = Get-TransferType -Config $TransferConfig -Section "Destino"
         
-        # Si alguno es FTP, OneDrive o Dropbox, preguntar modo de transferencia
-        if (($origenTipo -eq "FTP" -or $destinoTipo -eq "FTP") -or 
+        # Determinar modo de transferencia según tipos de origen/destino
+        # FILOSOFÍA: SIEMPRE comprimir y dividir en bloques para facilitar transporte
+        # ISO, USB, Diskette: SIEMPRE comprimido (destinos que requieren bloques)
+        # Local→Local: SIEMPRE comprimido (para facilitar distribución en múltiples medios)
+        # FTP/OneDrive/Dropbox: Preguntar al usuario (puede ser más eficiente sin comprimir)
+        
+        if ($destinoTipo -eq "ISO" -or $destinoTipo -eq "USB" -or $destinoTipo -eq "Diskette") {
+            # Destinos que requieren bloques: siempre comprimir
+            $TransferMode = "Compress"
+        }
+        elseif ($origenTipo -eq "Local" -and $destinoTipo -eq "Local") {
+            # Local→Local: comprimir por defecto para facilitar transporte en bloques
+            $TransferMode = "Compress"
+        }
+        elseif (($origenTipo -eq "FTP" -or $destinoTipo -eq "FTP") -or 
             ($origenTipo -eq "OneDrive" -or $destinoTipo -eq "OneDrive") -or 
             ($origenTipo -eq "Dropbox" -or $destinoTipo -eq "Dropbox")) {
-            
+            # Preguntar al usuario para FTP/Cloud
+            # Preguntar al usuario
             $tipoTransfer = "FTP"
             if ($origenTipo -eq "OneDrive" -or $destinoTipo -eq "OneDrive") { $tipoTransfer = "OneDrive/FTP" }
             if ($origenTipo -eq "Dropbox" -or $destinoTipo -eq "Dropbox") { $tipoTransfer = "Dropbox/OneDrive/FTP" }
@@ -169,6 +195,10 @@ Nota: Si elige comprimir, los archivos temporales se eliminarán automáticament
             $TransferMode = if ($seleccion -eq 0) { "Direct" } else { "Compress" }
             Write-Host "Modo seleccionado: $TransferMode" -ForegroundColor Cyan
         }
+        else {
+            # Por defecto: comprimir (para otros casos)
+            $TransferMode = "Compress"
+        }
         
         # Autenticar con OneDrive si es necesario
         if ($origenTipo -eq "OneDrive" -or $destinoTipo -eq "OneDrive") {
@@ -181,20 +211,42 @@ Nota: Si elige comprimir, los archivos temporales se eliminarán automáticament
                 
             Show-Banner "AUTENTICACIÓN ONEDRIVE" -BorderColor Cyan -TextColor Yellow
                 
-            if (-not (Connect-GraphSession)) {
-                Write-Host "No se pudo autenticar con OneDrive. Cancelando." -ForegroundColor Red
+            # Verificar si ya tenemos token en TransferConfig
+            $hasToken = $false
+            if ($origenTipo -eq "OneDrive") {
+                $hasToken = $TransferConfig.Origen.OneDrive.Token
+            }
+            elseif ($destinoTipo -eq "OneDrive") {
+                $hasToken = $TransferConfig.Destino.OneDrive.Token
+            }
+            
+            if (-not $hasToken) {
+                Write-Host "No se encontró token de OneDrive. Cancelando." -ForegroundColor Red
                 return
             }
+            
+            Write-Host "✓ OneDrive autenticado" -ForegroundColor Green
         }
             
         # Autenticar con Dropbox si es necesario
         if ($origenTipo -eq "Dropbox" -or $destinoTipo -eq "Dropbox") {
             Show-Banner "AUTENTICACIÓN DROPBOX" -BorderColor Cyan -TextColor Yellow
                 
-            if (-not (Connect-DropboxSession)) {
-                Write-Host "No se pudo autenticar con Dropbox. Cancelando." -ForegroundColor Red
+            # Verificar si ya tenemos token en TransferConfig
+            $hasToken = $false
+            if ($origenTipo -eq "Dropbox") {
+                $hasToken = $TransferConfig.Origen.Dropbox.Token
+            }
+            elseif ($destinoTipo -eq "Dropbox") {
+                $hasToken = $TransferConfig.Destino.Dropbox.Token
+            }
+            
+            if (-not $hasToken) {
+                Write-Host "No se encontró token de Dropbox. Cancelando." -ForegroundColor Red
                 return
             }
+            
+            Write-Host "✓ Dropbox autenticado" -ForegroundColor Green
         }
 
         # Inicializar rutas especiales (montar UNC, crear temp, determinar 7-Zip)
@@ -397,7 +449,16 @@ function Invoke-CompressedTransfer {
             }
             
             Write-Host "Descargando desde OneDrive a temporal..." -ForegroundColor Cyan
-            # TODO: Implementar Copy-LlevarFromOneDrive
+            
+            # Crear TransferConfig temporal para descarga OneDrive → Local
+            $downloadConfig = [TransferConfig]::new()
+            $downloadConfig.Origen = $TransferConfig.Origen  # OneDrive origen
+            $downloadConfig.Destino.Tipo = "Local"
+            $downloadConfig.Destino.Local.Path = $tempOrigenCloud
+            
+            # Descargar usando Copy-LlevarOneDriveToLocal
+            Copy-LlevarOneDriveToLocal -Llevar $downloadConfig
+            
             $origenParaComprimir = $tempOrigenCloud
             Write-Host "✓ Descarga de OneDrive completada" -ForegroundColor Green
         }
@@ -409,7 +470,16 @@ function Invoke-CompressedTransfer {
             }
             
             Write-Host "Descargando desde Dropbox a temporal..." -ForegroundColor Cyan
-            # TODO: Implementar Copy-LlevarFromDropbox
+            
+            # Crear TransferConfig temporal para descarga Dropbox → Local
+            $downloadConfig = [TransferConfig]::new()
+            $downloadConfig.Origen = $TransferConfig.Origen  # Dropbox origen
+            $downloadConfig.Destino.Tipo = "Local"
+            $downloadConfig.Destino.Local.Path = $tempOrigenCloud
+            
+            # Descargar usando Copy-LlevarDropboxToLocal
+            Copy-LlevarDropboxToLocal -Llevar $downloadConfig
+            
             $origenParaComprimir = $tempOrigenCloud
             Write-Host "✓ Descarga de Dropbox completada" -ForegroundColor Green
         }
@@ -421,7 +491,16 @@ function Invoke-CompressedTransfer {
             }
             
             Write-Host "Descargando desde FTP a temporal..." -ForegroundColor Cyan
-            # TODO: Implementar Copy-LlevarFromFTP usando Copy-LlevarFiles
+            
+            # Crear TransferConfig temporal para descarga FTP → Local
+            $downloadConfig = [TransferConfig]::new()
+            $downloadConfig.Origen = $TransferConfig.Origen  # FTP origen
+            $downloadConfig.Destino.Tipo = "Local"
+            $downloadConfig.Destino.Local.Path = $tempOrigenCloud
+            
+            # Descargar usando Copy-LlevarFtpToLocal
+            Copy-LlevarFtpToLocal -Llevar $downloadConfig
+            
             $origenParaComprimir = $tempOrigenCloud
             Write-Host "✓ Descarga de FTP completada" -ForegroundColor Green
         }
@@ -433,7 +512,7 @@ function Invoke-CompressedTransfer {
             $origenParaComprimir = Get-TransferConfigValue -Config $TransferConfig -Path "Origen.USB.Path"
         }
         "UNC" {
-            # Si es UNC, usar el drive montado
+            # Si es UNC montado, usar el drive montado
             $origenDrive = Get-TransferConfigValue -Config $TransferConfig -Path "Interno.OrigenDrive"
             $origenParaComprimir = if ($origenDrive) {
                 "${origenDrive}:\"
@@ -446,20 +525,47 @@ function Invoke-CompressedTransfer {
     
     # Ejecutar compresión
     Write-Host "Comprimiendo archivos..." -ForegroundColor Cyan
+    
+    # Obtener configuración de compresión
+    $sevenZipPath = if ($TransferConfig.Opciones.UseNativeZip) {
+        "NATIVE_ZIP"
+    }
+    else {
+        Get-SevenZipLlevar
+    }
+    
+    if (-not $TransferConfig.Interno) {
+        $TransferConfig.Interno = [PSCustomObject]@{
+            TempDir      = (Join-Path $env:TEMP "LLEVAR_TEMP")
+            SevenZipPath = $sevenZipPath
+        }
+    }
+    
+    $tempDir = $TransferConfig.Interno.TempDir
+    if (-not (Test-Path $tempDir)) {
+        New-Item -Type Directory $tempDir | Out-Null
+    }
+    
+    # Llamar a Compress-Folder con la firma correcta
     $compressionResult = Compress-Folder `
-        -SourcePath $origenParaComprimir `
-        -TempPath $TransferConfig.Interno.TempDir `
-        -SevenZipPath $TransferConfig.Interno.SevenZipPath `
-        -Password $TransferConfig.Opciones.Clave `
+        -Origen $origenParaComprimir `
+        -Temp $tempDir `
+        -SevenZ $sevenZipPath `
+        -Clave $TransferConfig.Opciones.Clave `
         -BlockSizeMB $TransferConfig.Opciones.BlockSizeMB
     
     $blocks = $compressionResult.Files
     $compressionType = $compressionResult.CompressionType
     
+    Write-Host "✓ Compresión completada: $($blocks.Count) bloques" -ForegroundColor Green
+    
     # Generar script instalador
+    Write-Host "Generando instalador..." -ForegroundColor Cyan
     $installerScript = New-InstallerScript `
-        -Temp $TransferConfig.Interno.TempDir `
+        -Temp $tempDir `
         -CompressionType $compressionType
+    
+    Write-Host "✓ Instalador generado: $(Split-Path $installerScript -Leaf)" -ForegroundColor Green
     
     # Copiar/subir bloques según tipo de destino
     $destinoTipo = Get-TransferType -Config $TransferConfig -Section "Destino"
@@ -469,6 +575,15 @@ function Invoke-CompressedTransfer {
     switch ($destinoTipo) {
         "OneDrive" {
             Write-Host "Subiendo bloques a OneDrive..." -ForegroundColor Cyan
+            
+            # Asegurar que el módulo OneDriveTransfer esté cargado
+            $onedriveTransferPath = Join-Path (Split-Path $PSScriptRoot -Parent) "Transfer\OneDrive\OneDriveTransfer.psm1"
+            if (Test-Path $onedriveTransferPath) {
+                Import-Module $onedriveTransferPath -Force -Global -ErrorAction Stop
+            }
+            else {
+                throw "No se encontró OneDriveTransfer.psm1 en: $onedriveTransferPath"
+            }
             
             $archivosParaSubir = $blocks + @($installerScript)
             if ($sevenZipPath -ne "NATIVE_ZIP") {
@@ -481,7 +596,7 @@ function Invoke-CompressedTransfer {
                 $nombreArchivo = Split-Path $archivo -Leaf
                 
                 Write-Host "  Subiendo: $nombreArchivo" -ForegroundColor Gray
-                # TODO: Send-LlevarOneDriveFile -Llevar $TransferConfig -LocalPath $archivo -RemotePath "$onedrivePathValue/$nombreArchivo"
+                Send-LlevarOneDriveFile -Llevar $TransferConfig -LocalPath $archivo -RemotePath $onedrivePathValue
             }
             
             Write-Host "✓ Todos los bloques subidos a OneDrive" -ForegroundColor Green
@@ -504,7 +619,7 @@ function Invoke-CompressedTransfer {
                 $nombreArchivo = Split-Path $archivo -Leaf
                 
                 Write-Host "  Subiendo: $nombreArchivo" -ForegroundColor Gray
-                # TODO: Send-LlevarDropboxFile -Llevar $TransferConfig -LocalPath $archivo -RemotePath "$dropboxPathValue/$nombreArchivo"
+                Send-LlevarDropboxFile -Llevar $TransferConfig -LocalPath $archivo -RemotePath $dropboxPathValue
             }
             
             Write-Host "✓ Todos los bloques subidos a Dropbox" -ForegroundColor Green
@@ -513,16 +628,84 @@ function Invoke-CompressedTransfer {
             Write-Host "Descarga los bloques .7z.* y ejecuta INSTALAR.ps1" -ForegroundColor Yellow
         }
         
+        "Local" {
+            # Copiar bloques a carpeta local
+            $destinoPath = Get-TransferConfigValue -Config $TransferConfig -Path "Destino.Local.Path"
+            
+            if (-not (Test-Path $destinoPath)) {
+                New-Item -Type Directory $destinoPath -Force | Out-Null
+            }
+            
+            Write-Host "Copiando bloques a: $destinoPath" -ForegroundColor Cyan
+            
+            $archivosParaCopiar = $blocks + @($installerScript)
+            if ($sevenZipPath -ne "NATIVE_ZIP" -and (Test-Path $sevenZipPath)) {
+                $archivosParaCopiar += $sevenZipPath
+            }
+            
+            foreach ($archivo in $archivosParaCopiar) {
+                $nombreArchivo = Split-Path $archivo -Leaf
+                Write-Host "  → $nombreArchivo" -ForegroundColor Gray
+                Copy-Item -Path $archivo -Destination (Join-Path $destinoPath $nombreArchivo) -Force
+            }
+            
+            Write-Host "✓ Todos los bloques copiados" -ForegroundColor Green
+            Show-Banner "TRANSFERENCIA COMPLETADA" -BorderColor Green -TextColor Green
+            Write-Host "Archivos en: $destinoPath" -ForegroundColor Cyan
+            Write-Host "Para restaurar: ejecuta INSTALAR.ps1" -ForegroundColor Yellow
+        }
+        
+        "USB" {
+            # Copiar bloques a USB (similar a Local pero con detección de dispositivos)
+            Write-Host "Copiando bloques a USB..." -ForegroundColor Cyan
+            # TODO: Implementar lógica de detección de USB y copia multi-dispositivo
+            $destinoPath = Get-TransferConfigValue -Config $TransferConfig -Path "Destino.USB.Path"
+            
+            $archivosParaCopiar = $blocks + @($installerScript)
+            if ($sevenZipPath -ne "NATIVE_ZIP" -and (Test-Path $sevenZipPath)) {
+                $archivosParaCopiar += $sevenZipPath
+            }
+            
+            foreach ($archivo in $archivosParaCopiar) {
+                $nombreArchivo = Split-Path $archivo -Leaf
+                Write-Host "  → $nombreArchivo" -ForegroundColor Gray
+                Copy-Item -Path $archivo -Destination (Join-Path $destinoPath $nombreArchivo) -Force
+            }
+            
+            Write-Host "✓ Bloques copiados a USB" -ForegroundColor Green
+        }
+        
+        "ISO" {
+            # Generar imagen ISO con bloques
+            Write-Host "Generando imagen ISO..." -ForegroundColor Cyan
+            $isoOutputPath = Get-TransferConfigValue -Config $TransferConfig -Path "Destino.ISO.OutputPath"
+            $isoSize = Get-TransferConfigValue -Config $TransferConfig -Path "Destino.ISO.Size"
+            
+            # Importar módulo ISO
+            $modulesRoot = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
+            Import-Module (Join-Path $modulesRoot "Installation\ISO.psm1") -Force -Global -ErrorAction SilentlyContinue
+            
+            # Llamar a New-LlevarIsoMain directamente
+            New-LlevarIsoMain `
+                -Origen $origenParaComprimir `
+                -Destino $isoOutputPath `
+                -Temp $tempDir `
+                -SevenZ $sevenZipPath `
+                -BlockSizeMB $TransferConfig.Opciones.BlockSizeMB `
+                -Clave $TransferConfig.Opciones.Clave `
+                -IsoDestino $(if ($isoSize) { $isoSize } else { "dvd" })
+            
+            Write-Host "✓ ISO generado" -ForegroundColor Green
+        }
+        
         "Diskette" {
             Write-Host "Generando disquetes..." -ForegroundColor Cyan
-            
-            $passwordValue = Get-TransferOption -Config $TransferConfig -Option "Clave"
             
             Copy-ToFloppyDisks `
                 -SourcePath $origenParaComprimir `
                 -TempDir $tempDir `
                 -SevenZPath $sevenZipPath `
-                -Password $passwordValue `
+                -Password $TransferConfig.Opciones.Clave `
                 -VerifyDisks
             
             Write-Host "✓ Disquetes generados" -ForegroundColor Green

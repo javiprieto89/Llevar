@@ -122,6 +122,48 @@ function Select-FolderDOS {
 # Get-SevenZip ahora está en Modules/Compression/SevenZip.psm1
 
 # ========================================================================== #
+#                     FUNCIONES DE BLOQUES (INYECTADAS)                      #
+# ========================================================================== #
+
+function Get-BlocksFromUnit {
+    <#
+    .SYNOPSIS
+        Detecta bloques en una unidad (USB, carpeta, etc.)
+    #>
+    param([string]$Path)
+
+    Get-ChildItem $Path -File |
+    Where-Object {
+        $_.Name -match '\.7z($|\.)' -or $_.Name -match '\.\d{3}$' -or $_.Name -match '\.alx\d{4}$' -or $_.Name -match '\.zip$'
+    } |
+    Sort-Object Name |
+    Select-Object -ExpandProperty FullName
+}
+
+function Get-AllBlocks {
+    <#
+    .SYNOPSIS
+        Recopila todos los bloques desde la carpeta actual
+    #>
+    param($InitialPath)
+
+    $blocks = @{}
+    $current = Get-BlocksFromUnit $InitialPath
+    
+    foreach ($c in $current) {
+        $name = Split-Path $c -Leaf
+        $blocks[$name] = $c
+    }
+
+    return $blocks
+}
+
+# Alias para compatibilidad con versiones anteriores del instalador
+function Get-7z {
+    return Get-SevenZip
+}
+
+# ========================================================================== #
 #                          RECONSTRUIR ARCHIVO .7Z                           #
 # ========================================================================== #
 

@@ -6,10 +6,17 @@
 #   - Select-PathNavigator: Navegador interactivo con teclado
 # ========================================================================== #
 
-# Importar módulos necesarios
-Import-Module "$PSScriptRoot\..\System\FileSystem.psm1" -Force
-Import-Module "$PSScriptRoot\..\UI\ProgressBar.psm1" -Force
-Import-Module "$PSScriptRoot\..\Transfer\UNC.psm1" -Force
+# Todos los módulos necesarios ya fueron importados por Llevar.ps1
+# Solo importar si se usan de forma independiente
+if (-not (Get-Command Get-DirectoryItems -ErrorAction SilentlyContinue)) {
+    Import-Module "$PSScriptRoot\..\System\FileSystem.psm1" -Force -Global
+}
+if (-not (Get-Command Write-LlevarProgressBar -ErrorAction SilentlyContinue)) {
+    Import-Module "$PSScriptRoot\..\UI\ProgressBar.psm1" -Force -Global
+}
+if (-not (Get-Command Select-NetworkPath -ErrorAction SilentlyContinue)) {
+    Import-Module "$PSScriptRoot\..\Transfer\UNC.psm1" -Force -Global
+}
 
 # Variable global para almacenar tamaños calculados de directorios
 $script:DirectorySizeCache = @{}

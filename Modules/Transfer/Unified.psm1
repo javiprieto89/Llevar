@@ -5,15 +5,9 @@
 # Arquitectura: Funciones públicas legibles → Dispatcher genérico → Handlers específicos
 # ========================================================================== #
 
-# Imports necesarios
+# Todos los módulos necesarios ya fueron importados por Llevar.ps1
+# Solo verificar que TransferConfig esté disponible
 $ModulesPath = Join-Path (Split-Path (Split-Path $PSScriptRoot -Parent) -Parent) "Modules"
-Import-Module (Join-Path $ModulesPath "UI\ProgressBar.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "Core\Logger.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "Transfer\Local.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "Transfer\UNC.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "Transfer\Floppy.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "System\FileSystem.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "Compression\SevenZip.psm1") -Force -Global
 if (-not (Get-Module -Name 'TransferConfig')) {
     Import-Module (Join-Path $ModulesPath "Core\TransferConfig.psm1") -Force -Global
 }
@@ -49,7 +43,7 @@ function Copy-LlevarFiles {
     #>
     param(
         [Parameter(Mandatory = $true)]
-        [TransferConfig]$TransferConfig,
+        $TransferConfig,
         
         [bool]$ShowProgress = $true,
         [int]$ProgressTop = -1
@@ -523,14 +517,7 @@ function Invoke-LocalToCloud {
         Write-LlevarProgressBar -Percent 0 -StartTime $StartTime -Label "Subiendo a ${CloudType}..." -Top $ProgressTop -Width 50
     }
     
-    # Importar módulos cloud
-    $modulesRoot = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
-    if ($CloudType -eq "OneDrive") {
-        Import-Module (Join-Path $modulesRoot "Transfer\OneDrive.psm1") -Force -Global -ErrorAction SilentlyContinue
-    }
-    elseif ($CloudType -eq "Dropbox") {
-        Import-Module (Join-Path $modulesRoot "Transfer\Dropbox.psm1") -Force -Global -ErrorAction SilentlyContinue
-    }
+    # Módulos OneDrive/Dropbox ya fueron importados por Llevar.ps1
     
     # Obtener todos los archivos a subir
     $files = @()
@@ -588,8 +575,127 @@ function Invoke-LocalToCloud {
 
 function Invoke-FtpToLocal {
     param([TransferConfig]$Llevar, [bool]$ShowProgress, [int]$ProgressTop, [datetime]$StartTime)
-    Write-Log "Handler: FTP→Local (en desarrollo)" "WARNING"
-    throw "FTP→Local: Implementación pendiente"
+    
+    Write-Log "Handler: FTP→Local (descarga recursiva)" "INFO"
+    
+    # Obtener configuración FTP
+    $ftpServer = $Llevar.Origen.FTP.Server
+    $ftpPort = $Llevar.Origen.FTP.Port
+    $ftpDirectory = $Llevar.Origen.FTP.Directory
+    $ftpCredentials = $Llevar.Origen.FTP.Credentials
+    $ftpUseSsl = $Llevar.Origen.FTP.UseSsl
+    
+    # Obtener configuración destino local
+    $localPath = $Llevar.Destino.Local.Path
+    
+    if (-not (Test-Path $localPath)) {
+        New-Item -Type Directory -Path $localPath -Force | Out-Null
+        Write-Log "Carpeta destino creada: $localPath" "INFO"
+    }
+    
+    Write-Log "FTP→Local: Descargando de $ftpServer$ftpDirectory a $localPath" "INFO"
+    
+    # Helper para descargar un archivo FTP
+    function Receive-SingleFtpFile {
+        param(
+            [string]$FtpUrl,
+            [PSCredential]$Credentials,
+            [string]$LocalFilePath,
+            [bool]$UseSsl
+        )
+        
+        $request = [System.Net.FtpWebRequest]::Create($FtpUrl)
+        $request.Method = [System.Net.WebRequestMethods+Ftp]::DownloadFile
+        $request.Credentials = $Credentials.GetNetworkCredential()
+        $request.UseBinary = $true
+        $request.UsePassive = $true
+        
+        if ($UseSsl) {
+            $request.EnableSsl = $true
+        }
+        
+        $response = $request.GetResponse()
+        $stream = $response.GetResponseStream()
+        
+        $fileStream = [System.IO.File]::Create($LocalFilePath)
+        $buffer = New-Object byte[] 8192
+        
+        do {
+            $bytesRead = $stream.Read($buffer, 0, $buffer.Length)
+            $fileStream.Write($buffer, 0, $bytesRead)
+        } while ($bytesRead -gt 0)
+        
+        $fileStream.Close()
+        $stream.Close()
+        $response.Close()
+    }
+    
+    # Función recursiva para descargar carpetas FTP
+    function Receive-FtpFolder {
+        param(
+            [string]$FtpPath,
+            [string]$LocalDestination
+        )
+        
+        # Obtener items del directorio FTP actual
+        $items = Get-FtpNavigatorItems -Server $ftpServer -Port $ftpPort `
+            -Credential $ftpCredentials -CurrentPath $FtpPath `
+            -AllowFiles $true -UseSsl $ftpUseSsl
+        
+        foreach ($item in $items) {
+            # Saltar item ".."
+            if ($item.IsParent) {
+                continue
+            }
+            
+            $localItemPath = Join-Path $LocalDestination $item.Name
+            
+            if ($item.IsDirectory) {
+                # Crear carpeta local
+                if (-not (Test-Path $localItemPath)) {
+                    New-Item -Type Directory -Path $localItemPath -Force | Out-Null
+                }
+                
+                # Recursión para subcarpetas
+                Receive-FtpFolder -FtpPath $item.FullName -LocalDestination $localItemPath
+            }
+            else {
+                # Descargar archivo
+                if ($ShowProgress) {
+                    Write-LlevarProgressBar -Percent 50 -StartTime $StartTime `
+                        -Label "Descargando: $($item.Name)..." -Top $ProgressTop -Width 50
+                }
+                
+                try {
+                    # Construir URL FTP completa
+                    $ftpFileUrl = "$ftpServer$($item.FullName)"
+                    
+                    Receive-SingleFtpFile -FtpUrl $ftpFileUrl `
+                        -Credentials $ftpCredentials `
+                        -LocalFilePath $localItemPath `
+                        -UseSsl $ftpUseSsl
+                    
+                    Write-Log "Archivo descargado: $($item.Name)" "INFO"
+                }
+                catch {
+                    Write-Log "Error descargando $($item.Name): $($_.Exception.Message)" "ERROR" -ErrorRecord $_
+                    throw
+                }
+            }
+        }
+    }
+    
+    # Iniciar descarga recursiva
+    Receive-FtpFolder -FtpPath $ftpDirectory -LocalDestination $localPath
+    
+    if ($ShowProgress) {
+        Write-LlevarProgressBar -Percent 100 -StartTime $StartTime `
+            -Label "Descarga FTP completada" -Top $ProgressTop -Width 50
+    }
+    
+    Write-Log "FTP→Local: Descarga completada exitosamente" "INFO"
+    
+    return @{ Success = $true; Route = "FTP→Local"; Downloaded = $true }
 }
 
 function Invoke-FtpToFtp {
@@ -707,7 +813,7 @@ function Invoke-LocalToUNC {
         # Usar Robocopy para copiar (más eficiente para UNC)
         $useMirror = $Llevar.Opciones.RobocopyMirror
         
-        Import-Module (Join-Path $ModulesPath "Transfer\Local.psm1") -Force -Global -ErrorAction SilentlyContinue
+        # Módulo Local.psm1 ya fue importado por Llevar.ps1
         
         Copy-LlevarLocalToLocalRobocopy -SourcePath $sourcePath -DestinationPath $destinoMontado `
             -UseMirror $useMirror -ShowProgress $ShowProgress -ProgressTop $ProgressTop -StartTime $StartTime
@@ -776,10 +882,7 @@ function Invoke-LocalToISO {
         Write-LlevarProgressBar -Percent 0 -StartTime $StartTime -Label "Generando ISO..." -Top $ProgressTop -Width 50
     }
     
-    # Importar módulos necesarios
-    $modulesRoot = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
-    Import-Module (Join-Path $modulesRoot "Installation\ISO.psm1") -Force -Global -ErrorAction SilentlyContinue
-    Import-Module (Join-Path $modulesRoot "Compression\SevenZip.psm1") -Force -Global -ErrorAction SilentlyContinue
+    # Módulos ISO y SevenZip ya fueron importados por Llevar.ps1
     
     # Obtener 7-Zip
     $sevenZ = Get-SevenZipLlevar

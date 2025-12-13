@@ -509,6 +509,14 @@ function Send-LlevarOneDriveFile {
         $remoteFolder = $remoteFolder.TrimEnd('/')
     }
 
+    # Crear la carpeta si no existe
+    if ($remoteFolder -ne "/") {
+        $folderCreated = New-OneDriveFolder -Token $token -FolderPath $remoteFolder
+        if (-not $folderCreated) {
+            Write-Warning "No se pudo verificar/crear la carpeta: $remoteFolder. Continuando..."
+        }
+    }
+
     $fileName = [System.IO.Path]::GetFileName($LocalPath)
     if ($remoteFolder -eq "/") {
         $uploadUrl = "https://graph.microsoft.com/v1.0/me/drive/root:" + "/" + $fileName + ":/content"
@@ -530,6 +538,107 @@ function Send-LlevarOneDriveFile {
 # ========================================================================== #
 # FUNCIONES DE RUTAS
 # ========================================================================== #
+
+function New-OneDriveFolder {
+    <#
+    .SYNOPSIS
+        Crea una carpeta en OneDrive si no existe
+    .PARAMETER Token
+        Token de autenticación de OneDrive
+    .PARAMETER FolderPath
+        Ruta de la carpeta a crear (ej: /Apps/TestLlevar)
+    .OUTPUTS
+        $true si la carpeta existe o se creó exitosamente, $false si falla
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Token,
+        
+        [Parameter(Mandatory = $true)]
+        [string]$FolderPath
+    )
+    
+    $folderPath = Resolve-OneDrivePath -Path $FolderPath
+    
+    # Si es raíz, no hay nada que crear
+    if ($folderPath -eq "/") {
+        return $true
+    }
+    
+    # Verificar si la carpeta ya existe
+    try {
+        $checkUrl = "https://graph.microsoft.com/v1.0/me/drive/root:${folderPath}"
+        $headers = @{
+            "Authorization" = "Bearer $Token"
+        }
+        
+        Invoke-RestMethod -Uri $checkUrl -Headers $headers -Method Get -ErrorAction Stop | Out-Null
+        Write-Log "Carpeta OneDrive ya existe: $folderPath" "DEBUG"
+        return $true
+    }
+    catch {
+        # Si no existe, intentar crearla
+        Write-Log "Carpeta no existe, creando: $folderPath" "DEBUG"
+    }
+    
+    # Crear carpetas recursivamente si es necesario
+    $parts = $folderPath.TrimStart('/').Split('/')
+    $currentPath = ""
+    
+    foreach ($part in $parts) {
+        if ([string]::IsNullOrWhiteSpace($part)) { continue }
+        
+        $parentPath = $currentPath
+        $currentPath = if ($currentPath) { "$currentPath/$part" } else { "/$part" }
+        
+        try {
+            # Verificar si existe
+            $checkUrl = "https://graph.microsoft.com/v1.0/me/drive/root:${currentPath}"
+            $headers = @{
+                "Authorization" = "Bearer $Token"
+            }
+            
+            Invoke-RestMethod -Uri $checkUrl -Headers $headers -Method Get -ErrorAction Stop | Out-Null
+            Write-Log "Carpeta existe: $currentPath" "DEBUG"
+        }
+        catch {
+            # Crear la carpeta
+            try {
+                $createUrl = if ($parentPath) {
+                    "https://graph.microsoft.com/v1.0/me/drive/root:${parentPath}:/children"
+                }
+                else {
+                    "https://graph.microsoft.com/v1.0/me/drive/root/children"
+                }
+                
+                $body = @{
+                    name                                = $part
+                    folder                              = @{}
+                    "@microsoft.graph.conflictBehavior" = "fail"
+                } | ConvertTo-Json
+                
+                $headers = @{
+                    "Authorization" = "Bearer $Token"
+                    "Content-Type"  = "application/json"
+                }
+                
+                Invoke-RestMethod -Uri $createUrl -Headers $headers -Method Post -Body $body -ErrorAction Stop | Out-Null
+                Write-Log "Carpeta creada: $currentPath" "INFO"
+            }
+            catch {
+                if ($_.Exception.Message -like "*already exists*" -or $_.Exception.Message -like "*nameAlreadyExists*") {
+                    Write-Log "Carpeta ya existe (conflicto): $currentPath" "DEBUG"
+                }
+                else {
+                    Write-Log "Error creando carpeta $currentPath : $($_.Exception.Message)" "ERROR"
+                    return $false
+                }
+            }
+        }
+    }
+    
+    return $true
+}
 
 function Resolve-OneDrivePath {
     param([string]$Path)
@@ -856,7 +965,9 @@ function Select-OneDrivePath {
 
     $modulePathResolved = $MyInvocation.MyCommand.Path
     try {
-        $modulePathResolved = (Resolve-Path -LiteralPath $modulePathResolved).Path
+        if ($modulePathResolved) {
+            $modulePathResolved = (Resolve-Path -LiteralPath $modulePathResolved).Path
+        }
     }
     catch {}
 
@@ -961,6 +1072,7 @@ Export-ModuleMember -Function @(
     'Receive-OneDriveFile',
     'Test-OneDriveConnection',
     'Send-LlevarOneDriveFile',
+    'New-OneDriveFolder',
     'Resolve-OneDrivePath',
     'Get-OneDriveParentPath',
     'Convert-GraphItemToNavigatorEntry',
