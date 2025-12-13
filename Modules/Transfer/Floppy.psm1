@@ -8,11 +8,11 @@
 #>
 
 # Imports necesarios
-$ModulesPath = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
-Import-Module (Join-Path $ModulesPath "Modules\Compression\SevenZip.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "Modules\Compression\BlockSplitter.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "Modules\UI\Banners.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "Modules\Core\Logger.psm1") -Force -Global
+$ModulesPath = Split-Path $PSScriptRoot -Parent
+Import-Module (Join-Path $ModulesPath "Compression\SevenZip.psm1") -Force -Global
+Import-Module (Join-Path $ModulesPath "Compression\BlockSplitter.psm1") -Force -Global
+Import-Module (Join-Path $ModulesPath "UI\Banners.psm1") -Force -Global
+Import-Module (Join-Path $ModulesPath "Core\Logger.psm1") -Force -Global
 
 # ========================================================================== #
 #                    CONSTANTES Y CONFIGURACIÓN                              #
@@ -26,6 +26,66 @@ $Script:FloppyBlockSize = 1440  # KB para ARJ/7-Zip
 # ========================================================================== #
 #                    FUNCIONES DE DETECCIÓN Y VALIDACIÓN                     #
 # ========================================================================== #
+
+function Get-LlevarArj32Path {
+    <#
+    .SYNOPSIS
+        Localiza ARJ32.EXE (Windows) (preferentemente el binario incluido con Llevar)
+    .OUTPUTS
+        String ruta completa al ejecutable ARJ32
+    #>
+    param()
+
+    $candidates = @(
+        (Join-Path $ModulesPath "ARJ32.EXE"),
+        (Join-Path $ModulesPath "ARJ32.exe")
+    )
+
+    foreach ($c in $candidates) {
+        if ($c -and (Test-Path $c)) {
+            return $c
+        }
+    }
+
+    foreach ($name in @('arj32', 'ARJ32')) {
+        $cmd = Get-Command $name -ErrorAction SilentlyContinue
+        if ($cmd -and $cmd.Source) {
+            return $cmd.Source
+        }
+    }
+
+    throw "No se encontró ARJ32.EXE. Coloque ARJ32.EXE en la raíz del proyecto o en PATH."
+}
+
+function Get-LlevarArjDosPath {
+    <#
+    .SYNOPSIS
+        Localiza ARJ.EXE (versión DOS) incluida con Llevar (para instalación en DOS)
+    .OUTPUTS
+        String ruta completa al ejecutable ARJ (DOS)
+    #>
+    param()
+
+    $candidates = @(
+        (Join-Path $ModulesPath "ARJ.EXE"),
+        (Join-Path $ModulesPath "ARJ.exe")
+    )
+
+    foreach ($c in $candidates) {
+        if ($c -and (Test-Path $c)) {
+            return $c
+        }
+    }
+
+    foreach ($name in @('arj', 'ARJ')) {
+        $cmd = Get-Command $name -ErrorAction SilentlyContinue
+        if ($cmd -and $cmd.Source) {
+            return $cmd.Source
+        }
+    }
+
+    throw "No se encontró ARJ.EXE (DOS). Coloque ARJ.EXE en la raíz del proyecto (recomendado) o en PATH."
+}
 
 function Test-FloppyDriveAvailable {
     <#
@@ -97,7 +157,7 @@ function Format-FloppyDisk {
     #>
     param(
         [string]$DriveLetter = "A:",
-        [switch]$QuickFormat = $true,
+        [bool]$QuickFormat = $true,
         [int]$FloppyNumber = 1
     )
     
@@ -228,6 +288,17 @@ function Test-FloppyArchiveIntegrity {
             }
         }
         
+        # ARJ multi-volumen: no es seguro ejecutar 'arj t' sobre un volumen aislado (puede pedir el siguiente y bloquear).
+        # En diskettes validamos por copia + comparación de tamaño (Copy-FileToFloppy ya compara) y por existencia.
+        if ($CompressionTool -eq "arj") {
+            $originalSize = (Get-Item $ArchivePath).Length
+            if ($originalSize -gt 0) {
+                Write-Log "Verificación básica OK (ARJ volumen, tamaño: $originalSize bytes)" "INFO"
+                return $true
+            }
+            return $false
+        }
+
         # Verificación simple: comparar tamaño
         $originalSize = (Get-Item $ArchivePath).Length
         if ($originalSize -gt 0) {
@@ -268,9 +339,10 @@ function Copy-ToFloppyDisks {
         
         [string]$SevenZPath,
         
-        [string]$Password,
+        [Alias('Password')]
+        [string]$DiskCode,
         
-        [switch]$VerifyDisks = $true
+        [bool]$VerifyDisks = $true
     )
     
     # Validar unidad de diskette
@@ -306,44 +378,89 @@ function Copy-ToFloppyDisks {
     Write-Host ""
     
     try {
-        # Determinar herramienta de compresión
-        if (-not $SevenZPath) {
-            $SevenZPath = Get-SevenZipLlevar
-        }
-        
+        # Para diskettes: SIEMPRE usamos ARJ32 (Windows) para crear multi-volumen.
+        # Además copiamos ARJ32.EXE + ARJ.EXE (DOS) al diskette 1 para que INSTALAR.BAT funcione en Windows/DOS.
+        $arj32Path = Get-LlevarArj32Path
+        $arjDosPath = Get-LlevarArjDosPath
+
+        $arj32SizeBytes = (Get-Item $arj32Path).Length
+        $arjDosSizeBytes = (Get-Item $arjDosPath).Length
+        Write-Log "ARJ32 detectado: $arj32Path ($arj32SizeBytes bytes)" "INFO"
+        Write-Log "ARJ (DOS) detectado: $arjDosPath ($arjDosSizeBytes bytes)" "INFO"
+
+        $archiveBaseName = "LLEVAR_FLP"
+        $archiveBase = Join-Path $TempDir $archiveBaseName
+
+        # Generación iterativa para reservar espacio en el primer volumen para:
+        # ARJ32.EXE + ARJ.EXE + INSTALAR.BAT (+ margen)
+        $reserveKB = 560
         $blocks = @()
-        
-        if ($SevenZPath -and $SevenZPath -ne "NATIVE_ZIP") {
-            # Usar 7-Zip con volúmenes de 1440KB
-            $baseArchive = Join-Path $TempDir "LLEVAR_FLP"
-            
-            $args = @(
-                "a"
-                "-v1440k"  # Volúmenes de 1.44MB
-                "-tzip"
-                "-mx=9"    # Máxima compresión
+        $installerContent = $null
+
+        for ($attempt = 1; $attempt -le 3; $attempt++) {
+            # Limpiar volúmenes previos
+            Get-ChildItem -Path $TempDir -File -ErrorAction SilentlyContinue | Where-Object {
+                $_.Name -match "^$archiveBaseName\.(arj|a\d{2})$"
+            } | Remove-Item -Force -ErrorAction SilentlyContinue
+
+            Write-Host "Comprimiendo con ARJ32 (intento $attempt, reserve=${reserveKB}KB en el primer volumen)..." -ForegroundColor Cyan
+            Write-Log "ARJ32 compress (attempt=$attempt) reserve=${reserveKB}KB" "INFO"
+
+            $sourceSpec = if (Test-Path $SourcePath -PathType Container) {
+                (Join-Path $SourcePath '*')
+            }
+            else {
+                $SourcePath
+            }
+
+            # Comando base (según ejemplo): arj a "...\backup" -r -a1 -vv1440r560k -jyv "...\*"
+            $arjArgs = @(
+                'a',
+                $archiveBase,
+                '-r',
+                '-a1',
+                ("-vv{0}r{1}k" -f $Script:FloppyBlockSize, $reserveKB),
+                '-jyv',
+                $sourceSpec
             )
-            
-            if ($Password) {
-                $args += "-p$Password"
-                $args += "-mhe=on"  # Cifrar headers
+
+            if ($DiskCode) {
+                # Garble with password (según help, switch g)
+                $arjArgs += ("-g$DiskCode")
             }
-            
-            $args += $baseArchive
-            $args += $SourcePath
-            
-            Write-Log "Ejecutando 7-Zip con volúmenes de 1440KB" "INFO"
-            $process = Start-Process -FilePath $SevenZPath -ArgumentList $args -Wait -NoNewWindow -PassThru
-            
+
+            $process = Start-Process -FilePath $arj32Path -ArgumentList $arjArgs -Wait -NoNewWindow -PassThru
             if ($process.ExitCode -ne 0) {
-                throw "Error comprimiendo con 7-Zip (código: $($process.ExitCode))"
+                throw "Error comprimiendo con ARJ32 (código: $($process.ExitCode))"
             }
-            
-            # Recopilar bloques generados
-            $blocks = Get-ChildItem "$baseArchive.zip*" | Sort-Object Name
-        }
-        else {
-            throw "Se requiere 7-Zip para copia a diskettes"
+
+            $vols = Get-ChildItem -Path $TempDir -File -ErrorAction SilentlyContinue | Where-Object {
+                $_.Name -match "^$archiveBaseName\.arj$" -or $_.Name -match "^$archiveBaseName\.a\d{2}$"
+            }
+
+            if (-not $vols -or $vols.Count -eq 0) {
+                throw "No se generaron volúmenes ARJ en $TempDir"
+            }
+
+            $blocks = $vols | Sort-Object @{
+                Expression = {
+                    if ($_.Extension -ieq '.arj') { 0 }
+                    elseif ($_.Extension -match '\.a(\d{2})') { [int]$matches[1] }
+                    else { 999 }
+                }
+            }, Name
+
+            $installerContent = New-FloppyInstallerScript -TotalDisks $blocks.Count -ArchiveBaseName $archiveBaseName
+            $installerBytes = [System.Text.Encoding]::ASCII.GetByteCount($installerContent)
+
+            $neededReserveBytes = $arj32SizeBytes + $arjDosSizeBytes + $installerBytes + (64KB)
+            $neededReserveKB = [int][Math]::Ceiling($neededReserveBytes / 1KB)
+            if ($neededReserveKB -lt 560) { $neededReserveKB = 560 }
+
+            Write-Log "Reserva requerida estimada: ${neededReserveKB}KB (ARJ32=${arj32SizeBytes} bytes, ARJ_DOS=${arjDosSizeBytes} bytes, INSTALAR=${installerBytes} bytes)" "INFO"
+
+            if ($neededReserveKB -le $reserveKB) { break }
+            $reserveKB = $neededReserveKB
         }
         
         if ($blocks.Count -eq 0) {
@@ -364,7 +481,7 @@ function Copy-ToFloppyDisks {
             return $false
         }
         
-        Show-Banner "RESUMEN DE COMPRESIÓN" -BorderColor Cyan -TextColor Cyan
+        Show-Banner "RESUMEN DE COMPRESIÓN (ARJ32)" -BorderColor Cyan -TextColor Cyan
         Write-Host "Diskettes necesarios: $($blocks.Count)" -ForegroundColor White
         Write-Host ""
         
@@ -387,7 +504,7 @@ function Copy-ToFloppyDisks {
                     Write-Host ""
                 }
                 
-                Write-Host "Inserte un diskette VAC�O en la unidad $Script:FloppyDrive" -ForegroundColor Cyan
+                Write-Host "Inserte un diskette VACIO en la unidad $Script:FloppyDrive" -ForegroundColor Cyan
                 Write-Host ""
                 Write-Host "Presione ENTER para continuar o ESC para cancelar..." -ForegroundColor Gray
                 
@@ -429,7 +546,7 @@ function Copy-ToFloppyDisks {
                     Write-Host "Verificando integridad..." -ForegroundColor Cyan
                     
                     $floppyFile = Join-Path $Script:FloppyDrive $block.Name
-                    $verified = Test-FloppyArchiveIntegrity -ArchivePath $floppyFile -CompressionTool "7z"
+                    $verified = Test-FloppyArchiveIntegrity -ArchivePath $floppyFile -CompressionTool "arj"
                     
                     if (-not $verified) {
                         Write-Host "✗ Verificación FALLÓ - diskette dañado" -ForegroundColor Red
@@ -468,7 +585,9 @@ function Copy-ToFloppyDisks {
         Write-Host ""
         $null = Read-Host "Presione ENTER cuando esté listo"
         
-        $installerContent = New-FloppyInstallerScript -TotalDisks $blocks.Count -ArchiveBaseName "LLEVAR_FLP"
+        if (-not $installerContent) {
+            $installerContent = New-FloppyInstallerScript -TotalDisks $blocks.Count -ArchiveBaseName "LLEVAR_FLP"
+        }
         $installerPath = Join-Path $Script:FloppyDrive "INSTALAR.BAT"
         
         try {
@@ -479,16 +598,18 @@ function Copy-ToFloppyDisks {
             Write-Log "Error creando instalador: $($_.Exception.Message)" "WARNING"
         }
         
-        # Copiar 7z.exe al primer diskette si existe
-        if ($SevenZPath -and (Test-Path $SevenZPath)) {
-            try {
-                $sevenZDest = Join-Path $Script:FloppyDrive "7z.exe"
-                Copy-Item -Path $SevenZPath -Destination $sevenZDest -Force
-                Write-Host "✓ 7z.exe copiado a diskette 1" -ForegroundColor Green
-            }
-            catch {
-                Write-Log "Error copiando 7z.exe: $($_.Exception.Message)" "WARNING"
-            }
+        # Copiar ARJ32.EXE + ARJ.EXE al primer diskette (requeridos para descompresión en Windows/DOS)
+        try {
+            $arj32Dest = Join-Path $Script:FloppyDrive "ARJ32.EXE"
+            Copy-Item -Path $arj32Path -Destination $arj32Dest -Force
+            Write-Host "✓ ARJ32.EXE copiado a diskette 1" -ForegroundColor Green
+
+            $arjDosDest = Join-Path $Script:FloppyDrive "ARJ.EXE"
+            Copy-Item -Path $arjDosPath -Destination $arjDosDest -Force
+            Write-Host "✓ ARJ.EXE (DOS) copiado a diskette 1" -ForegroundColor Green
+        }
+        catch {
+            Write-Log "Error copiando ARJ32/ARJ: $($_.Exception.Message)" "WARNING"
         }
         
         # Crear marcador __EOF__ en el ÚLTIMO diskette
@@ -555,8 +676,18 @@ function New-FloppyInstallerScript {
     
     $installer = @"
 @ECHO OFF
+REM Nota: En DOS puro, SETLOCAL/EnableDelayedExpansion pueden no existir. Evitar depender de eso.
+SETLOCAL EnableExtensions EnableDelayedExpansion 2>NUL
 REM Instalador generado por LLEVAR.PS1
-REM Restaura archivos desde diskettes
+REM Restaura archivos desde diskettes usando ARJ multi-volumen.
+REM En Windows_NT usa ARJ32.EXE y CHOICE; en DOS usa ARJ.EXE y PAUSE.
+
+REM Unidad de donde se ejecuta el instalador (normalmente A:)
+SET "SRC=%~d0\"
+IF "%SRC%"=="" SET "SRC=A:\"
+
+SET "IS_NT=0"
+IF /I "%OS%"=="Windows_NT" SET "IS_NT=1"
 
 CLS
 ECHO.
@@ -567,8 +698,7 @@ ECHO.
 ECHO Este proceso restaurara los archivos
 ECHO desde diskettes (hasta encontrar __EOF__).
 ECHO.
-ECHO Presione CTRL+C para cancelar o
-PAUSE
+CALL :WAITCONT "Presione S para continuar (o CTRL+C para cancelar)" || GOTO :EOF
 
 REM Crear directorio temporal
 IF NOT EXIST C:\LLEVAR_TEMP MD C:\LLEVAR_TEMP
@@ -581,9 +711,9 @@ ECHO.
 REM Copiar primer diskette
 CLS
 ECHO Inserte el diskette 1 y presione una tecla...
-PAUSE >NUL
+CALL :WAITDISK || GOTO :EOF
 ECHO Copiando disco 1...
-COPY A:\*.* C:\LLEVAR_TEMP\ >NUL
+COPY "%SRC%*.*" C:\LLEVAR_TEMP\ >NUL
 IF ERRORLEVEL 1 GOTO ERROR_COPY
 
 REM Copiar diskettes restantes hasta encontrar __EOF__
@@ -597,13 +727,13 @@ CLS
 ECHO.
 ECHO Inserte el diskette %DISK% y presione una tecla...
 ECHO (o ESC si no hay mas diskettes)
-PAUSE >NUL
+CALL :WAITDISK || GOTO :EOF
 
 REM Verificar si el diskette tiene archivos
-IF NOT EXIST A:\*.* GOTO ERROR_COPY
+IF NOT EXIST "%SRC%*.*" GOTO ERROR_COPY
 
 ECHO Copiando disco %DISK%...
-COPY A:\*.* C:\LLEVAR_TEMP\ >NUL
+COPY "%SRC%*.*" C:\LLEVAR_TEMP\ >NUL
 IF ERRORLEVEL 1 GOTO ERROR_COPY
 
 REM Incrementar contador y continuar
@@ -615,26 +745,63 @@ REM Descomprimir
 ECHO.
 ECHO Descomprimiendo archivos...
 
-REM Buscar 7-Zip
-IF EXIST "C:\Program Files\7-Zip\7z.exe" (
-    "C:\Program Files\7-Zip\7z.exe" x $ArchiveBaseName.zip.001 -o"C:\LLEVAR_RESTORED"
-    IF ERRORLEVEL 0 GOTO DONE
+REM Asegurar destino (ARJ requiere que exista)
+IF NOT EXIST C:\LLEVAR_RESTORED MD C:\LLEVAR_RESTORED
+
+REM Elegir ejecutable según entorno:
+REM - Windows_NT: ARJ32.EXE
+REM - DOS: ARJ.EXE
+SET "ARJEXE="
+IF "%IS_NT%"=="1" (
+  IF EXIST C:\LLEVAR_TEMP\ARJ32.EXE SET "ARJEXE=C:\LLEVAR_TEMP\ARJ32.EXE"
+  IF NOT DEFINED ARJEXE IF EXIST "%SRC%ARJ32.EXE" SET "ARJEXE=%SRC%ARJ32.EXE"
+) ELSE (
+  IF EXIST C:\LLEVAR_TEMP\ARJ.EXE SET "ARJEXE=C:\LLEVAR_TEMP\ARJ.EXE"
+  IF NOT DEFINED ARJEXE IF EXIST "%SRC%ARJ.EXE" SET "ARJEXE=%SRC%ARJ.EXE"
 )
 
-IF EXIST "C:\Program Files (x86)\7-Zip\7z.exe" (
-    "C:\Program Files (x86)\7-Zip\7z.exe" x $ArchiveBaseName.zip.001 -o"C:\LLEVAR_RESTORED"
-    IF ERRORLEVEL 0 GOTO DONE
-)
-
-IF EXIST C:\LLEVAR_TEMP\7z.exe (
-    C:\LLEVAR_TEMP\7z.exe x $ArchiveBaseName.zip.001 -o"C:\LLEVAR_RESTORED"
-    IF ERRORLEVEL 0 GOTO DONE
-)
-
-ECHO ERROR: No se encontro 7-Zip
-ECHO Instale 7-Zip desde www.7-zip.org
+IF NOT DEFINED ARJEXE (
+ECHO ERROR: No se encontro ARJ.EXE
+ECHO Copie ARJ32.EXE y ARJ.EXE junto a INSTALAR.BAT (diskette 1)
 PAUSE
 GOTO ERROR
+)
+
+IF NOT EXIST $ArchiveBaseName.arj (
+ECHO ERROR: No se encontro $ArchiveBaseName.arj en C:\LLEVAR_TEMP
+PAUSE
+GOTO ERROR
+)
+
+REM Descomprimir (NO redirigir a NUL)
+%ARJEXE% x $ArchiveBaseName.arj "C:\LLEVAR_RESTORED" -v -y
+IF ERRORLEVEL 1 GOTO ERROR
+GOTO DONE
+
+REM ===============================
+REM Subrutinas
+REM ===============================
+:WAITCONT
+REM En Windows_NT usar CHOICE; en DOS usar PAUSE.
+IF "%IS_NT%"=="1" (
+  CHOICE /C SN /N /M "%~1"
+  IF ERRORLEVEL 2 EXIT /B 1
+  EXIT /B 0
+) ELSE (
+  ECHO %~1
+  PAUSE >NUL
+  EXIT /B 0
+)
+
+:WAITDISK
+REM Espera una tecla en Windows (CHOICE) o DOS (PAUSE). No intentamos detectar ESC en DOS.
+IF "%IS_NT%"=="1" (
+  CHOICE /C C /N /M "Presione C para continuar..."
+  EXIT /B 0
+) ELSE (
+  PAUSE >NUL
+  EXIT /B 0
+)
 
 :DONE
 CLS
@@ -668,278 +835,6 @@ EXIT
 }
 
 # ========================================================================== #
-#                    FUNCIONES DE LECTURA DESDE DISKETTES                     #
-# ========================================================================== #
-
-function Request-NextFloppy {
-    <#
-    .SYNOPSIS
-        Solicita insertar el siguiente diskette
-    #>
-    param(
-        [string]$ExpectedBlock = "siguiente diskette",
-        [int]$DiskNumber = 1
-    )
-    
-    Write-Host ""
-    Write-Host "Inserte el diskette $DiskNumber" -ForegroundColor Yellow
-    if ($ExpectedBlock -ne "siguiente diskette") {
-        Write-Host "Falta el bloque: $ExpectedBlock" -ForegroundColor Yellow
-    }
-    Write-Host "Presione ENTER cuando esté listo o ESC para cancelar..." -ForegroundColor Gray
-    
-    $key = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
-    if ($key.VirtualKeyCode -eq 27) {
-        return $null
-    }
-    
-    # Esperar a que se detecte el diskette
-    $maxWait = 30
-    $waited = 0
-    while (-not (Test-FloppyInserted -DriveLetter $Script:FloppyDrive) -and $waited -lt $maxWait) {
-        Start-Sleep -Seconds 1
-        $waited++
-    }
-    
-    if (Test-FloppyInserted -DriveLetter $Script:FloppyDrive) {
-        return $Script:FloppyDrive
-    }
-    
-    Write-Host "No se detectó diskette en la unidad" -ForegroundColor Red
-    return $null
-}
-
-function Get-BlocksFromFloppy {
-    <#
-    .SYNOPSIS
-        Obtiene bloques desde el diskette actual
-    #>
-    param([string]$FloppyPath = "A:\")
-    
-    if (-not (Test-FloppyInserted -DriveLetter $FloppyPath)) {
-        return @()
-    }
-    
-    try {
-        $files = Get-ChildItem $FloppyPath -File -ErrorAction Stop | Where-Object {
-            $_.Name -match '\.(zip|7z|alx)\d+$' -or 
-            $_.Name -match '\.zip\.\d{3}$' -or 
-            $_.Name -match '\.7z\.\d{3}$' -or
-            $_.Name -match '\.alx\d{4}$'
-        }
-        return $files | Sort-Object Name | Select-Object -ExpandProperty FullName
-    }
-    catch {
-        Write-Log "Error leyendo diskette: $($_.Exception.Message)" "WARNING"
-        return @()
-    }
-}
-
-function Get-AllBlocksFromFloppies {
-    <#
-    .SYNOPSIS
-        Recopila todos los bloques desde múltiples diskettes
-    .DESCRIPTION
-        Lee diskettes secuencialmente hasta encontrar __EOF__
-    #>
-    param([string]$TempDir)
-    
-    if (-not (Test-FloppyDriveAvailable)) {
-        throw "No se detectó unidad de diskette"
-    }
-    
-    $blocks = @{}
-    $diskNumber = 1
-    $floppyPath = $Script:FloppyDrive
-    
-    Write-Host ""
-    Write-Host "Leyendo bloques desde diskettes..." -ForegroundColor Cyan
-    Write-Host "Inserte el diskette 1 y presione ENTER..." -ForegroundColor Yellow
-    
-    $null = Read-Host
-    
-    while ($true) {
-        # Verificar si hay diskette insertado
-        if (-not (Test-FloppyInserted -DriveLetter $floppyPath)) {
-            $nextFloppy = Request-NextFloppy -DiskNumber $diskNumber
-            if (-not $nextFloppy) {
-                break
-            }
-            $floppyPath = $nextFloppy
-        }
-        
-        # Leer bloques del diskette actual
-        $currentBlocks = Get-BlocksFromFloppy -FloppyPath $floppyPath
-        
-        foreach ($block in $currentBlocks) {
-            $name = Split-Path $block -Leaf
-            if (-not $blocks.ContainsKey($name)) {
-                # Copiar bloque a temporal
-                $tempBlock = Join-Path $TempDir $name
-                Copy-Item -Path $block -Destination $tempBlock -Force
-                $blocks[$name] = $tempBlock
-                Write-Host "  ✓ Bloque encontrado: $name" -ForegroundColor Green
-            }
-        }
-        
-        # Verificar si hay __EOF__
-        $eofPath = Join-Path $floppyPath "__EOF__"
-        if (Test-Path $eofPath) {
-            Write-Host ""
-            Write-Host "✓ Marcador __EOF__ encontrado - todos los bloques leídos" -ForegroundColor Green
-            break
-        }
-        
-        # Determinar siguiente bloque esperado
-        $sortedKeys = $blocks.Keys | Sort-Object
-        if ($sortedKeys.Count -eq 0) {
-            Write-Host "No se encontraron bloques en el diskette $diskNumber" -ForegroundColor Yellow
-            $nextFloppy = Request-NextFloppy -DiskNumber ($diskNumber + 1)
-            if (-not $nextFloppy) {
-                break
-            }
-            $floppyPath = $nextFloppy
-            $diskNumber++
-            continue
-        }
-        
-        $lastBlock = $sortedKeys[-1]
-        
-        # Inferir siguiente bloque
-        $nextBlock = $null
-        if ($lastBlock -match '\.alx(\d{4})$') {
-            $num = [int]$matches[1]
-            $nextNum = $num + 1
-            $nextBlock = $lastBlock -replace '\.alx\d{4}$', ('.alx{0:D4}' -f $nextNum)
-        }
-        elseif ($lastBlock -match '\.(zip|7z)\.(\d{3})$') {
-            $ext = $matches[1]
-            $num = [int]$matches[2]
-            $nextNum = $num + 1
-            $nextBlock = $lastBlock -replace '\.(zip|7z)\.\d{3}$', (".$ext.{0:D3}" -f $nextNum)
-        }
-        elseif ($lastBlock -match '\.(\d{3})$') {
-            $num = [int]$matches[1]
-            $nextNum = $num + 1
-            $nextBlock = $lastBlock -replace '\.\d{3}$', ('.{0:D3}' -f $nextNum)
-        }
-        
-        if ($nextBlock) {
-            $nextBlockPath = Join-Path $floppyPath $nextBlock
-            if (Test-Path $nextBlockPath) {
-                # El bloque existe en el diskette actual
-                continue
-            }
-        }
-        
-        # Solicitar siguiente diskette
-        $diskNumber++
-        $nextFloppy = Request-NextFloppy -ExpectedBlock $nextBlock -DiskNumber $diskNumber
-        if (-not $nextFloppy) {
-            break
-        }
-        $floppyPath = $nextFloppy
-    }
-    
-    return $blocks
-}
-
-function Restore-FromFloppyBlocks {
-    <#
-    .SYNOPSIS
-        Restaura archivo comprimido desde bloques de diskettes y lo descomprime
-    #>
-    param(
-        [hashtable]$Blocks,
-        [string]$TempDir,
-        [string]$Password = $null
-    )
-    
-    if ($Blocks.Count -eq 0) {
-        throw "No hay bloques para restaurar"
-    }
-    
-    # Ordenar bloques
-    $sortedBlocks = $Blocks.Values | Sort-Object
-    
-    # Determinar tipo de archivo y nombre base
-    $firstBlock = $sortedBlocks[0]
-    $firstBlockName = Split-Path $firstBlock -Leaf
-    
-    $archivePath = $null
-    $compressionType = $null
-    
-    if ($firstBlockName -match '^(.+?)\.(zip|7z)\.\d{3}$') {
-        # Volúmenes 7-Zip o ZIP
-        $baseName = $matches[1]
-        $ext = $matches[2]
-        $compressionType = if ($ext -eq "7z") { "7ZIP" } else { "ZIP" }
-        
-        # Para volúmenes 7-Zip/ZIP, usar el primer volumen directamente
-        # 7-Zip puede leer volúmenes automáticamente si están en la misma carpeta
-        $firstVolume = $sortedBlocks[0]
-        $archivePath = $firstVolume
-        
-        # Si los bloques están en TempDir pero el primer volumen tiene otro path,
-        # copiar todos los volúmenes a TempDir para que 7-Zip los encuentre
-        $firstVolumeName = Split-Path $firstVolume -Leaf
-        $expectedFirstVolume = Join-Path $TempDir $firstVolumeName
-        if ($firstVolume -ne $expectedFirstVolume) {
-            # Copiar todos los volúmenes a TempDir
-            Write-Host "Copiando volúmenes a directorio temporal..." -ForegroundColor Cyan
-            foreach ($block in $sortedBlocks) {
-                $blockName = Split-Path $block -Leaf
-                $destBlock = Join-Path $TempDir $blockName
-                Copy-Item -Path $block -Destination $destBlock -Force
-            }
-            $archivePath = $expectedFirstVolume
-        }
-    }
-    elseif ($firstBlockName -match '^(.+?)\.alx\d{4}$') {
-        # Bloques .alx (ZIP nativo dividido)
-        $baseName = $matches[1]
-        $archivePath = Join-Path $TempDir "$baseName.zip"
-        $compressionType = "NATIVE_ZIP"
-        
-        # Reconstruir ZIP desde bloques
-        Write-Host "Reconstruyendo archivo $baseName.zip desde bloques..." -ForegroundColor Cyan
-        Join-FromBlocks -Blocks $sortedBlocks -OutputFile $archivePath
-    }
-    else {
-        throw "Formato de bloque no reconocido: $firstBlockName"
-    }
-    
-    # Descomprimir
-    Write-Host "Descomprimiendo archivo..." -ForegroundColor Cyan
-    $extractPath = Join-Path $TempDir "EXTRACTED"
-    New-Item -ItemType Directory -Path $extractPath -Force | Out-Null
-    
-    if ($compressionType -eq "7ZIP") {
-        $sevenZ = Get-SevenZipLlevar
-        if (-not $sevenZ -or $sevenZ -eq "NATIVE_ZIP") {
-            throw "Se requiere 7-Zip para descomprimir"
-        }
-        
-        $sevenArgs = @("x", "-o`"$extractPath`"", "-y")
-        if ($Password) {
-            $sevenArgs += "-p$Password"
-        }
-        $sevenArgs += "`"$archivePath`""
-        
-        $process = Start-Process -FilePath $sevenZ -ArgumentList $sevenArgs -Wait -NoNewWindow -PassThru
-        if ($process.ExitCode -ne 0) {
-            throw "Error descomprimiendo con 7-Zip (código: $($process.ExitCode))"
-        }
-    }
-    elseif ($compressionType -eq "NATIVE_ZIP" -or $compressionType -eq "ZIP") {
-        Add-Type -AssemblyName System.IO.Compression.FileSystem
-        [System.IO.Compression.ZipFile]::ExtractToDirectory($archivePath, $extractPath, $true)
-    }
-    
-    return $extractPath
-}
-
-# ========================================================================== #
 #                    EXPORTAR FUNCIONES                                      #
 # ========================================================================== #
 
@@ -949,9 +844,5 @@ Export-ModuleMember -Function @(
     'Format-FloppyDisk',
     'Copy-FileToFloppy',
     'Test-FloppyArchiveIntegrity',
-    'Copy-ToFloppyDisks',
-    'Request-NextFloppy',
-    'Get-BlocksFromFloppy',
-    'Get-AllBlocksFromFloppies',
-    'Restore-FromFloppyBlocks'
+    'Copy-ToFloppyDisks'
 )

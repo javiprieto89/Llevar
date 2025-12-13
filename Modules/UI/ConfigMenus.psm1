@@ -1,6 +1,3 @@
-# Importar TransferConfig al inicio del módulo
-using module "Q:\Utilidad\LLevar\Modules\Core\TransferConfig.psm1"
-
 # ========================================================================== #
 #                    MÓDULO: MENÚS DE CONFIGURACIÓN                          #
 # ========================================================================== #
@@ -9,15 +6,19 @@ using module "Q:\Utilidad\LLevar\Modules\Core\TransferConfig.psm1"
 # ========================================================================== #
 
 # Importar módulos necesarios
-$ModulesPath = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
-Import-Module (Join-Path $ModulesPath "Modules\UI\Menus.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "Modules\UI\Banners.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "Modules\UI\Navigator.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "Modules\Transfer\FTP.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "Modules\Transfer\OneDrive.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "Modules\Transfer\Dropbox.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "Modules\Transfer\UNC.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "Modules\Transfer\Floppy.psm1") -Force -Global
+$ModulesPath = Split-Path $PSScriptRoot -Parent
+#$ModulesPath = Join-Path $PSScriptRoot "Modules"
+if (-not (Get-Module -Name 'TransferConfig')) {
+    Import-Module (Join-Path $ModulesPath "Core\TransferConfig.psm1") -Force -Global
+}
+Import-Module (Join-Path $ModulesPath "UI\Menus.psm1") -Force -Global
+Import-Module (Join-Path $ModulesPath "UI\Banners.psm1") -Force -Global
+Import-Module (Join-Path $ModulesPath "UI\Navigator.psm1") -Force -Global
+Import-Module (Join-Path $ModulesPath "Transfer\FTP.psm1") -Force -Global
+Import-Module (Join-Path $ModulesPath "Transfer\OneDrive.psm1") -Force -Global
+Import-Module (Join-Path $ModulesPath "Transfer\Dropbox.psm1") -Force -Global
+Import-Module (Join-Path $ModulesPath "Transfer\UNC.psm1") -Force -Global
+Import-Module (Join-Path $ModulesPath "Transfer\Floppy.psm1") -Force -Global
 
 # ========================================================================== #
 #                          FUNCIÓN PRINCIPAL                                 #
@@ -28,57 +29,40 @@ function Show-MainMenu {
     .SYNOPSIS
         Menú principal interactivo de Llevar.ps1
     .DESCRIPTION
-        Crea y mantiene una instancia única de TransferConfig que se modifica
-        directamente por las funciones del menú.
+        Recibe TransferConfig por referencia y lo modifica directamente.
         
-        ✅ $llevar se inicializa UNA SOLA VEZ al inicio
+        ✅ Se pasa [TransferConfig]$TransferConfig desde el llamador
         ✅ Se modifica directamente cuando el usuario interactúa
         ✅ Origen y Destino son opciones INDEPENDIENTES del menú
     #>
-    
-    # ✅ CREAR INSTANCIA ÚNICA DE TRANSFERCONFIG
-    $llevar = [TransferConfig]::new()
+    param(
+        [Parameter(Mandatory = $true)]
+        [TransferConfig]$TransferConfig
+    )
     
     while ($true) {
         # Construir display del origen desde TransferConfig
-        $origenDisplay = if ($llevar.Origen.Tipo) {
-            "$($llevar.Origen.Tipo)"
+        $origenDisplay = if ($TransferConfig.Origen.Tipo) {
+            "$($TransferConfig.Origen.Tipo)"
         }
         else {
             "(No configurado)"
         }
         
-        $origenPath = switch ($llevar.Origen.Tipo) {
-            "Local" { $llevar.Origen.Local.Path }
-            "UNC" { $llevar.Origen.UNC.Path }
-            "FTP" { $llevar.Origen.FTP.Directory }
-            "OneDrive" { $llevar.Origen.OneDrive.Path }
-            "Dropbox" { $llevar.Origen.Dropbox.Path }
-            default { $null }
-        }
+        $origenPath = Get-TransferPath -Config $TransferConfig -Section "Origen"
         if ($origenPath) {
             $origenDisplay += " → $origenPath"
         }
         
         # Construir display del destino desde TransferConfig
-        $destinoDisplay = if ($llevar.Destino.Tipo) {
-            "$($llevar.Destino.Tipo)"
+        $destinoDisplay = if ($TransferConfig.Destino.Tipo) {
+            "$($TransferConfig.Destino.Tipo)"
         }
         else {
             "(No configurado)"
         }
         
-        $destinoPath = switch ($llevar.Destino.Tipo) {
-            "Local" { $llevar.Destino.Local.Path }
-            "USB" { $llevar.Destino.USB.Path }
-            "UNC" { $llevar.Destino.UNC.Path }
-            "FTP" { $llevar.Destino.FTP.Directory }
-            "OneDrive" { $llevar.Destino.OneDrive.Path }
-            "Dropbox" { $llevar.Destino.Dropbox.Path }
-            "ISO" { $llevar.Destino.ISO.OutputPath }
-            "Diskette" { $llevar.Destino.Diskette.OutputPath }
-            default { $null }
-        }
+        $destinoPath = Get-TransferPath -Config $TransferConfig -Section "Destino"
         if ($destinoPath) {
             $destinoDisplay += " → $destinoPath"
         }
@@ -86,7 +70,7 @@ function Show-MainMenu {
         $options = @(
             "*Origen: $origenDisplay",
             "*Destino: $destinoDisplay",
-            "*Tamaño de Bloque: $($llevar.Opciones.BlockSizeMB) MB",
+            "*Tamaño de Bloque: $($TransferConfig.Opciones.BlockSizeMB) MB",
             "Modo *Robocopy Mirror",
             "Generar *ISO (en lugar de USB)",
             "Usar ZIP *Nativo (sin 7-Zip)",
@@ -101,117 +85,98 @@ function Show-MainMenu {
         switch ($selection) {
             0 { return $null }  # Salir
             1 { 
-                # ✅ PASAR $llevar A SHOW-ORIGENMENU
-                Show-OrigenMenu -Llevar $llevar | Out-Null
+                Show-OrigenDestinoMenu -TransferConfig $TransferConfig -Cual "Origen" | Out-Null
             }
             2 { 
-                # ✅ PASAR $llevar A SHOW-DESTINOMENU
-                Show-DestinoMenu -Llevar $llevar | Out-Null
+                Show-OrigenDestinoMenu -TransferConfig $TransferConfig -Cual "Destino" | Out-Null
             }
             3 { 
-                # ✅ PASAR $llevar A SHOW-BLOCKSIZEMENU
-                Show-BlockSizeMenu -Llevar $llevar | Out-Null
+                Show-BlockSizeMenu -TransferConfig $TransferConfig | Out-Null
             }
             4 { 
-                $llevar.Opciones.RobocopyMirror = -not $llevar.Opciones.RobocopyMirror
-                if ($llevar.Opciones.RobocopyMirror) { 
+                $currentValue = Get-TransferOption -Config $TransferConfig -Option "RobocopyMirror"
+                Set-TransferOption -Config $TransferConfig -Option "RobocopyMirror" -Value (-not $currentValue)
+                if (-not $currentValue) { 
                     Show-ConsolePopup -Title "Robocopy Mirror" -Message "Modo Robocopy Mirror activado`n`nSincronizará origen con destino (elimina extras)" -Options @("*OK") | Out-Null 
                 }
             }
             5 { 
-                # ✅ PASAR $llevar A SHOW-ISOMENU
-                Show-IsoMenu -Llevar $llevar | Out-Null
+                Show-IsoMenu -TransferConfig $TransferConfig | Out-Null
             }
             6 { 
-                $llevar.Opciones.UseNativeZip = -not $llevar.Opciones.UseNativeZip
-                Show-ConsolePopup -Title "ZIP Nativo" -Message "ZIP Nativo: $(if($llevar.Opciones.UseNativeZip){'ACTIVADO'}else{'DESACTIVADO'})" -Options @("*OK") | Out-Null 
+                $currentValue = Get-TransferOption -Config $TransferConfig -Option "UseNativeZip"
+                Set-TransferOption -Config $TransferConfig -Option "UseNativeZip" -Value (-not $currentValue)
+                Show-ConsolePopup -Title "ZIP Nativo" -Message "ZIP Nativo: $(if(-not $currentValue){'ACTIVADO'}else{'DESACTIVADO'})" -Options @("*OK") | Out-Null 
             }
             7 { 
-                # ✅ PASAR $llevar A SHOW-PASSWORDMENU
-                Show-PasswordMenu -Llevar $llevar | Out-Null
+                Show-PasswordMenu -TransferConfig $TransferConfig | Out-Null
             }
-            8 { return @{ Action = "Example" } }
+            8 { 
+                $script:ExampleInfo = Initialize-ExampleTransfer -TransferConfig $TransferConfig
+                return @{ Action = "Example" }
+            }
             9 { return @{ Action = "Help" } }
-            10 { 
+            10 {
                 # Validar configuración completa usando with y switch
                 $errors = @()
 
-                # Validar origen
-                if (-not $llevar.Origen.Tipo) {
-                    $errors += "• Falta configurar el tipo de origen"
-                }
-                else {
-                    $origenPath = switch ($llevar.Origen.Tipo) {
-                        "FTP" {
-                            with $llevar.Origen.FTP { .Directory }
+                # VALIDAR ORIGEN
+                with $TransferConfig.Origen {
+                    if (.Tipo) {
+                        
+                        $origenPath = switch (.Tipo) {
+                            "FTP" { .FTP.Directory }
+                            "Local" { .Local.Path }
+                            "UNC" { .UNC.Path }
+                            "OneDrive" { .OneDrive.Path }
+                            "Dropbox" { .Dropbox.Path }
+                            default { $null }
                         }
-                        "Local" {
-                            with $llevar.Origen.Local { .Path }
+
+                        if (-not $origenPath) {
+                            $errors += "• Falta configurar la ruta de origen ($(.Tipo))"
                         }
-                        "UNC" {
-                            with $llevar.Origen.UNC { .Path }
-                        }
-                        "OneDrive" {
-                            with $llevar.Origen.OneDrive { .Path }
-                        }
-                        "Dropbox" {
-                            with $llevar.Origen.Dropbox { .Path }
-                        }
-                        default { $null }
                     }
-                    if (-not $origenPath) {
-                        $errors += "• Falta configurar la ruta de origen ($($llevar.Origen.Tipo))"
+                    else {
+                        $errors += "• Falta configurar el tipo de origen"
+                    }
+                    
+                }
+                # Validar destino
+                $destinoPath = $null
+                with $TransferConfig.Destino {
+                    if (.Tipo) {                        
+                        $destinoPath = switch (.Tipo) {
+                            "FTP" { .FTP.Directory }
+                            "Local" { .Local.Path }
+                            "USB" { .USB.Path }
+                            "UNC" { .UNC.Path }
+                            "OneDrive" { .OneDrive.Path }
+                            "Dropbox" { .Dropbox.Path }
+                            "ISO" { .ISO.OutputPath }
+                            "Diskette" { .Diskette.OutputPath }
+                            default { $null }
+                        }
+
+                        if (-not $destinoPath) {
+                            $errors += "• Falta configurar la ruta de destino ($(.Tipo))"
+                        }
+                    }
+                    else {
+                        $errors += "• Falta configurar el tipo de destino"
                     }
                 }
 
-                # Validar destino
-                if (-not $llevar.Destino.Tipo) {
-                    $errors += "• Falta configurar el tipo de destino"
-                }
-                else {
-                    $destinoPath = switch ($llevar.Destino.Tipo) {
-                        "FTP" {
-                            with $llevar.Destino.FTP { .Directory }
-                        }
-                        "Local" {
-                            with $llevar.Destino.Local { .Path }
-                        }
-                        "USB" {
-                            with $llevar.Destino.USB { .Path }
-                        }
-                        "UNC" {
-                            with $llevar.Destino.UNC { .Path }
-                        }
-                        "OneDrive" {
-                            with $llevar.Destino.OneDrive { .Path }
-                        }
-                        "Dropbox" {
-                            with $llevar.Destino.Dropbox { .Path }
-                        }
-                        "ISO" {
-                            with $llevar.Destino.ISO { .OutputPath }
-                        }
-                        "Diskette" {
-                            with $llevar.Destino.Diskette { .OutputPath }
-                        }
-                        default { $null }
-                    }
-                    if (-not $destinoPath) {
-                        $errors += "• Falta configurar la ruta de destino ($($llevar.Destino.Tipo))"
-                    }
-                }
+                # MOSTRAR ERRORES / CONTINUAR
 
                 if ($errors.Count -gt 0) {
                     $mensaje = "Faltan parámetros requeridos:`n`n" + ($errors -join "`n")
-                    Show-ConsolePopup -Title "Configuración Incompleta" -Message $mensaje -Options @("*OK") | Out-Null
+                    Show-ConsolePopup -Title "Configuración Incompleta" -Message $mensaje -Options @("*OK") | Out-Null 
                     continue
                 }
-                
-                # ✅ RETORNAR $llevar CONFIGURADO
-                return @{ 
-                    Action         = "Execute"
-                    TransferConfig = $llevar
-                }
+
+                # ✅ RETORNAR ACCIÓN - TransferConfig ya está modificado
+                return @{ Action = "Execute" }
             }
         }
     }
@@ -221,136 +186,139 @@ function Show-MainMenu {
 #                          SUBMENÚS DE CONFIGURACIÓN                         #
 # ========================================================================== #
 
-function Show-OrigenMenu {
+function Show-OrigenDestinoMenu {
     <#
     .SYNOPSIS
-        Menú de configuración de origen usando TransferConfig
-    .PARAMETER Llevar
-        Objeto TransferConfig que se modificará directamente
+        Menú unificado de configuración de origen/destino usando TransferConfig
+    .PARAMETER TransferConfig
+        Referencia al objeto TransferConfig que se modificará directamente
+    .PARAMETER Cual
+        "Origen" o "Destino" para indicar qué se está configurando
     #>
     param(
         [Parameter(Mandatory = $true)]
-        [TransferConfig]$Llevar
+        [TransferConfig]$TransferConfig,
+        
+        [Parameter(Mandatory = $true)]
+        [ValidateSet("Origen", "Destino")]
+        [string]$Cual
     )
     
-    $options = @(
-        "*Local (carpeta del sistema)",
-        "*FTP (servidor FTP)",
-        "*OneDrive (Microsoft OneDrive)",
-        "*Dropbox",
-        "*UNC (red compartida)"
-    )
+    if ($Cual -eq "Origen") {
+        $options = @(
+            "*Local (carpeta del sistema)",
+            "*FTP (servidor FTP)",
+            "*OneDrive (Microsoft OneDrive)",
+            "*Dropbox",
+            "*UNC (red compartida)"
+        )
+    }
+    else {
+        $options = @(
+            "*Local (carpeta del sistema)",
+            "*USB (copiar a dispositivos USB)",
+            "*Diskettes (disquetes 1.44MB)",
+            "*FTP (servidor FTP)",
+            "*OneDrive (Microsoft OneDrive)",
+            "*Dropbox",
+            "U*NC (red compartida)"
+        )
+    }
     
-    $selection = Show-DosMenu -Title "ORIGEN - Seleccione tipo" -Items $options -CancelValue 0
+    $selection = Show-DosMenu -Title "$Cual - Seleccione tipo" -Items $options -CancelValue 0
     
-    switch ($selection) {
-        0 { return }
-        1 {
-            $selected = Select-PathNavigator -Prompt "Seleccione carpeta de ORIGEN" -AllowFiles $false
-            if ($selected) {
-                $Llevar.Origen.Tipo = "Local"
-                $Llevar.Origen.Local.Path = $selected
+    if ($selection -eq 0) { return }
+    
+    if ($Cual -eq "Origen") {
+        switch ($selection) {
+            1 {
+                $selected = Select-PathNavigator -Prompt "Seleccione carpeta de ORIGEN" -AllowFiles $false
+                if ($selected) {
+                    Set-TransferType -Config $TransferConfig -Section "Origen" -Type "Local"
+                    Set-TransferPath -Config $TransferConfig -Section "Origen" -Value $selected
+                    Set-TransferConfigValue -Config $TransferConfig -Path "OrigenIsSet" -Value $true
+                }
             }
-        }
-        2 {
-            # ✅ LLAMADA CORRECTA: PASA $Llevar y "Origen"
-            if (-not (Get-FtpConfigFromUser -Llevar $Llevar -Cual "Origen")) { return }
-            # ✅ $Llevar.Origen.FTP.* YA ESTÁ CONFIGURADO
-        }
-        3 {
-            # ✅ LLAMADA CORRECTA: PASA $Llevar y "Origen"
-            if (-not (Get-OneDriveConfigFromUser -Llevar $Llevar -Cual "Origen")) { return }
-            # ✅ $Llevar.Origen.OneDrive.* YA ESTÁ CONFIGURADO
-        }
-        4 {
-            # ✅ LLAMADA CORRECTA: PASA $Llevar y "Origen"
-            if (-not (Get-DropboxConfigFromUser -Llevar $Llevar -Cual "Origen")) { return }
-            # ✅ $Llevar.Origen.Dropbox.* YA ESTÁ CONFIGURADO
-        }
-        5 {
-            $uncPath = Select-NetworkPath -Purpose "ORIGEN"
-            if ($uncPath) {
-                $Llevar.Origen.Tipo = "UNC"
-                $Llevar.Origen.UNC.Path = $uncPath
+            2 {
+                if (Get-FtpConfigFromUser -Llevar $TransferConfig -Cual "Origen") {
+                    Set-TransferConfigValue -Config $TransferConfig -Path "OrigenIsSet" -Value $true
+                }
+            }
+            3 {
+                if (Get-OneDriveConfigFromUser -Llevar $TransferConfig -Cual "Origen") {
+                    Set-TransferConfigValue -Config $TransferConfig -Path "OrigenIsSet" -Value $true
+                }
+            }
+            4 {
+                if (Get-DropboxConfigFromUser -Llevar $TransferConfig -Cual "Origen") {
+                    Set-TransferConfigValue -Config $TransferConfig -Path "OrigenIsSet" -Value $true
+                }
+            }
+            5 {
+                $uncPath = Select-NetworkPath -Purpose "ORIGEN"
+                if ($uncPath) {
+                    Set-TransferType -Config $TransferConfig -Section "Origen" -Type "UNC"
+                    Set-TransferPath -Config $TransferConfig -Section "Origen" -Value $uncPath
+                    Set-TransferConfigValue -Config $TransferConfig -Path "OrigenIsSet" -Value $true
+                }
             }
         }
     }
-}
-
-function Show-DestinoMenu {
-    <#
-    .SYNOPSIS
-        Menú de configuración de destino usando TransferConfig
-    .PARAMETER Llevar
-        Objeto TransferConfig que se modificará directamente
-    #>
-    param(
-        [Parameter(Mandatory = $true)]
-        [TransferConfig]$Llevar
-    )
-    
-    $options = @(
-        "*Local (carpeta del sistema)",
-        "*USB (copiar a dispositivos USB)",
-        "*Diskettes (disquetes 1.44MB)",
-        "*FTP (servidor FTP)",
-        "*OneDrive (Microsoft OneDrive)",
-        "*Dropbox",
-        "U*NC (red compartida)"
-    )
-    
-    $selection = Show-DosMenu -Title "DESTINO - Seleccione tipo" -Items $options -CancelValue 0
-    
-    switch ($selection) {
-        0 { return }
-        1 {
-            $selected = Select-PathNavigator -Prompt "Seleccione carpeta de DESTINO" -AllowFiles $false
-            if ($selected) {
-                $Llevar.Destino.Tipo = "Local"
-                $Llevar.Destino.Local.Path = $selected
+    else {
+        switch ($selection) {
+            1 {
+                $selected = Select-PathNavigator -Prompt "Seleccione carpeta de DESTINO" -AllowFiles $false
+                if ($selected) {
+                    Set-TransferType -Config $TransferConfig -Section "Destino" -Type "Local"
+                    Set-TransferPath -Config $TransferConfig -Section "Destino" -Value $selected
+                    Set-TransferConfigValue -Config $TransferConfig -Path "DestinoIsSet" -Value $true
+                }
             }
-        }
-        2 {
-            Show-ConsolePopup -Title "Modo USB" -Message "El programa solicitará USBs durante la transferencia" -Options @("*OK") | Out-Null
-            $Llevar.Destino.Tipo = "USB"
-            $Llevar.Destino.USB.Path = "USB"
-        }
-        3 {
-            if (-not (Test-FloppyDriveAvailable)) {
-                Show-ConsolePopup -Title "Error" -Message "No se detectó una unidad de diskette (A:)" -Options @("*OK") | Out-Null
-                return
+            2 {
+                Show-ConsolePopup -Title "Modo USB" -Message "El programa solicitará USBs durante la transferencia" -Options @("*OK") | Out-Null
+                Set-TransferType -Config $TransferConfig -Section "Destino" -Type "USB"
+                Set-TransferPath -Config $TransferConfig -Section "Destino" -Value "USB"
+                Set-TransferConfigValue -Config $TransferConfig -Path "DestinoIsSet" -Value $true
             }
-            
-            $confirm = Show-ConsolePopup -Title "⚠ DISKETTES (LEGACY)" `
-                -Message "Los diskettes son medios obsoletos.`n`n¿Desea continuar?" `
-                -Options @("*Sí", "*No")
-            
-            if ($confirm -eq 0) {
-                $Llevar.Destino.Tipo = "Diskette"
-                $Llevar.Destino.Diskette.OutputPath = $env:TEMP
-                $Llevar.Destino.Diskette.MaxDisks = 30
+            3 {
+                if (-not (Test-FloppyDriveAvailable)) {
+                    Show-ConsolePopup -Title "Error" -Message "No se detectó una unidad de diskette (A:)" -Options @("*OK") | Out-Null
+                    return
+                }
+                
+                $confirm = Show-ConsolePopup -Title "⚠ DISKETTES (LEGACY)" `
+                    -Message "Los diskettes son medios obsoletos.`n`n¿Desea continuar?" `
+                    -Options @("*Sí", "*No")
+                
+                if ($confirm -eq 0) {
+                    Set-TransferType -Config $TransferConfig -Section "Destino" -Type "Diskette"
+                    Set-TransferConfigValue -Config $TransferConfig -Path "Destino.Diskette.OutputPath" -Value $env:TEMP
+                    Set-TransferConfigValue -Config $TransferConfig -Path "Destino.Diskette.MaxDisks" -Value 30
+                    Set-TransferConfigValue -Config $TransferConfig -Path "DestinoIsSet" -Value $true
+                }
             }
-        }
-        4 {
-            # ✅ LLAMADA CORRECTA: PASA $Llevar y "Destino"
-            if (-not (Get-FtpConfigFromUser -Llevar $Llevar -Cual "Destino")) { return }
-            # ✅ $Llevar.Destino.FTP.* YA ESTÁ CONFIGURADO
-        }
-        5 {
-            # ✅ LLAMADA CORRECTA: PASA $Llevar y "Destino"
-            if (-not (Get-OneDriveConfigFromUser -Llevar $Llevar -Cual "Destino")) { return }
-            # ✅ $Llevar.Destino.OneDrive.* YA ESTÁ CONFIGURADO
-        }
-        6 {
-            # ✅ LLAMADA CORRECTA: PASA $Llevar y "Destino"
-            if (-not (Get-DropboxConfigFromUser -Llevar $Llevar -Cual "Destino")) { return }
-            # ✅ $Llevar.Destino.Dropbox.* YA ESTÁ CONFIGURADO
-        }
-        7 {
-            $uncPath = Select-NetworkPath -Purpose "DESTINO"
-            if ($uncPath) {
-                $Llevar.Destino.Tipo = "UNC"
-                $Llevar.Destino.UNC.Path = $uncPath
+            4 {
+                if (Get-FtpConfigFromUser -Llevar $TransferConfig -Cual "Destino") {
+                    Set-TransferConfigValue -Config $TransferConfig -Path "DestinoIsSet" -Value $true
+                }
+            }
+            5 {
+                if (Get-OneDriveConfigFromUser -Llevar $TransferConfig -Cual "Destino") {
+                    Set-TransferConfigValue -Config $TransferConfig -Path "DestinoIsSet" -Value $true
+                }
+            }
+            6 {
+                if (Get-DropboxConfigFromUser -Llevar $TransferConfig -Cual "Destino") {
+                    Set-TransferConfigValue -Config $TransferConfig -Path "DestinoIsSet" -Value $true
+                }
+            }
+            7 {
+                $uncPath = Select-NetworkPath -Purpose "DESTINO"
+                if ($uncPath) {
+                    Set-TransferType -Config $TransferConfig -Section "Destino" -Type "UNC"
+                    Set-TransferPath -Config $TransferConfig -Section "Destino" -Value $uncPath
+                    Set-TransferConfigValue -Config $TransferConfig -Path "DestinoIsSet" -Value $true
+                }
             }
         }
     }
@@ -360,12 +328,12 @@ function Show-BlockSizeMenu {
     <#
     .SYNOPSIS
         Menú de configuración de tamaño de bloque
-    .PARAMETER Llevar
-        Objeto TransferConfig que se modificará directamente
+    .PARAMETER TransferConfig
+        Referencia al objeto TransferConfig que se modificará directamente
     #>
     param(
         [Parameter(Mandatory = $true)]
-        [TransferConfig]$Llevar
+        [TransferConfig]$TransferConfig
     )
     
     $options = @(
@@ -378,7 +346,7 @@ function Show-BlockSizeMenu {
         "Tamaño *Manual"
     )
     
-    $currentSize = $Llevar.Opciones.BlockSizeMB
+    $currentSize = $TransferConfig.Opciones.BlockSizeMB
     $selection = Show-DosMenu -Title "TAMAÑO DE BLOQUE (Actual: $currentSize MB)" -Items $options -CancelValue 0
     
     $newSize = switch ($selection) {
@@ -410,7 +378,7 @@ function Show-BlockSizeMenu {
     }
     
     if ($newSize) {
-        $Llevar.Opciones.BlockSizeMB = $newSize
+        Set-TransferOption -Config $TransferConfig -Option "BlockSizeMB" -Value $newSize
         Show-ConsolePopup -Title "Tamaño de Bloque" -Message "Configurado: $newSize MB" -Options @("*OK") | Out-Null
     }
 }
@@ -419,21 +387,21 @@ function Show-PasswordMenu {
     <#
     .SYNOPSIS
         Menú de configuración de contraseña
-    .PARAMETER Llevar
-        Objeto TransferConfig que se modificará directamente
+    .PARAMETER TransferConfig
+        Referencia al objeto TransferConfig que se modificará directamente
     #>
     param(
         [Parameter(Mandatory = $true)]
-        [TransferConfig]$Llevar
+        [TransferConfig]$TransferConfig
     )
     
-    if ($Llevar.Opciones.Clave) {
+    if ($TransferConfig.Opciones.Clave) {
         $options = @("*Cambiar contraseña", "*Eliminar contraseña")
         $selection = Show-DosMenu -Title "CONTRASEÑA (Actual: ******)" -Items $options -CancelValue 0
         
         if ($selection -eq 0) { return }
         if ($selection -eq 2) {
-            $Llevar.Opciones.Clave = $null
+            Set-TransferOption -Config $TransferConfig -Option "Clave" -Value $null
             Show-ConsolePopup -Title "Contraseña" -Message "Contraseña eliminada" -Options @("*OK") | Out-Null
             return
         }
@@ -456,7 +424,7 @@ function Show-PasswordMenu {
     [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($ptr2)
     
     if ($plainPass1 -eq $plainPass2) {
-        $Llevar.Opciones.Clave = $plainPass1
+        Set-TransferOption -Config $TransferConfig -Option "Clave" -Value $plainPass1
         Show-ConsolePopup -Title "Contraseña" -Message "Contraseña configurada correctamente" -Options @("*OK") | Out-Null
     }
     else {
@@ -468,15 +436,15 @@ function Show-IsoMenu {
     <#
     .SYNOPSIS
         Menú de configuración ISO
-    .PARAMETER Llevar
-        Objeto TransferConfig que se modificará directamente
+    .PARAMETER TransferConfig
+        Referencia al objeto TransferConfig que se modificará directamente
     #>
     param(
         [Parameter(Mandatory = $true)]
-        [TransferConfig]$Llevar
+        [TransferConfig]$TransferConfig
     )
     
-    $wasISO = ($Llevar.Destino.Tipo -eq "ISO")
+    $wasISO = ($TransferConfig.Destino.Tipo -eq "ISO")
     
     if (-not $wasISO) {
         $options = @("*CD (700 MB)", "*DVD (4.5 GB)", "*USB (4.5 GB)")
@@ -490,15 +458,15 @@ function Show-IsoMenu {
             3 { "usb" }
         }
         
-        $Llevar.Destino.Tipo = "ISO"
-        $Llevar.Destino.ISO.OutputPath = $env:TEMP
-        $Llevar.Destino.ISO.Size = $isoSize
+        Set-TransferType -Config $TransferConfig -Section "Destino" -Type "ISO"
+        Set-TransferConfigValue -Config $TransferConfig -Path "Destino.ISO.OutputPath" -Value $env:TEMP
+        Set-TransferConfigValue -Config $TransferConfig -Path "Destino.ISO.Size" -Value $isoSize
         
-        Show-ConsolePopup -Title "Modo ISO" -Message "Se generarán imágenes ISO de tipo: $($isoSize.ToUpper())" -Options @("*OK") | Out-Null
+        Show-ConsolePopup -Title "Modo ISO" -Message "Se generar\u00e1n im\u00e1genes ISO de tipo: $($isoSize.ToUpper())" -Options @("*OK") | Out-Null
     }
     else {
-        $Llevar.Destino.Tipo = "Local"
-        $Llevar.Destino.Local.Path = $null
+        Set-TransferType -Config $TransferConfig -Section "Destino" -Type "Local"
+        Set-TransferPath -Config $TransferConfig -Section "Destino" -Value $null
         Show-ConsolePopup -Title "Modo ISO" -Message "Modo ISO desactivado" -Options @("*OK") | Out-Null
     }
 }
@@ -506,8 +474,7 @@ function Show-IsoMenu {
 # Exportar funciones
 Export-ModuleMember -Function @(
     'Show-MainMenu',
-    'Show-OrigenMenu',
-    'Show-DestinoMenu',
+    'Show-OrigenDestinoMenu',
     'Show-BlockSizeMenu',
     'Show-PasswordMenu',
     'Show-IsoMenu'

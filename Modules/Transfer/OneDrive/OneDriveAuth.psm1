@@ -10,11 +10,11 @@
 # ========================================================================== #
 
 # Imports necesarios
-$ModulesPath = Split-Path (Split-Path (Split-Path $PSScriptRoot -Parent) -Parent) -Parent
-Import-Module (Join-Path $ModulesPath "Modules\UI\Menus.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "Modules\UI\Banners.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "Modules\Core\Logger.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "Modules\System\Browser.psm1") -Force -Global
+$ModulesPath = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
+Import-Module (Join-Path $ModulesPath "UI\Menus.psm1") -Force -Global
+Import-Module (Join-Path $ModulesPath "UI\Banners.psm1") -Force -Global
+Import-Module (Join-Path $ModulesPath "Core\Logger.psm1") -Force -Global
+Import-Module (Join-Path $ModulesPath "System\Browser.psm1") -Force -Global
 
 # ========================================================================== #
 # FUNCIONES DE AUTENTICACIÓN OAUTH

@@ -6,15 +6,17 @@
 # ========================================================================== #
 
 # Imports necesarios
-$ModulesPath = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
-Import-Module (Join-Path $ModulesPath "Modules\UI\ProgressBar.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "Modules\Core\Logger.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "Modules\Transfer\Local.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "Modules\Transfer\UNC.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "Modules\Transfer\Floppy.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "Modules\System\FileSystem.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "Modules\Compression\SevenZip.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath ".\Modules\Core\TransferConfig.psm1") -Force -Global
+$ModulesPath = Join-Path (Split-Path (Split-Path $PSScriptRoot -Parent) -Parent) "Modules"
+Import-Module (Join-Path $ModulesPath "UI\ProgressBar.psm1") -Force -Global
+Import-Module (Join-Path $ModulesPath "Core\Logger.psm1") -Force -Global
+Import-Module (Join-Path $ModulesPath "Transfer\Local.psm1") -Force -Global
+Import-Module (Join-Path $ModulesPath "Transfer\UNC.psm1") -Force -Global
+Import-Module (Join-Path $ModulesPath "Transfer\Floppy.psm1") -Force -Global
+Import-Module (Join-Path $ModulesPath "System\FileSystem.psm1") -Force -Global
+Import-Module (Join-Path $ModulesPath "Compression\SevenZip.psm1") -Force -Global
+if (-not (Get-Module -Name 'TransferConfig')) {
+    Import-Module (Join-Path $ModulesPath "Core\TransferConfig.psm1") -Force -Global
+}
 
 # ========================================================================== #
 #                  FUNCIONES PÚBLICAS (NOMBRES DESCRIPTIVOS)                 #
@@ -270,11 +272,9 @@ function Invoke-LocalToFtp {
     Write-Log "Handler: Local→FTP" "INFO"
     
     # Obtener origen local
-    $sourcePath = switch ($Llevar.Origen.Tipo) {
-        "Local" {
-            with ($Llevar.Origen.Local) { .Path }
-        }
-        default { throw "Origen no es Local" }
+    $sourcePath = Get-TransferPath -Config $Llevar -Section "Origen"
+    if ($Llevar.Origen.Tipo -ne "Local") {
+        throw "Origen no es Local"
     }
     
     if (-not $sourcePath -or -not (Test-Path $sourcePath)) {
@@ -291,14 +291,14 @@ function Invoke-LocalToFtp {
         UseSsl    = $false
     }
 
-    with ($Llevar.Destino.FTP) {
-        $ftpConfig.Server = .Server
-        $ftpConfig.Port = if (.Port -gt 0) { .Port } else { 21 }
-        $ftpConfig.User = .User
-        $ftpConfig.Password = .Password
-        $ftpConfig.Directory = if (.Directory) { .Directory } else { "/" }
-        $ftpConfig.UseSsl = .UseSsl
-    }
+    $ftpConfig.Server = Get-TransferConfigValue -Config $Llevar -Path "Destino.FTP.Server"
+    $ftpPort = Get-TransferConfigValue -Config $Llevar -Path "Destino.FTP.Port"
+    $ftpConfig.Port = if ($ftpPort -gt 0) { $ftpPort } else { 21 }
+    $ftpConfig.User = Get-TransferConfigValue -Config $Llevar -Path "Destino.FTP.User"
+    $ftpConfig.Password = Get-TransferConfigValue -Config $Llevar -Path "Destino.FTP.Password"
+    $ftpDirectory = Get-TransferConfigValue -Config $Llevar -Path "Destino.FTP.Directory"
+    $ftpConfig.Directory = if ($ftpDirectory) { $ftpDirectory } else { "/" }
+    $ftpConfig.UseSsl = Get-TransferConfigValue -Config $Llevar -Path "Destino.FTP.UseSsl"
 
     if (-not $ftpConfig.Server -or -not $ftpConfig.User) {
         throw "Local→FTP: Configuración FTP incompleta (falta Server o User)"
@@ -485,11 +485,9 @@ function Invoke-LocalToCloud {
     Write-Log "Handler: Local→${CloudType}" "INFO"
     
     # Obtener origen local
-    $sourcePath = switch ($Llevar.Origen.Tipo) {
-        "Local" {
-            with ($Llevar.Origen.Local) { .Path }
-        }
-        default { throw "Origen no es Local" }
+    $sourcePath = Get-TransferPath -Config $Llevar -Section "Origen"
+    if ($Llevar.Origen.Tipo -ne "Local") {
+        throw "Origen no es Local"
     }
     
     if (-not $sourcePath -or -not (Test-Path $sourcePath)) {
@@ -499,13 +497,13 @@ function Invoke-LocalToCloud {
     # Obtener configuración cloud destino
     $cloudPath = $null
     if ($CloudType -eq "OneDrive") {
-        $cloudPath = with ($Llevar.Destino.OneDrive) { .Path }
+        $cloudPath = Get-TransferConfigValue -Config $Llevar -Path "Destino.OneDrive.Path"
         if (-not $cloudPath) {
             $cloudPath = "/"
         }
     }
     elseif ($CloudType -eq "Dropbox") {
-        $cloudPath = with ($Llevar.Destino.Dropbox) { .Path }
+        $cloudPath = Get-TransferConfigValue -Config $Llevar -Path "Destino.Dropbox.Path"
         if (-not $cloudPath) {
             $cloudPath = "/"
         }
@@ -528,10 +526,10 @@ function Invoke-LocalToCloud {
     # Importar módulos cloud
     $modulesRoot = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
     if ($CloudType -eq "OneDrive") {
-        Import-Module (Join-Path $modulesRoot "Modules\Transfer\OneDrive.psm1") -Force -Global -ErrorAction SilentlyContinue
+        Import-Module (Join-Path $modulesRoot "Transfer\OneDrive.psm1") -Force -Global -ErrorAction SilentlyContinue
     }
     elseif ($CloudType -eq "Dropbox") {
-        Import-Module (Join-Path $modulesRoot "Modules\Transfer\Dropbox.psm1") -Force -Global -ErrorAction SilentlyContinue
+        Import-Module (Join-Path $modulesRoot "Transfer\Dropbox.psm1") -Force -Global -ErrorAction SilentlyContinue
     }
     
     # Obtener todos los archivos a subir
@@ -671,11 +669,9 @@ function Invoke-LocalToUNC {
     Write-Log "Handler: Local→UNC" "INFO"
     
     # Obtener origen local
-    $sourcePath = switch ($Llevar.Origen.Tipo) {
-        "Local" {
-            with ($Llevar.Origen.Local) { .Path }
-        }
-        default { throw "Origen no es Local" }
+    $sourcePath = Get-TransferPath -Config $Llevar -Section "Origen"
+    if ($Llevar.Origen.Tipo -ne "Local") {
+        throw "Origen no es Local"
     }
     
     if (-not $sourcePath -or -not (Test-Path $sourcePath)) {
@@ -683,11 +679,9 @@ function Invoke-LocalToUNC {
     }
     
     # Obtener destino UNC
-    $destPath = switch ($Llevar.Destino.Tipo) {
-        "UNC" {
-            with ($Llevar.Destino.UNC) { .Path }
-        }
-        default { throw "Destino no es UNC" }
+    $destPath = Get-TransferPath -Config $Llevar -Section "Destino"
+    if ($Llevar.Destino.Tipo -ne "UNC") {
+        throw "Destino no es UNC"
     }
     
     if (-not $destPath) {
@@ -713,7 +707,7 @@ function Invoke-LocalToUNC {
         # Usar Robocopy para copiar (más eficiente para UNC)
         $useMirror = $Llevar.Opciones.RobocopyMirror
         
-        Import-Module (Join-Path $ModulesPath "Modules\Transfer\Local.psm1") -Force -Global -ErrorAction SilentlyContinue
+        Import-Module (Join-Path $ModulesPath "Transfer\Local.psm1") -Force -Global -ErrorAction SilentlyContinue
         
         Copy-LlevarLocalToLocalRobocopy -SourcePath $sourcePath -DestinationPath $destinoMontado `
             -UseMirror $useMirror -ShowProgress $ShowProgress -ProgressTop $ProgressTop -StartTime $StartTime
@@ -749,11 +743,9 @@ function Invoke-LocalToISO {
     Write-Log "Handler: Local→ISO" "INFO"
     
     # Obtener origen local
-    $sourcePath = switch ($Llevar.Origen.Tipo) {
-        "Local" {
-            with ($Llevar.Origen.Local) { .Path }
-        }
-        default { throw "Origen no es Local" }
+    $sourcePath = Get-TransferPath -Config $Llevar -Section "Origen"
+    if ($Llevar.Origen.Tipo -ne "Local") {
+        throw "Origen no es Local"
     }
     
     if (-not $sourcePath -or -not (Test-Path $sourcePath)) {
@@ -761,8 +753,9 @@ function Invoke-LocalToISO {
     }
     
     # Obtener configuración ISO destino
-    $isoOutputPath = with ($Llevar.Destino.ISO) { .OutputPath }
-    $isoSize = with ($Llevar.Destino.ISO) { if (.Size) { .Size } else { "dvd" } }
+    $isoOutputPath = Get-TransferConfigValue -Config $Llevar -Path "Destino.ISO.OutputPath"
+    $isoSizeValue = Get-TransferConfigValue -Config $Llevar -Path "Destino.ISO.Size"
+    $isoSize = if ($isoSizeValue) { $isoSizeValue } else { "dvd" }
     
     if (-not $isoOutputPath) {
         # Si no hay ruta de salida, usar el directorio del origen
@@ -785,8 +778,8 @@ function Invoke-LocalToISO {
     
     # Importar módulos necesarios
     $modulesRoot = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
-    Import-Module (Join-Path $modulesRoot "Modules\Installation\ISO.psm1") -Force -Global -ErrorAction SilentlyContinue
-    Import-Module (Join-Path $modulesRoot "Modules\Compression\SevenZip.psm1") -Force -Global -ErrorAction SilentlyContinue
+    Import-Module (Join-Path $modulesRoot "Installation\ISO.psm1") -Force -Global -ErrorAction SilentlyContinue
+    Import-Module (Join-Path $modulesRoot "Compression\SevenZip.psm1") -Force -Global -ErrorAction SilentlyContinue
     
     # Obtener 7-Zip
     $sevenZ = Get-SevenZipLlevar
@@ -919,49 +912,9 @@ function Invoke-DisketteToDiskette {
         [datetime]$StartTime
     )
     
-    Write-Log "Handler: Diskette→Diskette" "INFO"
-    
-    $tempDir = Join-Path $env:TEMP "LLEVAR_DISKETTE_BRIDGE_$(Get-Date -Format 'yyyyMMddHHmmss')"
-    try {
-        New-Item -Type Directory $tempDir -Force | Out-Null
-        
-        if ($ShowProgress) {
-            Write-LlevarProgressBar -Percent 25 -StartTime $StartTime -Label "Leyendo desde diskettes origen..." -Top $ProgressTop -Width 50
-        }
-        
-        # Leer bloques desde diskettes origen
-        $blocks = Get-AllBlocksFromFloppies -TempDir $tempDir
-        
-        if ($blocks.Count -eq 0) {
-            throw "No se encontraron bloques en los diskettes origen"
-        }
-        
-        # Restaurar y descomprimir
-        $password = $Llevar.Opciones.Clave
-        $extractedPath = Restore-FromFloppyBlocks -Blocks $blocks -TempDir $tempDir -Password $password
-        
-        if ($ShowProgress) {
-            Write-LlevarProgressBar -Percent 75 -StartTime $StartTime -Label "Copiando a diskettes destino..." -Top $ProgressTop -Width 50
-        }
-        
-        # Copiar a diskettes destino usando Copy-ToFloppyDisks
-        $destTempDir = Join-Path $env:TEMP "LLEVAR_DISKETTE_DEST_$(Get-Date -Format 'yyyyMMddHHmmss')"
-        New-Item -Type Directory $destTempDir -Force | Out-Null
-        
-        $sevenZ = Get-SevenZipLlevar
-        $ok = Copy-ToFloppyDisks -SourcePath $extractedPath -TempDir $destTempDir -SevenZPath $sevenZ -Password $password -VerifyDisks
-        
-        if (-not $ok) {
-            throw "Error copiando a diskettes destino"
-        }
-        
-        return @{ Success = $true; Route = "Diskette→Diskette" }
-    }
-    finally {
-        if (Test-Path $tempDir) {
-            Remove-Item $tempDir -Recurse -Force -ErrorAction SilentlyContinue
-        }
-    }
+    $msg = "Origen Diskette no soportado: para restaurar desde diskettes use INSTALAR.BAT desde el diskette 1 (restauración legacy fuera del dispatcher)."
+    Write-Log $msg "WARNING"
+    throw $msg
 }
 
 function Invoke-DisketteToLocal {
@@ -976,49 +929,9 @@ function Invoke-DisketteToLocal {
         [datetime]$StartTime
     )
     
-    Write-Log "Handler: Diskette→Local" "INFO"
-    
-    $tempDir = Join-Path $env:TEMP "LLEVAR_DISKETTE_TO_LOCAL_$(Get-Date -Format 'yyyyMMddHHmmss')"
-    try {
-        New-Item -Type Directory $tempDir -Force | Out-Null
-        
-        if ($ShowProgress) {
-            Write-LlevarProgressBar -Percent 25 -StartTime $StartTime -Label "Leyendo desde diskettes..." -Top $ProgressTop -Width 50
-        }
-        
-        # Leer bloques desde diskettes
-        $blocks = Get-AllBlocksFromFloppies -TempDir $tempDir
-        
-        if ($blocks.Count -eq 0) {
-            throw "No se encontraron bloques en los diskettes"
-        }
-        
-        # Restaurar y descomprimir
-        $password = $Llevar.Opciones.Clave
-        $extractedPath = Restore-FromFloppyBlocks -Blocks $blocks -TempDir $tempDir -Password $password
-        
-        if ($ShowProgress) {
-            Write-LlevarProgressBar -Percent 75 -StartTime $StartTime -Label "Copiando a destino local..." -Top $ProgressTop -Width 50
-        }
-        
-        # Obtener destino local
-        $destPath = switch ($Llevar.Destino.Tipo) {
-            "Local" {
-                with ($Llevar.Destino.Local) { .Path }
-            }
-            default { throw "Destino no es Local" }
-        }
-        
-        # Copiar archivos extraídos al destino
-        Copy-Item -Path "$extractedPath\*" -Destination $destPath -Recurse -Force
-        
-        return @{ Success = $true; Route = "Diskette→Local" }
-    }
-    finally {
-        if (Test-Path $tempDir) {
-            Remove-Item $tempDir -Recurse -Force -ErrorAction SilentlyContinue
-        }
-    }
+    $msg = "Origen Diskette no soportado: para restaurar desde diskettes use INSTALAR.BAT desde el diskette 1 (restauración legacy fuera del dispatcher)."
+    Write-Log $msg "WARNING"
+    throw $msg
 }
 
 function Invoke-DisketteToFtp {
@@ -1033,55 +946,9 @@ function Invoke-DisketteToFtp {
         [datetime]$StartTime
     )
     
-    Write-Log "Handler: Diskette→FTP" "INFO"
-    
-    $tempDir = Join-Path $env:TEMP "LLEVAR_DISKETTE_TO_FTP_$(Get-Date -Format 'yyyyMMddHHmmss')"
-    try {
-        New-Item -Type Directory $tempDir -Force | Out-Null
-        
-        if ($ShowProgress) {
-            Write-LlevarProgressBar -Percent 25 -StartTime $StartTime -Label "Leyendo desde diskettes..." -Top $ProgressTop -Width 50
-        }
-        
-        # Leer bloques desde diskettes
-        $blocks = Get-AllBlocksFromFloppies -TempDir $tempDir
-        
-        if ($blocks.Count -eq 0) {
-            throw "No se encontraron bloques en los diskettes"
-        }
-        
-        # Restaurar y descomprimir
-        $password = $Llevar.Opciones.Clave
-        $extractedPath = Restore-FromFloppyBlocks -Blocks $blocks -TempDir $tempDir -Password $password
-        
-        if ($ShowProgress) {
-            Write-LlevarProgressBar -Percent 75 -StartTime $StartTime -Label "Subiendo a FTP..." -Top $ProgressTop -Width 50
-        }
-        
-        # Crear TransferConfig temporal para FTP
-        $ftpConfig = New-TransferConfig
-        $ftpConfig.Origen.Tipo = "Local"
-        $ftpConfig.Origen.Local.Path = $extractedPath
-        $ftpConfig.Destino.Tipo = "FTP"
-        with ($ftpConfig.Destino.FTP) {
-            .Server = (with ($Llevar.Destino.FTP) { .Server })
-            .Port = (with ($Llevar.Destino.FTP) { .Port })
-            .User = (with ($Llevar.Destino.FTP) { .User })
-            .Password = (with ($Llevar.Destino.FTP) { .Password })
-            .Directory = (with ($Llevar.Destino.FTP) { .Directory })
-            .UseSsl = (with ($Llevar.Destino.FTP) { .UseSsl })
-        }
-        
-        # Usar Local→FTP (aunque sea stub, la estructura está lista)
-        Invoke-LocalToFtp -Llevar $ftpConfig -ShowProgress $ShowProgress -ProgressTop $ProgressTop -StartTime $StartTime
-        
-        return @{ Success = $true; Route = "Diskette→FTP" }
-    }
-    finally {
-        if (Test-Path $tempDir) {
-            Remove-Item $tempDir -Recurse -Force -ErrorAction SilentlyContinue
-        }
-    }
+    $msg = "Origen Diskette no soportado: para restaurar desde diskettes use INSTALAR.BAT desde el diskette 1 (restauración legacy fuera del dispatcher)."
+    Write-Log $msg "WARNING"
+    throw $msg
 }
 
 function Invoke-DisketteToUNC {
@@ -1096,65 +963,9 @@ function Invoke-DisketteToUNC {
         [datetime]$StartTime
     )
     
-    Write-Log "Handler: Diskette→UNC" "INFO"
-    
-    $tempDir = Join-Path $env:TEMP "LLEVAR_DISKETTE_TO_UNC_$(Get-Date -Format 'yyyyMMddHHmmss')"
-    try {
-        New-Item -Type Directory $tempDir -Force | Out-Null
-        
-        if ($ShowProgress) {
-            Write-LlevarProgressBar -Percent 25 -StartTime $StartTime -Label "Leyendo desde diskettes..." -Top $ProgressTop -Width 50
-        }
-        
-        # Leer bloques desde diskettes
-        $blocks = Get-AllBlocksFromFloppies -TempDir $tempDir
-        
-        if ($blocks.Count -eq 0) {
-            throw "No se encontraron bloques en los diskettes"
-        }
-        
-        # Restaurar y descomprimir
-        $password = $Llevar.Opciones.Clave
-        $extractedPath = Restore-FromFloppyBlocks -Blocks $blocks -TempDir $tempDir -Password $password
-        
-        if ($ShowProgress) {
-            Write-LlevarProgressBar -Percent 75 -StartTime $StartTime -Label "Copiando a UNC..." -Top $ProgressTop -Width 50
-        }
-        
-        # Obtener destino UNC
-        $destPath = switch ($Llevar.Destino.Tipo) {
-            "UNC" {
-                with ($Llevar.Destino.UNC) { .Path }
-            }
-            default { throw "Destino no es UNC" }
-        }
-        
-        # Montar UNC si es necesario y copiar
-        $destDrive = "LLEVAR_DISKETTE_UNC"
-        $credDestino = $null
-        if ($Llevar.Destino.UNC.Credentials) {
-            $credDestino = $Llevar.Destino.UNC.Credentials
-        }
-        
-        $destinoMontado = Mount-LlevarNetworkPath -Path $destPath -Credential $credDestino -DriveName $destDrive
-        
-        try {
-            # Copiar archivos extraídos al destino UNC
-            Copy-Item -Path "$extractedPath\*" -Destination $destinoMontado -Recurse -Force
-        }
-        finally {
-            if ($destDrive -and (Get-PSDrive -Name $destDrive -ErrorAction SilentlyContinue)) {
-                Remove-PSDrive -Name $destDrive -Force -ErrorAction SilentlyContinue
-            }
-        }
-        
-        return @{ Success = $true; Route = "Diskette→UNC" }
-    }
-    finally {
-        if (Test-Path $tempDir) {
-            Remove-Item $tempDir -Recurse -Force -ErrorAction SilentlyContinue
-        }
-    }
+    $msg = "Origen Diskette no soportado: para restaurar desde diskettes use INSTALAR.BAT desde el diskette 1 (restauración legacy fuera del dispatcher)."
+    Write-Log $msg "WARNING"
+    throw $msg
 }
 
 function Invoke-DisketteToCloud {
@@ -1170,66 +981,9 @@ function Invoke-DisketteToCloud {
         [datetime]$StartTime
     )
     
-    Write-Log "Handler: Diskette→$CloudType" "INFO"
-    
-    $tempDir = Join-Path $env:TEMP "LLEVAR_DISKETTE_TO_$CloudType`_$(Get-Date -Format 'yyyyMMddHHmmss')"
-    try {
-        New-Item -Type Directory $tempDir -Force | Out-Null
-        
-        if ($ShowProgress) {
-            Write-LlevarProgressBar -Percent 25 -StartTime $StartTime -Label "Leyendo desde diskettes..." -Top $ProgressTop -Width 50
-        }
-        
-        # Leer bloques desde diskettes
-        $blocks = Get-AllBlocksFromFloppies -TempDir $tempDir
-        
-        if ($blocks.Count -eq 0) {
-            throw "No se encontraron bloques en los diskettes"
-        }
-        
-        # Restaurar y descomprimir
-        $password = $Llevar.Opciones.Clave
-        $extractedPath = Restore-FromFloppyBlocks -Blocks $blocks -TempDir $tempDir -Password $password
-        
-        if ($ShowProgress) {
-            Write-LlevarProgressBar -Percent 75 -StartTime $StartTime -Label "Subiendo a $CloudType..." -Top $ProgressTop -Width 50
-        }
-        
-        # Crear TransferConfig temporal para cloud
-        $cloudConfig = New-TransferConfig
-        $cloudConfig.Origen.Tipo = "Local"
-        $cloudConfig.Origen.Local.Path = $extractedPath
-        $cloudConfig.Destino.Tipo = $CloudType
-        
-        if ($CloudType -eq "OneDrive") {
-            with ($cloudConfig.Destino.OneDrive) {
-                .Path = (with ($Llevar.Destino.OneDrive) { .Path })
-                .Token = (with ($Llevar.Destino.OneDrive) { .Token })
-                .RefreshToken = (with ($Llevar.Destino.OneDrive) { .RefreshToken })
-                .Email = (with ($Llevar.Destino.OneDrive) { .Email })
-                .ApiUrl = (with ($Llevar.Destino.OneDrive) { .ApiUrl })
-            }
-        }
-        elseif ($CloudType -eq "Dropbox") {
-            with ($cloudConfig.Destino.Dropbox) {
-                .Path = (with ($Llevar.Destino.Dropbox) { .Path })
-                .Token = (with ($Llevar.Destino.Dropbox) { .Token })
-                .RefreshToken = (with ($Llevar.Destino.Dropbox) { .RefreshToken })
-                .Email = (with ($Llevar.Destino.Dropbox) { .Email })
-                .ApiUrl = (with ($Llevar.Destino.Dropbox) { .ApiUrl })
-            }
-        }
-        
-        # Usar Local→Cloud (aunque sea stub, la estructura está lista)
-        Invoke-LocalToCloud -Llevar $cloudConfig -CloudType $CloudType -ShowProgress $ShowProgress -ProgressTop $ProgressTop -StartTime $StartTime
-        
-        return @{ Success = $true; Route = "Diskette→$CloudType" }
-    }
-    finally {
-        if (Test-Path $tempDir) {
-            Remove-Item $tempDir -Recurse -Force -ErrorAction SilentlyContinue
-        }
-    }
+    $msg = "Origen Diskette no soportado: para restaurar desde diskettes use INSTALAR.BAT desde el diskette 1 (restauración legacy fuera del dispatcher)."
+    Write-Log $msg "WARNING"
+    throw $msg
 }
 
 function Invoke-DisketteToISO {
@@ -1244,53 +998,9 @@ function Invoke-DisketteToISO {
         [datetime]$StartTime
     )
     
-    Write-Log "Handler: Diskette→ISO" "INFO"
-    
-    $tempDir = Join-Path $env:TEMP "LLEVAR_DISKETTE_TO_ISO_$(Get-Date -Format 'yyyyMMddHHmmss')"
-    try {
-        New-Item -Type Directory $tempDir -Force | Out-Null
-        
-        if ($ShowProgress) {
-            Write-LlevarProgressBar -Percent 25 -StartTime $StartTime -Label "Leyendo desde diskettes..." -Top $ProgressTop -Width 50
-        }
-        
-        # Leer bloques desde diskettes
-        $blocks = Get-AllBlocksFromFloppies -TempDir $tempDir
-        
-        if ($blocks.Count -eq 0) {
-            throw "No se encontraron bloques en los diskettes"
-        }
-        
-        # Restaurar y descomprimir
-        $password = $Llevar.Opciones.Clave
-        $extractedPath = Restore-FromFloppyBlocks -Blocks $blocks -TempDir $tempDir -Password $password
-        
-        if ($ShowProgress) {
-            Write-LlevarProgressBar -Percent 75 -StartTime $StartTime -Label "Generando ISO..." -Top $ProgressTop -Width 50
-        }
-        
-        # Crear TransferConfig temporal para ISO
-        $isoConfig = New-TransferConfig
-        $isoConfig.Origen.Tipo = "Local"
-        $isoConfig.Origen.Local.Path = $extractedPath
-        $isoConfig.Destino.Tipo = "ISO"
-        with ($isoConfig.Destino.ISO) {
-            .OutputPath = (with ($Llevar.Destino.ISO) { .OutputPath })
-            .Size = (with ($Llevar.Destino.ISO) { .Size })
-            .VolumeSize = (with ($Llevar.Destino.ISO) { .VolumeSize })
-            .VolumeName = (with ($Llevar.Destino.ISO) { .VolumeName })
-        }
-        
-        # Usar Local→ISO (aunque sea stub, la estructura está lista)
-        Invoke-LocalToISO -Llevar $isoConfig -ShowProgress $ShowProgress -ProgressTop $ProgressTop -StartTime $StartTime
-        
-        return @{ Success = $true; Route = "Diskette→ISO" }
-    }
-    finally {
-        if (Test-Path $tempDir) {
-            Remove-Item $tempDir -Recurse -Force -ErrorAction SilentlyContinue
-        }
-    }
+    $msg = "Origen Diskette no soportado: para restaurar desde diskettes use INSTALAR.BAT desde el diskette 1 (restauración legacy fuera del dispatcher)."
+    Write-Log $msg "WARNING"
+    throw $msg
 }
 
 # Exportar funciones PÚBLICAS solamente

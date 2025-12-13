@@ -7,8 +7,8 @@
 # ========================================================================== #
 
 # Importar dependencias
-$ModulesPath = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
-Import-Module (Join-Path $ModulesPath "Modules\Compression\BlockSplitter.psm1") -Force -Global
+$ModulesPath = Split-Path $PSScriptRoot -Parent
+Import-Module (Join-Path $ModulesPath "Compression\BlockSplitter.psm1") -Force -Global
 
 # ========================================================================== #
 #                    PLANTILLA DEL INSTALADOR (EMBUTIDA)                     #

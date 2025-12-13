@@ -9,24 +9,24 @@
     Archivo: q:\Utilidad\LLevar\Modules\Parameters\Test.psm1
 #>
 
-# Importar TransferConfig al inicio
-using module "Q:\Utilidad\LLevar\Modules\Core\TransferConfig.psm1"
-
 # Imports necesarios
-$ModulesPath = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
-Import-Module (Join-Path $ModulesPath "Modules\UI\Banners.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "Modules\UI\Navigator.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "Modules\Transfer\FTP.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "Modules\Transfer\OneDrive.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "Modules\Transfer\Dropbox.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "Modules\Compression\SevenZip.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "Modules\Compression\BlockSplitter.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "Modules\System\Robocopy.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "Modules\Transfer\UNC.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "Modules\Utilities\VolumeManagement.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "Modules\Installation\ISO.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "Modules\Core\Logger.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "Modules\UI\Menus.psm1") -Force -Global
+$ModulesPath = Split-Path $PSScriptRoot -Parent
+if (-not (Get-Module -Name 'TransferConfig')) {
+    Import-Module (Join-Path $ModulesPath "Core\TransferConfig.psm1") -Force -Global
+}
+Import-Module (Join-Path $ModulesPath "UI\Banners.psm1") -Force -Global
+Import-Module (Join-Path $ModulesPath "UI\Navigator.psm1") -Force -Global
+Import-Module (Join-Path $ModulesPath "Transfer\FTP.psm1") -Force -Global
+Import-Module (Join-Path $ModulesPath "Transfer\OneDrive.psm1") -Force -Global
+Import-Module (Join-Path $ModulesPath "Transfer\Dropbox.psm1") -Force -Global
+Import-Module (Join-Path $ModulesPath "Compression\SevenZip.psm1") -Force -Global
+Import-Module (Join-Path $ModulesPath "Compression\BlockSplitter.psm1") -Force -Global
+Import-Module (Join-Path $ModulesPath "System\Robocopy.psm1") -Force -Global
+Import-Module (Join-Path $ModulesPath "Transfer\UNC.psm1") -Force -Global
+Import-Module (Join-Path $ModulesPath "Utilities\VolumeManagement.psm1") -Force -Global
+Import-Module (Join-Path $ModulesPath "Installation\ISO.psm1") -Force -Global
+Import-Module (Join-Path $ModulesPath "Core\Logger.psm1") -Force -Global
+Import-Module (Join-Path $ModulesPath "UI\Menus.psm1") -Force -Global
 
 # ========================================================================== #
 #                     FUNCIÓN PRINCIPAL DE PRUEBAS                           #

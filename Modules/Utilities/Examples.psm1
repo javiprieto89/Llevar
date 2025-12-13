@@ -254,9 +254,165 @@ function Remove-ExampleData {
     Write-Host ""
 }
 
+function Initialize-ExampleTransfer {
+    <#
+    .SYNOPSIS
+        Configura TransferConfig con datos de ejemplo para demostración
+    .PARAMETER TransferConfig
+        Referencia al objeto TransferConfig a configurar
+    .PARAMETER FileCount
+        Número de archivos de prueba a generar (por defecto: 5)
+    .PARAMETER FileSizeMB
+        Tamaño de cada archivo en MB (por defecto: 20)
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [TransferConfig]$TransferConfig,
+        
+        [int]$FileCount = 5,
+        [int]$FileSizeMB = 20
+    )
+    
+    Show-Banner "MODO EJEMPLO - Generando datos de prueba" -BorderColor Cyan -TextColor Cyan
+    
+    # Crear carpetas temporales
+    $baseTemp = Join-Path $env:TEMP "LlevarTest_$(Get-Date -Format 'yyyyMMdd_HHmmss')"
+    $origenTemp = Join-Path $baseTemp "Origen"
+    $destinoTemp = Join-Path $baseTemp "Destino"
+    
+    Write-Host "📂 Creando estructura temporal..." -ForegroundColor Gray
+    New-Item -ItemType Directory -Path $origenTemp -Force | Out-Null
+    New-Item -ItemType Directory -Path $destinoTemp -Force | Out-Null
+    
+    # Generar archivos de prueba
+    Write-Host "📝 Generando $FileCount archivos de ${FileSizeMB}MB cada uno..." -ForegroundColor Gray
+    
+    for ($i = 1; $i -le $FileCount; $i++) {
+        $fileName = "TestFile_$i.tmp"
+        $filePath = Join-Path $origenTemp $fileName
+        
+        $chunkSize = 1MB
+        $totalBytes = $FileSizeMB * 1MB
+        $written = 0
+        
+        $stream = [System.IO.File]::Create($filePath)
+        $random = New-Object System.Random
+        
+        while ($written -lt $totalBytes) {
+            $remaining = $totalBytes - $written
+            $size = [Math]::Min($chunkSize, $remaining)
+            
+            $buffer = New-Object byte[] $size
+            $random.NextBytes($buffer)
+            
+            $stream.Write($buffer, 0, $size)
+            $written += $size
+        }
+        
+        $stream.Close()
+        
+        $sizeStr = "{0:N2}" -f ((Get-Item $filePath).Length / 1MB)
+        Write-Host "  ✓ $fileName ($sizeStr MB)" -ForegroundColor Green
+    }
+    
+    # Configurar TransferConfig por referencia
+    Set-TransferType -Config $TransferConfig -Section "Origen" -Type "Local"
+    Set-TransferPath -Config $TransferConfig -Section "Origen" -Value $origenTemp
+    Set-TransferConfigValue -Config $TransferConfig -Path "OrigenIsSet" -Value $true
+    
+    Set-TransferType -Config $TransferConfig -Section "Destino" -Type "Local"
+    Set-TransferPath -Config $TransferConfig -Section "Destino" -Value $destinoTemp
+    Set-TransferConfigValue -Config $TransferConfig -Path "DestinoIsSet" -Value $true
+    
+    Write-Host ""
+    Write-Host "✅ Datos de ejemplo generados correctamente" -ForegroundColor Green
+    Write-Host "   Origen:  $origenTemp" -ForegroundColor Cyan
+    Write-Host "   Destino: $destinoTemp" -ForegroundColor Cyan
+    Write-Host ""
+    
+    # Retornar info para limpieza
+    return @{
+        BaseDir     = $baseTemp
+        Origen      = $origenTemp
+        Destino     = $destinoTemp
+        FileCount   = $FileCount
+        TotalSizeMB = $FileCount * $FileSizeMB
+    }
+}
+
+function Show-ExampleSummary {
+    <#
+    .SYNOPSIS
+        Muestra resumen de ejecución del modo ejemplo
+    .PARAMETER ExampleInfo
+        Hashtable con información del ejemplo
+    .PARAMETER TransferConfig
+        Objeto TransferConfig con la configuración usada
+    .PARAMETER ElapsedTime
+        Tiempo transcurrido en la operación
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [hashtable]$ExampleInfo,
+        
+        [Parameter(Mandatory = $true)]
+        $TransferConfig,
+        
+        [timespan]$ElapsedTime
+    )
+    
+    Show-Banner "EJEMPLO EJECUTADO EXITOSAMENTE" -BorderColor Green -TextColor Green
+    
+    Write-Host ""
+    Write-Host "📊 RESUMEN DE LA OPERACIÓN" -ForegroundColor Cyan
+    Write-Host "═══════════════════════════════════════════════════" -ForegroundColor Gray
+    Write-Host ""
+    
+    Write-Host "  📂 Origen:        " -NoNewline -ForegroundColor Yellow
+    Write-Host "$($ExampleInfo.Origen)" -ForegroundColor White
+    Write-Host "     └─ Archivos:   " -NoNewline -ForegroundColor Gray
+    Write-Host "$($ExampleInfo.FileCount) archivos ($($ExampleInfo.TotalSizeMB) MB)" -ForegroundColor White
+    Write-Host ""
+    
+    Write-Host "  📂 Destino:       " -NoNewline -ForegroundColor Yellow
+    Write-Host "$($ExampleInfo.Destino)" -ForegroundColor White
+    Write-Host ""
+    
+    Write-Host "  ⚙️  Configuración:" -ForegroundColor Yellow
+    Write-Host "     └─ Tamaño bloque:  " -NoNewline -ForegroundColor Gray
+    Write-Host "$($TransferConfig.Opciones.BlockSizeMB) MB" -ForegroundColor White
+    Write-Host "     └─ Compresión:     " -NoNewline -ForegroundColor Gray
+    Write-Host "$(if ($TransferConfig.Opciones.UseNativeZip) { 'ZIP Nativo' } else { '7-Zip' })" -ForegroundColor White
+    Write-Host ""
+    
+    Write-Host "  ⏱️  Tiempo:       " -NoNewline -ForegroundColor Yellow
+    Write-Host "$($ElapsedTime.ToString('hh\:mm\:ss'))" -ForegroundColor White
+    Write-Host ""
+    
+    Write-Host "═══════════════════════════════════════════════════" -ForegroundColor Gray
+    Write-Host ""
+    
+    # Preguntar si limpiar
+    $cleanup = Read-Host "¿Desea eliminar los archivos de ejemplo? (S/N)"
+    
+    if ($cleanup -match '^[SsYy]') {
+        Remove-ExampleData -Directories @($ExampleInfo.BaseDir)
+        Write-Host "✓ Archivos temporales eliminados" -ForegroundColor Green
+    }
+    else {
+        Write-Host "Los archivos permanecen en: $($ExampleInfo.BaseDir)" -ForegroundColor Yellow
+    }
+    
+    Write-Host ""
+    Write-Host "Presione ENTER para salir..." -ForegroundColor Cyan
+    Read-Host
+}
+
 # Exportar funciones
 Export-ModuleMember -Function @(
     'New-ExampleData',
     'Invoke-ExampleMode',
-    'Remove-ExampleData'
+    'Remove-ExampleData',
+    'Initialize-ExampleTransfer',
+    'Show-ExampleSummary'
 )

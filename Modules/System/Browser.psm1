@@ -7,8 +7,8 @@
 # ========================================================================== #
 
 # Imports necesarios
-$ModulesPath = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
-Import-Module (Join-Path $ModulesPath "Modules\Core\Logger.psm1") -Force -Global
+$ModulesPath = Split-Path $PSScriptRoot -Parent
+Import-Module (Join-Path $ModulesPath "Core\Logger.psm1") -Force -Global
 
 # Almacén simple de ventanas abiertas por tag (solo handle y t¡tulo inicial)
 if (-not $script:BrowserWindows) {

@@ -1,0 +1,1 @@
+isInIDE=False hasParams=False ForceLogo=True shouldShow=True host=ConsoleHost

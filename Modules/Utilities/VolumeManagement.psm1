@@ -296,7 +296,7 @@ function Copy-BlocksToUSB {
 
             # Usar dispatcher unificado
             $modulesRoot = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
-            $dispatcherPath = Join-Path $modulesRoot "Modules\Transfer\Unified.psm1"
+            $dispatcherPath = Join-Path $modulesRoot "Transfer\Unified.psm1"
             if (-not (Get-Command Copy-LlevarFiles -ErrorAction SilentlyContinue)) {
                 Import-Module $dispatcherPath -Force -Global
             }

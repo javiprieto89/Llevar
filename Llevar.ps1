@@ -208,18 +208,30 @@ try {
     $ErrorActionPreference = 'Continue'
 
     # ========================================================================== #
+    #                   CARGAR CLASE TRANSFERCONFIG (ANTES DE MÓDULOS)           #
+    # ========================================================================== #
+    
+    # PowerShell NO exporta clases desde .psm1 con Import-Module
+    # Solución: cargar el módulo TransferConfig antes que el resto
+    $ModulesPath = Join-Path $PSScriptRoot "Modules"
+    #$ModulesPath = Split-Path $PSScriptRoot -Parent
+
+    $transferConfigModule = Join-Path $ModulesPath "Core\TransferConfig.psm1"
+    if (-not (Test-Path $transferConfigModule)) {
+        throw "ERROR CRÍTICO: No se encontró TransferConfig.psm1 en $transferConfigModule"
+    }
+
+    # ========================================================================== #
     #                        IMPORTAR TODOS LOS MÓDULOS                          #
     # ========================================================================== #
-
-    $ModulesPath = Join-Path $PSScriptRoot "Modules"
 
     # Las preferencias de error/warning ya están configuradas al inicio del script
     # Variables para capturar errores y warnings durante importación
     $importWarnings = @()
     $importErrors = @()
 
-    # Módulos Core        
-    Import-Module (Join-Path $ModulesPath "Core\TransferConfig.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
+    # Módulos Core (TransferConfig ya está cargado arriba)
+    Import-Module $transferConfigModule -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
     Import-Module (Join-Path $ModulesPath "Core\Validation.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
     Import-Module (Join-Path $ModulesPath "Core\Logger.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
     
@@ -358,7 +370,16 @@ try {
 
     $forceLogoEnv = $false
     if ($env:LLEVAR_FORCE_LOGO -eq '1' -or $env:LLEVAR_FORCE_LOGO -eq 'true') { $forceLogoEnv = $true }
-    $shouldShowLogo = (-not $hasExecutionParams) -and ((-not $isInIDE) -or $ForceLogo -or $forceLogoEnv)
+    
+    # Mostrar logo si:
+    # - Se especifica -ForceLogo o variable de entorno -> SIEMPRE mostrar
+    # - O si NO hay parámetros de ejecución Y NO está en IDE
+    if ($ForceLogo -or $forceLogoEnv) {
+        $shouldShowLogo = $true
+    }
+    else {
+        $shouldShowLogo = (-not $hasExecutionParams) -and (-not $isInIDE)
+    }
     
     # Log de depuración solo si Write-Log está disponible
     if (Get-Command Write-Log -ErrorAction SilentlyContinue) {
@@ -491,30 +512,31 @@ try {
         }
     }
 
-    # 6. Verificar si no hay parámetros (modo interactivo)
-    $menuConfig = Invoke-InteractiveMenu -Ayuda:$Ayuda -Instalar:$Instalar -RobocopyMirror:$RobocopyMirror -Ejemplo:$Ejemplo -Origen $Origen -Destino $Destino -Iso:$Iso
+    # 6. Configurar TransferConfig según parámetros o menú interactivo
+    
+    # ✅ CREAR INSTANCIA ÚNICA DE TRANSFERCONFIG AL INICIO
+    [TransferConfig]$transferConfig = [TransferConfig]::new()
 
-    # Variable para almacenar el TransferConfig (tipada)
-    [TransferConfig]$transferConfig = $null
+    # Detectar si hay parámetros de ejecución que configuran origen/destino
+    $hasOriginDestinationParams = ($Origen -or $Destino -or $OnedriveOrigen -or $OnedriveDestino -or $DropboxOrigen -or $DropboxDestino)
 
-    # Si el menú interactivo devolvió configuración, extraerla
-    if ($null -ne $menuConfig) {
-        # Verificar si es modo ejemplo o ayuda (sin TransferConfig)
-        if ($menuConfig.Action -eq "Example") {
-            $Ejemplo = $menuConfig.Ejemplo
-        }
-        elseif ($menuConfig.Action -eq "Execute" -and $menuConfig.ContainsKey('TransferConfig')) {
-            # Usar TransferConfig del menú interactivo (ya viene configurado)
-            $transferConfig = [TransferConfig]$menuConfig.TransferConfig
+    # Solo invocar menú interactivo si NO hay parámetros de origen/destino
+    if (-not $hasOriginDestinationParams) {
+        # Pasar por referencia usando [ref]
+        $menuAction = Invoke-InteractiveMenu -TransferConfig $transferConfig -Ayuda:$Ayuda -Instalar:$Instalar -RobocopyMirror:$RobocopyMirror -Ejemplo:$Ejemplo -Origen $Origen -Destino $Destino -Iso:$Iso
+        
+        # Procesar acción retornada del menú
+        if ($menuAction -eq "Example") {
+            $exampleStartTime = Get-Date
+            Invoke-NormalMode -TransferConfig $transferConfig
+            $exampleElapsed = (Get-Date) - $exampleStartTime
+            Show-ExampleSummary -ExampleInfo $script:ExampleInfo -TransferConfig $transferConfig -ElapsedTime $exampleElapsed
+            exit
         }
     }
 
-    # Si no hay TransferConfig del menú y hay parámetros, crear TransferConfig
-    # Detectar tipo automáticamente según parámetros disponibles
-    if (-not $transferConfig -and ($Origen -or $Destino -or $OnedriveOrigen -or $OnedriveDestino -or $DropboxOrigen -or $DropboxDestino)) {
-        # ✅ CREAR INSTANCIA ÚNICA DE TRANSFERCONFIG
-        $transferConfig = [TransferConfig]::new()
-        
+    # Si hay parámetros de línea de comandos, configurar TransferConfig directamente
+    if ($hasOriginDestinationParams) {
         # ===== DETECTAR Y CONFIGURAR ORIGEN =====
         if ($Origen) {
             # Detectar tipo de origen según formato del path
@@ -532,8 +554,10 @@ try {
                     $transferConfig.Origen.FTP.Port = $ftpPort
                     $transferConfig.Origen.FTP.Directory = $ftpDirectory
                     $transferConfig.Origen.FTP.UseSsl = ($ftpScheme -eq "ftps")
+                    $transferConfig.OrigenIsSet = $true
                     
                     if ($SourceCredentials) {
+                        $transferConfig.Origen.FTP.Credentials = $SourceCredentials
                         $transferConfig.Origen.FTP.User = $SourceCredentials.UserName
                         $transferConfig.Origen.FTP.Password = $SourceCredentials.GetNetworkCredential().Password
                     }
@@ -543,21 +567,25 @@ try {
                 # Es UNC - ruta de red
                 $transferConfig.Origen.Tipo = "UNC"
                 $transferConfig.Origen.UNC.Path = $Origen
+                $transferConfig.OrigenIsSet = $true
             }
             elseif ($OnedriveOrigen) {
                 # OneDrive especificado por parámetro
                 $transferConfig.Origen.Tipo = "OneDrive"
                 $transferConfig.Origen.OneDrive.Path = $Origen
+                $transferConfig.OrigenIsSet = $true
             }
             elseif ($DropboxOrigen) {
                 # Dropbox especificado por parámetro
                 $transferConfig.Origen.Tipo = "Dropbox"
                 $transferConfig.Origen.Dropbox.Path = $Origen
+                $transferConfig.OrigenIsSet = $true
             }
             else {
                 # Es Local por defecto
                 $transferConfig.Origen.Tipo = "Local"
                 $transferConfig.Origen.Local.Path = $Origen
+                $transferConfig.OrigenIsSet = $true
             }
         }
         
@@ -569,6 +597,7 @@ try {
                 $transferConfig.Destino.Tipo = "ISO"
                 $transferConfig.Destino.ISO.OutputPath = $Destino
                 $transferConfig.Destino.ISO.Size = $IsoDestino
+                $transferConfig.DestinoIsSet = $true
             }
             elseif ($Destino -match '^ftp(s)?://') {
                 # Es FTP - parsear URL
@@ -584,8 +613,10 @@ try {
                     $transferConfig.Destino.FTP.Port = $ftpPort
                     $transferConfig.Destino.FTP.Directory = $ftpDirectory
                     $transferConfig.Destino.FTP.UseSsl = ($ftpScheme -eq "ftps")
+                    $transferConfig.DestinoIsSet = $true                    
                     
                     if ($DestinationCredentials) {
+                        $transferConfig.Destino.FTP.Credentials = $DestinationCredentials
                         $transferConfig.Destino.FTP.User = $DestinationCredentials.UserName
                         $transferConfig.Destino.FTP.Password = $DestinationCredentials.GetNetworkCredential().Password
                     }
@@ -595,31 +626,36 @@ try {
                 # Es UNC - ruta de red
                 $transferConfig.Destino.Tipo = "UNC"
                 $transferConfig.Destino.UNC.Path = $Destino
+                $transferConfig.DestinoIsSet = $true
             }
             elseif ($OnedriveDestino) {
                 # OneDrive especificado por parámetro
                 $transferConfig.Destino.Tipo = "OneDrive"
                 $transferConfig.Destino.OneDrive.Path = $Destino
+                $transferConfig.DestinoIsSet = $true
             }
             elseif ($DropboxDestino) {
                 # Dropbox especificado por parámetro
                 $transferConfig.Destino.Tipo = "Dropbox"
                 $transferConfig.Destino.Dropbox.Path = $Destino
+                $transferConfig.DestinoIsSet = $true
             }
             elseif ($Destino -ieq "FLOPPY") {
                 # Diskette especificado
                 $transferConfig.Destino.Tipo = "Diskette"
                 $transferConfig.Destino.Diskette.OutputPath = $env:TEMP
                 $transferConfig.Destino.Diskette.MaxDisks = 30
+                $transferConfig.DestinoIsSet = $true
             }
             else {
                 # Es Local por defecto
                 $transferConfig.Destino.Tipo = "Local"
                 $transferConfig.Destino.Local.Path = $Destino
+                $transferConfig.DestinoIsSet = $true
             }
         }
         
-        # ✅ CONFIGURAR OPCIONES GENERALES (NO SE PISAN)
+        # ✅ CONFIGURAR OPCIONES GENERALES
         $transferConfig.Opciones.BlockSizeMB = $BlockSizeMB
         $transferConfig.Opciones.Clave = $Clave
         $transferConfig.Opciones.UseNativeZip = $UseNativeZip
@@ -630,9 +666,23 @@ try {
     #                     MODO NORMAL - EJECUCIÓN PRINCIPAL                      #
     # ========================================================================== #
 
-    # Invocar modo normal con TransferConfig unificado
-    if ($transferConfig) {
+    # Ejecutar solo si origen Y destino están configurados
+    if ($transferConfig.OrigenIsSet -and $transferConfig.DestinoIsSet) {
         Invoke-NormalMode -TransferConfig $transferConfig
+    }
+    elseif (-not $transferConfig.OrigenIsSet -and -not $transferConfig.DestinoIsSet) {
+        # Sin configuración, no hacer nada (modo ayuda, ejemplo, etc. ya se ejecutaron)
+    }
+    else {
+        Write-Host ""
+        Write-Host "ERROR: Configuración incompleta" -ForegroundColor Red
+        if (-not $transferConfig.OrigenIsSet) {
+            Write-Host "  - Origen no configurado" -ForegroundColor Yellow
+        }
+        if (-not $transferConfig.DestinoIsSet) {
+            Write-Host "  - Destino no configurado" -ForegroundColor Yellow
+        }
+        Write-Host ""
     }
 
     # ========================================================================== #

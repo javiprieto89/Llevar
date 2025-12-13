@@ -5,15 +5,15 @@
 # Funciones refactorizadas para usar TransferConfig como única fuente de verdad
 # ========================================================================== #
 
-# Importar TransferConfig al inicio
-using module "Q:\Utilidad\LLevar\Modules\Core\TransferConfig.psm1"
-
 # Imports necesarios
-$ModulesPath = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
-Import-Module (Join-Path $ModulesPath "Modules\UI\Banners.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "Modules\UI\ProgressBar.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "Modules\Core\Logger.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "Modules\UI\Menus.psm1") -Force -Global
+$ModulesPath = Split-Path $PSScriptRoot -Parent
+if (-not (Get-Module -Name 'TransferConfig')) {
+    Import-Module (Join-Path $ModulesPath "Core\TransferConfig.psm1") -Force -Global
+}
+Import-Module (Join-Path $ModulesPath "UI\Banners.psm1") -Force -Global
+Import-Module (Join-Path $ModulesPath "UI\ProgressBar.psm1") -Force -Global
+Import-Module (Join-Path $ModulesPath "Core\Logger.psm1") -Force -Global
+Import-Module (Join-Path $ModulesPath "UI\Menus.psm1") -Force -Global
 
 # ========================================================================== #
 #                          FUNCIONES AUXILIARES                              #
@@ -192,6 +192,7 @@ function Get-FtpConfigFromUser {
         $Llevar.Origen.Tipo = "FTP"
         $Llevar.Origen.FTP.Server = $server
         $Llevar.Origen.FTP.Port = $port
+        $Llevar.Origen.FTP.Credentials = $credentials
         $Llevar.Origen.FTP.User = $credentials.UserName
         $Llevar.Origen.FTP.Password = $credentials.GetNetworkCredential().Password
         $Llevar.Origen.FTP.UseSsl = ($server -match '^ftps://')
@@ -203,6 +204,7 @@ function Get-FtpConfigFromUser {
         $Llevar.Destino.Tipo = "FTP"
         $Llevar.Destino.FTP.Server = $server
         $Llevar.Destino.FTP.Port = $port
+        $Llevar.Destino.FTP.Credentials = $credentials
         $Llevar.Destino.FTP.User = $credentials.UserName
         $Llevar.Destino.FTP.Password = $credentials.GetNetworkCredential().Password
         $Llevar.Destino.FTP.UseSsl = ($server -match '^ftps://')
@@ -245,7 +247,7 @@ function Copy-LlevarLocalToFtp {
     Write-Log "Copy-LlevarLocalToFtp: Delegando al dispatcher unificado" "INFO"
     
     # Importar dispatcher si no está cargado
-    $dispatcherPath = Join-Path $ModulesPath "Modules\Transfer\Unified.psm1"
+    $dispatcherPath = Join-Path $ModulesPath "Transfer\Unified.psm1"
     if (-not (Get-Command Invoke-TransferDispatcher -ErrorAction SilentlyContinue)) {
         Import-Module $dispatcherPath -Force -Global
     }
@@ -277,7 +279,7 @@ function Copy-LlevarFtpToLocal {
     Write-Log "Copy-LlevarFtpToLocal: Delegando al dispatcher unificado" "INFO"
     
     # Importar dispatcher si no está cargado
-    $dispatcherPath = Join-Path $ModulesPath "Modules\Transfer\Unified.psm1"
+    $dispatcherPath = Join-Path $ModulesPath "Transfer\Unified.psm1"
     if (-not (Get-Command Invoke-TransferDispatcher -ErrorAction SilentlyContinue)) {
         Import-Module $dispatcherPath -Force -Global
     }

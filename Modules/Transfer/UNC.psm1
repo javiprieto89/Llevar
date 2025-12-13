@@ -12,8 +12,8 @@
 # ========================================================================== #
 
 # Imports necesarios
-$ModulesPath = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
-Import-Module (Join-Path $ModulesPath "Modules\Core\Logger.psm1") -Force -Global
+$ModulesPath = Join-Path (Split-Path (Split-Path $PSScriptRoot -Parent) -Parent) "Modules"
+Import-Module (Join-Path $ModulesPath "Core\Logger.psm1") -Force -Global
 
 function Get-NetworkComputers {
     <#

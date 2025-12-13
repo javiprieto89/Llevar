@@ -4,7 +4,9 @@
 # ============================================================================ #
 
 # Importar módulo de ProgressBar para Show-AsciiLogo
-Import-Module "$PSScriptRoot\ProgressBar.psm1" -Force
+$ModulesPath = Join-Path (Split-Path (Split-Path $PSScriptRoot -Parent) -Parent) "Modules"
+Import-Module (Join-Path $ModulesPath "UI\Console.psm1") -Force -Global
+Import-Module (Join-Path $ModulesPath "UI\ProgressBar.psm1") -Force -Global
 
 function Show-Banner {
     <#
@@ -447,7 +449,7 @@ function Show-AsciiLogo {
     # === REPRODUCIR SONIDO ESTILO DOS ===
     if ($PlaySound) {
         #Invoke-DOSBeep -Style 'GameBoy'
-        Start-DOSBeepAsync -Style 'GameBoy'
+        #Start-DOSBeepAsync -Style 'GameBoy'
     }
     # === DIBUJAR LOGO ===
     for ($i = 0; $i -lt $effectiveLines.Count; $i++) {

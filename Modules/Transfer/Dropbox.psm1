@@ -5,15 +5,18 @@
 # Funciones refactorizadas para usar TransferConfig como única fuente de verdad
 # ========================================================================== #
 
-# Importar TransferConfig al inicio
-using module "Q:\Utilidad\LLevar\Modules\Core\TransferConfig.psm1"
+# Importar TransferConfig al inicio (ruta relativa para permitir mover la carpeta)
+
 
 # Imports necesarios
-$ModulesPath = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
-Import-Module (Join-Path $ModulesPath "Modules\UI\Banners.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "Modules\UI\ProgressBar.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "Modules\Core\Logger.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "Modules\UI\Menus.psm1") -Force -Global
+$ModulesPath = Split-Path $PSScriptRoot -Parent
+if (-not (Get-Module -Name 'TransferConfig')) {
+    Import-Module (Join-Path $ModulesPath "Core\TransferConfig.psm1") -Force -Global
+}
+Import-Module (Join-Path $ModulesPath "UI\Banners.psm1") -Force -Global
+Import-Module (Join-Path $ModulesPath "UI\ProgressBar.psm1") -Force -Global
+Import-Module (Join-Path $ModulesPath "Core\Logger.psm1") -Force -Global
+Import-Module (Join-Path $ModulesPath "UI\Menus.psm1") -Force -Global
 
 # ========================================================================== #
 #                          FUNCIONES AUXILIARES                              #
@@ -220,8 +223,8 @@ function Copy-LlevarLocalToDropbox {
     # ✅ DELEGAR AL DISPATCHER
     Write-Log "Copy-LlevarLocalToDropbox: Delegando al dispatcher unificado" "INFO"
     
-    $ModulesPath = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
-    $dispatcherPath = Join-Path $ModulesPath "Modules\Transfer\Unified.psm1"
+    $ModulesPath = Split-Path $PSScriptRoot -Parent
+    $dispatcherPath = Join-Path $ModulesPath "Transfer\Unified.psm1"
     if (-not (Get-Command Invoke-TransferDispatcher -ErrorAction SilentlyContinue)) {
         Import-Module $dispatcherPath -Force -Global
     }
@@ -251,8 +254,8 @@ function Copy-LlevarDropboxToLocal {
     # ✅ DELEGAR AL DISPATCHER
     Write-Log "Copy-LlevarDropboxToLocal: Delegando al dispatcher unificado" "INFO"
     
-    $ModulesPath = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
-    $dispatcherPath = Join-Path $ModulesPath "Modules\Transfer\Unified.psm1"
+    $ModulesPath = Split-Path $PSScriptRoot -Parent
+    $dispatcherPath = Join-Path $ModulesPath "Transfer\Unified.psm1"
     if (-not (Get-Command Invoke-TransferDispatcher -ErrorAction SilentlyContinue)) {
         Import-Module $dispatcherPath -Force -Global
     }

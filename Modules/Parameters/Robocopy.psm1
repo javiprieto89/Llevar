@@ -9,8 +9,8 @@
 #>
 
 # Importar dependencias
-$ModulesPath = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
-Import-Module (Join-Path $ModulesPath "Modules\Utilities\PathSelectors.psm1") -Force -Global
+$ModulesPath = Split-Path $PSScriptRoot -Parent
+Import-Module (Join-Path $ModulesPath "Utilities\PathSelectors.psm1") -Force -Global
 
 function Invoke-RobocopyParameter {
     <#

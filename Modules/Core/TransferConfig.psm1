@@ -10,18 +10,23 @@
 # ========================================================================== #
 
 class TransferConfig {
+    # ====== ESTADO DE CONFIGURACIÓN ======
+    [bool]$OrigenIsSet = $false
+    [bool]$DestinoIsSet = $false
+    
     # ====== ORIGEN ======
     [PSCustomObject]$Origen = [PSCustomObject]@{
         Tipo     = $null  # "Local", "FTP", "UNC", "OneDrive", "Dropbox", "USB"
         
         # Subestructura FTP
         FTP      = [PSCustomObject]@{
-            Server    = $null
-            Port      = 21
-            User      = $null
-            Password  = $null
-            UseSsl    = $false
-            Directory = "/"
+            Server      = $null
+            Port        = 21
+            User        = $null
+            Password    = $null
+            Credentials = $null
+            UseSsl      = $false
+            Directory   = "/"
         }
         
         # Subestructura UNC
@@ -67,12 +72,13 @@ class TransferConfig {
         
         # Subestructura FTP
         FTP      = [PSCustomObject]@{
-            Server    = $null
-            Port      = 21
-            User      = $null
-            Password  = $null
-            UseSsl    = $false
-            Directory = "/"
+            Server      = $null
+            Port        = 21
+            User        = $null
+            Password    = $null
+            Credentials = $null
+            UseSsl      = $false
+            Directory   = "/"
         }
         
         # Subestructura UNC
@@ -139,12 +145,10 @@ class TransferConfig {
     
     # ====== INTERNO (uso del sistema) ======
     [PSCustomObject]$Interno = [PSCustomObject]@{
-        OrigenMontado  = $null
-        DestinoMontado = $null
-        OrigenDrive    = $null
-        DestinoDrive   = $null
-        TempDir        = $null
-        SevenZipPath   = $null
+        OrigenDrive  = $null  # Drive temporal si origen es UNC
+        DestinoDrive = $null  # Drive temporal si destino es UNC
+        TempDir      = $null  # Directorio temporal para compresión
+        SevenZipPath = $null  # Ruta a 7-Zip
     }
 }
 
@@ -257,6 +261,716 @@ function Set-TransferConfigValue {
     }
     else {
         throw "Propiedad no existe en TransferConfig: $lastPart en ruta $Path"
+    }
+}
+
+function Get-TransferPath {
+    <#
+    .SYNOPSIS
+        Obtiene la ruta de origen o destino según el tipo configurado
+    .DESCRIPTION
+        Simplifica el acceso a la ruta correcta según el tipo de transferencia.
+        Detecta automáticamente qué propiedad usar (Path, Directory, OutputPath)
+        según el tipo configurado (Local, FTP, OneDrive, ISO, etc.)
+    .PARAMETER Config
+        Objeto TransferConfig
+    .PARAMETER Section
+        "Origen" o "Destino"
+    .OUTPUTS
+        [string] Ruta configurada según el tipo, o $null si no hay tipo configurado
+    .EXAMPLE
+        $origenPath = Get-TransferPath -Config $cfg -Section "Origen"
+    .EXAMPLE
+        $destinoPath = Get-TransferPath -Config $cfg -Section "Destino"
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [TransferConfig]$Config,
+        
+        [Parameter(Mandatory = $true)]
+        [ValidateSet("Origen", "Destino")]
+        [string]$Section
+    )
+    
+    $tipo = Get-TransferConfigValue -Config $Config -Path "${Section}.Tipo"
+    
+    switch ($tipo) {
+        "Local" { Get-TransferConfigValue -Config $Config -Path "${Section}.Local.Path" }
+        "USB" { Get-TransferConfigValue -Config $Config -Path "${Section}.USB.Path" }
+        "UNC" { Get-TransferConfigValue -Config $Config -Path "${Section}.UNC.Path" }
+        "FTP" { Get-TransferConfigValue -Config $Config -Path "${Section}.FTP.Directory" }
+        "OneDrive" { Get-TransferConfigValue -Config $Config -Path "${Section}.OneDrive.Path" }
+        "Dropbox" { Get-TransferConfigValue -Config $Config -Path "${Section}.Dropbox.Path" }
+        "ISO" { Get-TransferConfigValue -Config $Config -Path "${Section}.ISO.OutputPath" }
+        "Diskette" { Get-TransferConfigValue -Config $Config -Path "${Section}.Diskette.OutputPath" }
+        default { $null }
+    }
+}
+
+function Set-TransferPath {
+    <#
+    .SYNOPSIS
+        Establece la ruta de origen o destino según el tipo configurado
+    .DESCRIPTION
+        Detecta automáticamente qué propiedad usar (Path, Directory, OutputPath)
+        según el tipo configurado y establece el valor.
+    .PARAMETER Config
+        Objeto TransferConfig
+    .PARAMETER Section
+        "Origen" o "Destino"
+    .PARAMETER Value
+        Nueva ruta a establecer
+    .EXAMPLE
+        Set-TransferPath -Config $cfg -Section "Destino" -Value "C:\Temp"
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [TransferConfig]$Config,
+        
+        [Parameter(Mandatory = $true)]
+        [ValidateSet("Origen", "Destino")]
+        [string]$Section,
+        
+        [Parameter(Mandatory = $true)]
+        [string]$Value
+    )
+    
+    $tipo = Get-TransferConfigValue -Config $Config -Path "${Section}.Tipo"
+    
+    if (-not $tipo) {
+        throw "No se ha configurado el tipo de ${Section}. Use Set-TransferType primero."
+    }
+    
+    $path = switch ($tipo) {
+        "Local" { "${Section}.Local.Path" }
+        "USB" { "${Section}.USB.Path" }
+        "UNC" { "${Section}.UNC.Path" }
+        "FTP" { "${Section}.FTP.Directory" }
+        "OneDrive" { "${Section}.OneDrive.Path" }
+        "Dropbox" { "${Section}.Dropbox.Path" }
+        "ISO" { "${Section}.ISO.OutputPath" }
+        "Diskette" { "${Section}.Diskette.OutputPath" }
+        default { throw "Tipo no válido para ${Section}: $tipo" }
+    }
+    
+    Set-TransferConfigValue -Config $Config -Path $path -Value $Value
+}
+
+function Get-TransferType {
+    <#
+    .SYNOPSIS
+        Obtiene el tipo de transferencia (Local, FTP, etc.)
+    .DESCRIPTION
+        Simplifica el acceso al tipo de origen o destino configurado.
+    .PARAMETER Config
+        Objeto TransferConfig
+    .PARAMETER Section
+        "Origen" o "Destino"
+    .OUTPUTS
+        [string] Tipo configurado o $null si no está configurado
+    .EXAMPLE
+        $tipo = Get-TransferType -Config $cfg -Section "Origen"
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [TransferConfig]$Config,
+        
+        [Parameter(Mandatory = $true)]
+        [ValidateSet("Origen", "Destino")]
+        [string]$Section
+    )
+    
+    return Get-TransferConfigValue -Config $Config -Path "${Section}.Tipo"
+}
+
+function Set-TransferType {
+    <#
+    .SYNOPSIS
+        Establece el tipo de transferencia
+    .DESCRIPTION
+        Configura el tipo de origen o destino (Local, FTP, USB, etc.)
+    .PARAMETER Config
+        Objeto TransferConfig
+    .PARAMETER Section
+        "Origen" o "Destino"
+    .PARAMETER Type
+        Tipo: "Local", "FTP", "USB", "UNC", "OneDrive", "Dropbox", "ISO", "Diskette"
+    .EXAMPLE
+        Set-TransferType -Config $cfg -Section "Destino" -Type "FTP"
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [TransferConfig]$Config,
+        
+        [Parameter(Mandatory = $true)]
+        [ValidateSet("Origen", "Destino")]
+        [string]$Section,
+        
+        [Parameter(Mandatory = $true)]
+        [ValidateSet("Local", "FTP", "USB", "UNC", "OneDrive", "Dropbox", "ISO", "Diskette")]
+        [string]$Type
+    )
+    
+    Set-TransferConfigValue -Config $Config -Path "${Section}.Tipo" -Value $Type
+}
+
+function Get-FTPConfig {
+    <#
+    .SYNOPSIS
+        Obtiene la configuración FTP completa
+    .DESCRIPTION
+        Retorna el objeto completo con la configuración FTP (Server, Port, User, Password, UseSsl, Directory)
+    .PARAMETER Config
+        Objeto TransferConfig
+    .PARAMETER Section
+        "Origen" o "Destino"
+    .OUTPUTS
+        [PSCustomObject] Objeto con Server, Port, User, Password, Credentials, UseSsl, Directory
+    .EXAMPLE
+        $ftp = Get-FTPConfig -Config $cfg -Section "Origen"
+        Write-Host $ftp.Server
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [TransferConfig]$Config,
+        
+        [Parameter(Mandatory = $true)]
+        [ValidateSet("Origen", "Destino")]
+        [string]$Section
+    )
+    
+    return Get-TransferConfigValue -Config $Config -Path "${Section}.FTP"
+}
+
+function Set-FTPConfig {
+    <#
+    .SYNOPSIS
+        Establece la configuración FTP completa
+    .DESCRIPTION
+        Configura todos los parámetros FTP de una vez.
+    .PARAMETER Config
+        Objeto TransferConfig
+    .PARAMETER Section
+        "Origen" o "Destino"
+    .PARAMETER Server
+        Servidor FTP
+    .PARAMETER Port
+        Puerto (por defecto 21)
+    .PARAMETER User
+        Usuario
+    .PARAMETER Password
+        Contraseña
+    .PARAMETER Credentials
+        Objeto PSCredential (alternativa a User/Password)
+    .PARAMETER UseSsl
+        Usar SSL (por defecto $false)
+    .PARAMETER Directory
+        Directorio inicial (por defecto "/")
+    .EXAMPLE
+        Set-FTPConfig -Config $cfg -Section "Origen" -Server "ftp.example.com" -User "user" -Password "pass"
+    .EXAMPLE
+        Set-FTPConfig -Config $cfg -Section "Destino" -Server "ftp.example.com" -Credentials $cred
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [TransferConfig]$Config,
+        
+        [Parameter(Mandatory = $true)]
+        [ValidateSet("Origen", "Destino")]
+        [string]$Section,
+        
+        [Parameter(Mandatory = $true)]
+        [string]$Server,
+        
+        [int]$Port = 21,
+        [string]$User,
+        [string]$Password,
+        [PSCredential]$Credentials,
+        [bool]$UseSsl = $false,
+        [string]$Directory = "/"
+    )
+    
+    Set-TransferConfigValue -Config $Config -Path "${Section}.FTP.Server" -Value $Server
+    Set-TransferConfigValue -Config $Config -Path "${Section}.FTP.Port" -Value $Port
+    
+    if ($User) {
+        Set-TransferConfigValue -Config $Config -Path "${Section}.FTP.User" -Value $User
+    }
+    if ($Password) {
+        Set-TransferConfigValue -Config $Config -Path "${Section}.FTP.Password" -Value $Password
+    }
+    if ($Credentials) {
+        Set-TransferConfigValue -Config $Config -Path "${Section}.FTP.Credentials" -Value $Credentials
+    }
+    
+    Set-TransferConfigValue -Config $Config -Path "${Section}.FTP.UseSsl" -Value $UseSsl
+    Set-TransferConfigValue -Config $Config -Path "${Section}.FTP.Directory" -Value $Directory
+}
+
+function Get-TransferOption {
+    <#
+    .SYNOPSIS
+        Obtiene una opción de transferencia
+    .DESCRIPTION
+        Simplifica el acceso a opciones comunes (BlockSizeMB, Clave, UseNativeZip, etc.)
+    .PARAMETER Config
+        Objeto TransferConfig
+    .PARAMETER Option
+        Nombre de la opción: BlockSizeMB, Clave, UseNativeZip, RobocopyMirror, TransferMode, Verbose
+    .OUTPUTS
+        Valor de la opción solicitada
+    .EXAMPLE
+        $blockSize = Get-TransferOption -Config $cfg -Option "BlockSizeMB"
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [TransferConfig]$Config,
+        
+        [Parameter(Mandatory = $true)]
+        [ValidateSet("BlockSizeMB", "Clave", "UseNativeZip", "RobocopyMirror", "TransferMode", "Verbose")]
+        [string]$Option
+    )
+    
+    return Get-TransferConfigValue -Config $Config -Path "Opciones.$Option"
+}
+
+function Set-TransferOption {
+    <#
+    .SYNOPSIS
+        Establece una opción de transferencia
+    .DESCRIPTION
+        Simplifica la configuración de opciones comunes.
+    .PARAMETER Config
+        Objeto TransferConfig
+    .PARAMETER Option
+        Nombre de la opción
+    .PARAMETER Value
+        Nuevo valor
+    .EXAMPLE
+        Set-TransferOption -Config $cfg -Option "BlockSizeMB" -Value 50
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [TransferConfig]$Config,
+        
+        [Parameter(Mandatory = $true)]
+        [ValidateSet("BlockSizeMB", "Clave", "UseNativeZip", "RobocopyMirror", "TransferMode", "Verbose")]
+        [string]$Option,
+        
+        [Parameter(Mandatory = $true)]
+        $Value
+    )
+    
+    Set-TransferConfigValue -Config $Config -Path "Opciones.$Option" -Value $Value
+}
+
+# ========================================================================== #
+#                FUNCIONES HELPER PARA CLOUD Y NETWORK                       #
+# ========================================================================== #
+
+function Get-OneDriveConfig {
+    <#
+    .SYNOPSIS
+        Obtiene la configuración OneDrive completa
+    .PARAMETER Config
+        Objeto TransferConfig
+    .PARAMETER Section
+        "Origen" o "Destino"
+    .OUTPUTS
+        [PSCustomObject] Objeto con Path, Token, RefreshToken, Email, ApiUrl, UseLocal, LocalPath, DriveId, RootId
+    .EXAMPLE
+        $onedrive = Get-OneDriveConfig -Config $cfg -Section "Origen"
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [TransferConfig]$Config,
+        
+        [Parameter(Mandatory = $true)]
+        [ValidateSet("Origen", "Destino")]
+        [string]$Section
+    )
+    
+    return Get-TransferConfigValue -Config $Config -Path "${Section}.OneDrive"
+}
+
+function Set-OneDriveConfig {
+    <#
+    .SYNOPSIS
+        Establece la configuración OneDrive
+    .PARAMETER Config
+        Objeto TransferConfig
+    .PARAMETER Section
+        "Origen" o "Destino"
+    .PARAMETER Path
+        Ruta en OneDrive (ej: "/Documents/LLEVAR")
+    .PARAMETER Token
+        Token de acceso OAuth
+    .PARAMETER RefreshToken
+        Token de actualización OAuth
+    .PARAMETER Email
+        Email de la cuenta OneDrive
+    .PARAMETER UseLocal
+        Usar sincronización local ($true) o API ($false)
+    .PARAMETER LocalPath
+        Ruta local si UseLocal es $true
+    .EXAMPLE
+        Set-OneDriveConfig -Config $cfg -Section "Destino" -Path "/LLEVAR" -Token $token -Email "user@outlook.com"
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [TransferConfig]$Config,
+        
+        [Parameter(Mandatory = $true)]
+        [ValidateSet("Origen", "Destino")]
+        [string]$Section,
+        
+        [string]$Path,
+        [string]$Token,
+        [string]$RefreshToken,
+        [string]$Email,
+        [bool]$UseLocal,
+        [string]$LocalPath
+    )
+    
+    if ($Path) {
+        Set-TransferConfigValue -Config $Config -Path "${Section}.OneDrive.Path" -Value $Path
+    }
+    if ($Token) {
+        Set-TransferConfigValue -Config $Config -Path "${Section}.OneDrive.Token" -Value $Token
+    }
+    if ($RefreshToken) {
+        Set-TransferConfigValue -Config $Config -Path "${Section}.OneDrive.RefreshToken" -Value $RefreshToken
+    }
+    if ($Email) {
+        Set-TransferConfigValue -Config $Config -Path "${Section}.OneDrive.Email" -Value $Email
+    }
+    if ($PSBoundParameters.ContainsKey('UseLocal')) {
+        Set-TransferConfigValue -Config $Config -Path "${Section}.OneDrive.UseLocal" -Value $UseLocal
+    }
+    if ($LocalPath) {
+        Set-TransferConfigValue -Config $Config -Path "${Section}.OneDrive.LocalPath" -Value $LocalPath
+    }
+}
+
+function Get-DropboxConfig {
+    <#
+    .SYNOPSIS
+        Obtiene la configuración Dropbox completa
+    .PARAMETER Config
+        Objeto TransferConfig
+    .PARAMETER Section
+        "Origen" o "Destino"
+    .OUTPUTS
+        [PSCustomObject] Objeto con Path, Token, RefreshToken, Email, ApiUrl
+    .EXAMPLE
+        $dropbox = Get-DropboxConfig -Config $cfg -Section "Origen"
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [TransferConfig]$Config,
+        
+        [Parameter(Mandatory = $true)]
+        [ValidateSet("Origen", "Destino")]
+        [string]$Section
+    )
+    
+    return Get-TransferConfigValue -Config $Config -Path "${Section}.Dropbox"
+}
+
+function Set-DropboxConfig {
+    <#
+    .SYNOPSIS
+        Establece la configuración Dropbox
+    .PARAMETER Config
+        Objeto TransferConfig
+    .PARAMETER Section
+        "Origen" o "Destino"
+    .PARAMETER Path
+        Ruta en Dropbox (ej: "/LLEVAR")
+    .PARAMETER Token
+        Token de acceso OAuth
+    .PARAMETER RefreshToken
+        Token de actualización OAuth
+    .PARAMETER Email
+        Email de la cuenta Dropbox
+    .EXAMPLE
+        Set-DropboxConfig -Config $cfg -Section "Destino" -Path "/LLEVAR" -Token $token -Email "user@dropbox.com"
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [TransferConfig]$Config,
+        
+        [Parameter(Mandatory = $true)]
+        [ValidateSet("Origen", "Destino")]
+        [string]$Section,
+        
+        [string]$Path,
+        [string]$Token,
+        [string]$RefreshToken,
+        [string]$Email
+    )
+    
+    if ($Path) {
+        Set-TransferConfigValue -Config $Config -Path "${Section}.Dropbox.Path" -Value $Path
+    }
+    if ($Token) {
+        Set-TransferConfigValue -Config $Config -Path "${Section}.Dropbox.Token" -Value $Token
+    }
+    if ($RefreshToken) {
+        Set-TransferConfigValue -Config $Config -Path "${Section}.Dropbox.RefreshToken" -Value $RefreshToken
+    }
+    if ($Email) {
+        Set-TransferConfigValue -Config $Config -Path "${Section}.Dropbox.Email" -Value $Email
+    }
+}
+
+function Get-UNCConfig {
+    <#
+    .SYNOPSIS
+        Obtiene la configuración UNC completa
+    .PARAMETER Config
+        Objeto TransferConfig
+    .PARAMETER Section
+        "Origen" o "Destino"
+    .OUTPUTS
+        [PSCustomObject] Objeto con Path, User, Password, Domain, Credentials
+    .EXAMPLE
+        $unc = Get-UNCConfig -Config $cfg -Section "Origen"
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [TransferConfig]$Config,
+        
+        [Parameter(Mandatory = $true)]
+        [ValidateSet("Origen", "Destino")]
+        [string]$Section
+    )
+    
+    return Get-TransferConfigValue -Config $Config -Path "${Section}.UNC"
+}
+
+function Set-UNCConfig {
+    <#
+    .SYNOPSIS
+        Establece la configuración UNC
+    .PARAMETER Config
+        Objeto TransferConfig
+    .PARAMETER Section
+        "Origen" o "Destino"
+    .PARAMETER Path
+        Ruta UNC (ej: "\\\\servidor\\carpeta")
+    .PARAMETER User
+        Usuario para autenticación
+    .PARAMETER Password
+        Contraseña
+    .PARAMETER Domain
+        Dominio (opcional)
+    .PARAMETER Credentials
+        Objeto PSCredential (alternativa a User/Password)
+    .EXAMPLE
+        Set-UNCConfig -Config $cfg -Section "Origen" -Path "\\\\servidor\\share" -User "admin" -Password "pass"
+    .EXAMPLE
+        Set-UNCConfig -Config $cfg -Section "Origen" -Path "\\\\servidor\\share" -Credentials $cred
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [TransferConfig]$Config,
+        
+        [Parameter(Mandatory = $true)]
+        [ValidateSet("Origen", "Destino")]
+        [string]$Section,
+        
+        [string]$Path,
+        [string]$User,
+        [string]$Password,
+        [string]$Domain,
+        [PSCredential]$Credentials
+    )
+    
+    if ($Path) {
+        Set-TransferConfigValue -Config $Config -Path "${Section}.UNC.Path" -Value $Path
+    }
+    if ($User) {
+        Set-TransferConfigValue -Config $Config -Path "${Section}.UNC.User" -Value $User
+    }
+    if ($Password) {
+        Set-TransferConfigValue -Config $Config -Path "${Section}.UNC.Password" -Value $Password
+    }
+    if ($Domain) {
+        Set-TransferConfigValue -Config $Config -Path "${Section}.UNC.Domain" -Value $Domain
+    }
+    if ($Credentials) {
+        Set-TransferConfigValue -Config $Config -Path "${Section}.UNC.Credentials" -Value $Credentials
+    }
+}
+
+function Get-LocalConfig {
+    <#
+    .SYNOPSIS
+        Obtiene la configuración Local (ruta local)
+    .PARAMETER Config
+        Objeto TransferConfig
+    .PARAMETER Section
+        "Origen" o "Destino"
+    .OUTPUTS
+        [PSCustomObject] Objeto con Path
+    .EXAMPLE
+        $local = Get-LocalConfig -Config $cfg -Section "Origen"
+        Write-Host $local.Path
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [TransferConfig]$Config,
+        
+        [Parameter(Mandatory = $true)]
+        [ValidateSet("Origen", "Destino")]
+        [string]$Section
+    )
+    
+    return Get-TransferConfigValue -Config $Config -Path "${Section}.Local"
+}
+
+function Set-LocalConfig {
+    <#
+    .SYNOPSIS
+        Establece la configuración Local
+    .PARAMETER Config
+        Objeto TransferConfig
+    .PARAMETER Section
+        "Origen" o "Destino"
+    .PARAMETER Path
+        Ruta local (ej: "C:\\Data")
+    .EXAMPLE
+        Set-LocalConfig -Config $cfg -Section "Origen" -Path "C:\\Data"
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [TransferConfig]$Config,
+        
+        [Parameter(Mandatory = $true)]
+        [ValidateSet("Origen", "Destino")]
+        [string]$Section,
+        
+        [Parameter(Mandatory = $true)]
+        [string]$Path
+    )
+    
+    Set-TransferConfigValue -Config $Config -Path "${Section}.Local.Path" -Value $Path
+}
+
+function Get-ISOConfig {
+    <#
+    .SYNOPSIS
+        Obtiene la configuración ISO (solo para Destino)
+    .PARAMETER Config
+        Objeto TransferConfig
+    .OUTPUTS
+        [PSCustomObject] Objeto con OutputPath, Size, VolumeSize, VolumeName
+    .EXAMPLE
+        $iso = Get-ISOConfig -Config $cfg
+        Write-Host $iso.OutputPath
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [TransferConfig]$Config
+    )
+    
+    return Get-TransferConfigValue -Config $Config -Path "Destino.ISO"
+}
+
+function Set-ISOConfig {
+    <#
+    .SYNOPSIS
+        Establece la configuración ISO
+    .PARAMETER Config
+        Objeto TransferConfig
+    .PARAMETER OutputPath
+        Ruta donde crear la imagen ISO
+    .PARAMETER Size
+        Tamaño: "cd" (650MB), "dvd" (4.7GB), "usb" (4.5GB)
+    .PARAMETER VolumeSize
+        Tamaño personalizado en MB (anula Size)
+    .PARAMETER VolumeName
+        Nombre del volumen ISO (por defecto "LLEVAR")
+    .EXAMPLE
+        Set-ISOConfig -Config $cfg -OutputPath "C:\\backup.iso" -Size "dvd" -VolumeName "BACKUP"
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [TransferConfig]$Config,
+        
+        [string]$OutputPath,
+        [ValidateSet("cd", "dvd", "usb")]
+        [string]$Size,
+        [int]$VolumeSize,
+        [string]$VolumeName
+    )
+    
+    if ($OutputPath) {
+        Set-TransferConfigValue -Config $Config -Path "Destino.ISO.OutputPath" -Value $OutputPath
+    }
+    if ($Size) {
+        Set-TransferConfigValue -Config $Config -Path "Destino.ISO.Size" -Value $Size
+    }
+    if ($VolumeSize) {
+        Set-TransferConfigValue -Config $Config -Path "Destino.ISO.VolumeSize" -Value $VolumeSize
+    }
+    if ($VolumeName) {
+        Set-TransferConfigValue -Config $Config -Path "Destino.ISO.VolumeName" -Value $VolumeName
+    }
+}
+
+function Get-DisketteConfig {
+    <#
+    .SYNOPSIS
+        Obtiene la configuración Diskette (solo para Destino)
+    .PARAMETER Config
+        Objeto TransferConfig
+    .OUTPUTS
+        [PSCustomObject] Objeto con MaxDisks, Size, OutputPath
+    .EXAMPLE
+        $diskette = Get-DisketteConfig -Config $cfg
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [TransferConfig]$Config
+    )
+    
+    return Get-TransferConfigValue -Config $Config -Path "Destino.Diskette"
+}
+
+function Set-DisketteConfig {
+    <#
+    .SYNOPSIS
+        Establece la configuración Diskette
+    .PARAMETER Config
+        Objeto TransferConfig
+    .PARAMETER OutputPath
+        Ruta donde guardar las imágenes de diskette
+    .PARAMETER MaxDisks
+        Número máximo de diskettes a crear (por defecto 30)
+    .PARAMETER Size
+        Tamaño del diskette en KB (por defecto 1440 = 1.44MB)
+    .EXAMPLE
+        Set-DisketteConfig -Config $cfg -OutputPath "C:\\Diskettes" -MaxDisks 50
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [TransferConfig]$Config,
+        
+        [string]$OutputPath,
+        [int]$MaxDisks,
+        [int]$Size
+    )
+    
+    if ($OutputPath) {
+        Set-TransferConfigValue -Config $Config -Path "Destino.Diskette.OutputPath" -Value $OutputPath
+    }
+    if ($MaxDisks) {
+        Set-TransferConfigValue -Config $Config -Path "Destino.Diskette.MaxDisks" -Value $MaxDisks
+    }
+    if ($Size) {
+        Set-TransferConfigValue -Config $Config -Path "Destino.Diskette.Size" -Value $Size
     }
 }
 
@@ -483,77 +1197,46 @@ function New-ConfigNode {
     return $obj
 }
 
-function with {
-    <#
-    .SYNOPSIS
-        Permite acceso directo a propiedades y métodos de un objeto usando sintaxis "." 
-    .DESCRIPTION
-        Permite leer y escribir propiedades, llamar métodos y acceder a propiedades anidadas.
-        Ejemplo:
-            with $obj {
-                .Prop = 123
-                $value = .Prop
-                .Method()
-                .Child.Sub.Value = "Hola"
-            }
-    #>
-    param(
-        [Parameter(Mandatory)]
-        $Object,
-
-        [Parameter(Mandatory)]
-        [ScriptBlock]$Block
-    )
-
-    # Crear contexto de ejecución donde "." es el objeto y "ContextItem" lo referencia
-    $psVars = New-Object 'System.Collections.Generic.List[System.Management.Automation.PSVariable]'
-    $psVars.Add((New-Object System.Management.Automation.PSVariable(".", $Object)))
-    $psVars.Add((New-Object System.Management.Automation.PSVariable("ContextItem", $Object)))
-    
-    # Para que las asignaciones funcionen, necesitamos modificar el ScriptBlock
-    # Obtener el texto del ScriptBlock y transformarlo usando regex
-    $blockText = $Block.ToString()
-    
-    # Reemplazar patrones como ".Prop" o ".FTP.Directory" con "$ContextItem.Prop" o "$ContextItem.FTP.Directory"
-    # Patrón que captura "." seguido de una o más propiedades separadas por "."
-    # (?<![A-Za-z0-9_$]) asegura que no hay un carácter alfanumérico antes (evita números como 3.14)
-    # ([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*) captura la cadena completa de propiedades
-    $modifiedScript = $blockText -replace '(?<![A-Za-z0-9_$])\.([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*)', '$ContextItem.$1'
-    
-    # Crear nuevo ScriptBlock modificado
-    try {
-        $modifiedBlock = [ScriptBlock]::Create($modifiedScript)
-        
-        # Ejecutar el bloque modificado con el contexto
-        $result = $modifiedBlock.InvokeWithContext($psVars, $null)
-    }
-    catch {
-        # Si falla la modificación, intentar ejecutar el bloque original
-        # Esto puede no funcionar para asignaciones, pero al menos permite lectura
-        Write-Log "Error en función with: $($_.Exception.Message). Intentando ejecución directa." "WARNING" -ErrorRecord $_
-        $result = $Block.InvokeWithContext($psVars, $null)
-    }
-    
-    # Retornar el resultado (si hay uno solo, retornarlo directamente)
-    if ($result.Count -eq 1) {
-        return $result[0]
-    }
-    return $result
-}
-
 # Exportar funciones
 Export-ModuleMember -Function @(
     'New-TransferConfig',
-    'Set-TransferConfigOrigen',
-    'Set-TransferConfigDestino',
-    'Get-TransferConfigOrigen',
-    'Get-TransferConfigDestino',
     'Get-TransferConfigValue',
     'Set-TransferConfigValue',
+    'Get-TransferPath',
+    'Set-TransferPath',
+    'Get-TransferType',
+    'Set-TransferType',
+    'Get-FTPConfig',
+    'Set-FTPConfig',
+    'Get-TransferOption',
+    'Set-TransferOption',
+    'Get-OneDriveConfig',
+    'Set-OneDriveConfig',
+    'Get-DropboxConfig',
+    'Set-DropboxConfig',
+    'Get-UNCConfig',
+    'Set-UNCConfig',
+    'Get-LocalConfig',
+    'Set-LocalConfig',
+    'Get-ISOConfig',
+    'Set-ISOConfig',
+    'Get-DisketteConfig',
+    'Set-DisketteConfig',
     'Export-TransferConfig',
     'Import-TransferConfig',
     'Reset-TransferConfigSection',
     'Copy-TransferConfigSection',
-    'New-ConfigNode',
-    'with'
+    'New-ConfigNode'
 )
+
+# ========================================================================== #
+# HACER LA CLASE DISPONIBLE GLOBALMENTE (sin usar "using module")
+# ========================================================================== #
+
+# PowerShell requiere que las clases se definan en el scope global/script
+# para que estén disponibles fuera del módulo sin "using module"
+# Estrategia: Usar New-Module con -AsCustomObject para mantener la clase disponible
+
+# Nada que hacer aquí - la clase ya está definida en el scope del módulo
+# y será accesible cuando se importe con -Global
+

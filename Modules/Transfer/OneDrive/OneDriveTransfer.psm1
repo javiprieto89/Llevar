@@ -10,12 +10,14 @@
 # ========================================================================== #
 
 # Imports necesarios
-$ModulesPath = Split-Path (Split-Path (Split-Path $PSScriptRoot -Parent) -Parent) -Parent
-Import-Module (Join-Path $ModulesPath "Modules\UI\Banners.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "Modules\UI\Navigator.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "Modules\Core\TransferConfig.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "Modules\Core\Logger.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "Modules\System\FileSystem.psm1") -Force -Global
+$ModulesPath = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
+Import-Module (Join-Path $ModulesPath "UI\Banners.psm1") -Force -Global
+Import-Module (Join-Path $ModulesPath "UI\Navigator.psm1") -Force -Global
+if (-not (Get-Module -Name 'TransferConfig')) {
+    Import-Module (Join-Path $ModulesPath "Core\TransferConfig.psm1") -Force -Global
+}
+Import-Module (Join-Path $ModulesPath "Core\Logger.psm1") -Force -Global
+Import-Module (Join-Path $ModulesPath "System\FileSystem.psm1") -Force -Global
 
 # Importar módulo de autenticación
 $authModulePath = Join-Path $PSScriptRoot "OneDriveAuth.psm1"
@@ -912,8 +914,8 @@ function Copy-LlevarLocalToOneDrive {
     
     Write-Log "Copy-LlevarLocalToOneDrive: Delegando al dispatcher unificado" "INFO"
     
-    $ModulesPath = Split-Path (Split-Path (Split-Path $PSScriptRoot -Parent) -Parent) -Parent
-    $dispatcherPath = Join-Path $ModulesPath "Modules\Transfer\Unified.psm1"
+    
+    $dispatcherPath = Join-Path $ModulesPath "Transfer\Unified.psm1"
     if (-not (Get-Command Invoke-TransferDispatcher -ErrorAction SilentlyContinue)) {
         Import-Module $dispatcherPath -Force -Global
     }
@@ -940,8 +942,8 @@ function Copy-LlevarOneDriveToLocal {
     
     Write-Log "Copy-LlevarOneDriveToLocal: Delegando al dispatcher unificado" "INFO"
     
-    $ModulesPath = Split-Path (Split-Path (Split-Path $PSScriptRoot -Parent) -Parent) -Parent
-    $dispatcherPath = Join-Path $ModulesPath "Modules\Transfer\Unified.psm1"
+    
+    $dispatcherPath = Join-Path $ModulesPath "Transfer\Unified.psm1"
     if (-not (Get-Command Invoke-TransferDispatcher -ErrorAction SilentlyContinue)) {
         Import-Module $dispatcherPath -Force -Global
     }
