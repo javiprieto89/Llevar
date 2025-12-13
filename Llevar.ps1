@@ -301,6 +301,31 @@ try {
         }
         Write-InitLogSafe $errorLog
     }
+
+    # Verificar que la clase TransferConfig esté disponible (si el módulo falló no existirá)
+    $transferConfigType = "TransferConfig" -as [type]
+    if (-not $transferConfigType) {
+        $typeErrorLog = "`n[ERROR CRITICO] No se pudo cargar la clase TransferConfig desde $transferConfigModule.`n"
+
+        if ($importErrors -and $importErrors.Count -gt 0) {
+            $typeErrorLog += "Detalles de errores de importacion:`n"
+            foreach ($err in $importErrors) {
+                $typeErrorLog += "  - $($err.Exception.Message)`n"
+            }
+        }
+        elseif ($importWarnings -and $importWarnings.Count -gt 0) {
+            $typeErrorLog += "Se detectaron advertencias durante la importacion que podrían haber evitado la carga del tipo:`n"
+            foreach ($warning in $importWarnings) {
+                $typeErrorLog += "  - $warning`n"
+            }
+        }
+        else {
+            $typeErrorLog += "No se registraron errores ni advertencias, verificar TransferConfig.psm1 manualmente." + "`n"
+        }
+
+        Write-InitLogSafe $typeErrorLog
+        throw "ERROR CRITICO: La clase TransferConfig no está disponible. Revisa el log para más detalles."
+    }
     
     # Restaurar preferencias de error y warning después de la importación
     # para que el resto del script funcione normalmente
