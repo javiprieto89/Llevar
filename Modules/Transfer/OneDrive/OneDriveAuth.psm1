@@ -257,8 +257,65 @@ function Get-OneDriveAuth {
         Configura autenticación OneDrive con OAuth o ruta local
     .OUTPUTS
         Hashtable con Email, Token, ApiUrl, LocalPath, UseLocal
+    .PARAMETER ForceAuth
+        Forzar nueva autenticación aunque exista token válido en cache
     #>
-    param([switch]$ForceApi)
+    param(
+        [switch]$ForceApi,
+        [switch]$ForceAuth
+    )
+    
+    # Verificar si ya existe autenticación válida en esta sesión
+    if (-not $ForceAuth -and $Global:OneDriveSessionAuth) {
+        Write-Log "Verificando token OneDrive en cache de sesión..." "INFO"
+        
+        # Si es local, siempre es válido
+        if ($Global:OneDriveSessionAuth.UseLocal) {
+            Write-Host "✓ Usando autenticación OneDrive local cacheada" -ForegroundColor Green
+            Write-Log "OneDrive local reutilizado desde cache" "INFO"
+            return $Global:OneDriveSessionAuth
+        }
+        
+        # Si es API, verificar vigencia del token
+        if ($Global:OneDriveSessionAuth.Token) {
+            $tokenValid = Test-OneDriveToken -Token $Global:OneDriveSessionAuth.Token
+            
+            if ($tokenValid) {
+                Write-Host "✓ Usando token OneDrive cacheado (aún válido)" -ForegroundColor Green
+                Write-Log "Token OneDrive reutilizado desde cache (Email: $($Global:OneDriveSessionAuth.Email))" "INFO"
+                return $Global:OneDriveSessionAuth
+            }
+            else {
+                Write-Log "Token en cache expiró, intentando refrescar..." "INFO"
+                
+                # Intentar refrescar el token
+                if ($Global:OneDriveSessionAuth.RefreshToken) {
+                    $refreshResult = Update-OneDriveToken -RefreshToken $Global:OneDriveSessionAuth.RefreshToken
+                    
+                    if ($refreshResult -and $refreshResult.access_token) {
+                        # Actualizar el cache con el nuevo token
+                        $Global:OneDriveSessionAuth.Token = $refreshResult.access_token
+                        if ($refreshResult.refresh_token) {
+                            $Global:OneDriveSessionAuth.RefreshToken = $refreshResult.refresh_token
+                        }
+                        
+                        Write-Host "✓ Token OneDrive refrescado automáticamente" -ForegroundColor Green
+                        Write-Log "Token OneDrive refrescado exitosamente" "INFO"
+                        return $Global:OneDriveSessionAuth
+                    }
+                    else {
+                        Write-Log "No se pudo refrescar token, requiere nueva autenticación" "WARNING"
+                        # Limpiar cache inválido
+                        $Global:OneDriveSessionAuth = $null
+                    }
+                }
+                else {
+                    Write-Log "No hay refresh token, requiere nueva autenticación" "WARNING"
+                    $Global:OneDriveSessionAuth = $null
+                }
+            }
+        }
+    }
     
     Write-Log "Iniciando configuración OneDrive" "INFO"
     Clear-Host
@@ -292,13 +349,19 @@ function Get-OneDriveAuth {
         
         if ($opcion -eq 0) {
             Write-Log "Usuario eligió OneDrive local" "INFO"
-            return @{
+            $authResult = @{
                 Email     = $env:USERNAME + "@onedrive.com"
                 Token     = $null
                 ApiUrl    = $null
                 LocalPath = $oneDriveLocal
                 UseLocal  = $true
             }
+            
+            # Guardar en cache de sesión
+            $Global:OneDriveSessionAuth = $authResult
+            Write-Log "OneDrive local guardado en cache de sesión" "INFO"
+            
+            return $authResult
         }
         elseif ($opcion -eq 2) {
             return $null
@@ -332,7 +395,7 @@ function Get-OneDriveAuth {
         Write-Host "Email: $($userInfo.userPrincipalName)" -ForegroundColor White
         Write-Log "OneDrive API autenticado: $($userInfo.userPrincipalName)" "INFO"
         
-        return @{
+        $authResult = @{
             Email        = $userInfo.userPrincipalName
             Token        = $tokenData.access_token
             RefreshToken = $tokenData.refresh_token
@@ -342,6 +405,12 @@ function Get-OneDriveAuth {
             DriveId      = $driveInfo.id
             RootId       = $driveInfo.root.id
         }
+        
+        # Guardar en cache de sesión para reutilizar
+        $Global:OneDriveSessionAuth = $authResult
+        Write-Log "Token OneDrive guardado en cache de sesión" "INFO"
+        
+        return $authResult
     }
     catch {
         Write-Host "✗ Error de autenticación: $($_.Exception.Message)" -ForegroundColor Red

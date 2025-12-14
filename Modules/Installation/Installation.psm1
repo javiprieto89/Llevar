@@ -89,13 +89,20 @@ function Install-LlevarToSystem {
         
         # Copiar archivos principales
         Write-Host "`nCopiando archivos principales..." -ForegroundColor Cyan
-        $archivosPrincipales = @("Llevar.ps1", "Llevar.cmd", "Llevar.inf", "Instalar-MenuContextual.ps1")
+        $archivosPrincipales = @("Llevar.ps1", "Llevar.cmd", "Llevar.inf")
         foreach ($archivo in $archivosPrincipales) {
             $origen = Join-Path $origenDir $archivo
             if (Test-Path $origen) {
                 Copy-Item -Path $origen -Destination $destinoDir -Force
                 Write-Host "  ✓ $archivo" -ForegroundColor Gray
             }
+        }
+        
+        # Copiar script de instalación del menú contextual desde Modules/Installation
+        $menuScriptOrigen = Join-Path (Join-Path $origenDir "Modules") "Installation\Instalar-MenuContextual.ps1"
+        if (Test-Path $menuScriptOrigen) {
+            Copy-Item -Path $menuScriptOrigen -Destination $destinoDir -Force
+            Write-Host "  ✓ Instalar-MenuContextual.ps1" -ForegroundColor Gray
         }
         
         # Copiar ejecutables (7-Zip, ARJ)
@@ -201,7 +208,7 @@ function Install-LlevarToSystem {
         
         # Configurar icono de la carpeta C:\Llevar
         Write-Host "\nConfigurando icono de carpeta..." -ForegroundColor Cyan
-        $iconoPath = Join-Path $destinoDir "Data\Llevar.ico"
+        $iconoPath = Join-Path $destinoDir "Data\Llevar_AlexSoft.ico"
         if (Test-Path $iconoPath) {
             try {
                 # Crear desktop.ini

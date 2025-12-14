@@ -92,51 +92,146 @@ REM ============================================================
 
 echo [*] Verificando PowerShell 7+...
 
-REM Buscar pwsh.exe (PowerShell 7+) en ubicaciones comunes
+REM Usar PowerShell para detectar pwsh.exe
+for /f "delims=" %%i in ('powershell -NoProfile -Command "(Get-Command pwsh -ErrorAction SilentlyContinue).Source" 2^>nul') do set "PWSH_EXE=%%i"
+
+REM Si se encontró, verificar que sea válido
+if defined PWSH_EXE (
+    if exist "%PWSH_EXE%" (
+        goto :FoundPwsh
+    )
+)
+
+REM Fallback: Buscar en ubicaciones comunes
 set "PWSH_EXE="
 
-REM Primero buscar en PATH
-where pwsh.exe >nul 2>&1
-if !ERRORLEVEL! equ 0 (
-    set "PWSH_EXE=pwsh.exe"
+REM Buscar en PATH con where
+for /f "delims=" %%i in ('where pwsh.exe 2^>nul') do (
+    set "PWSH_EXE=%%i"
     goto :FoundPwsh
 )
 
-REM Buscar en Program Files
-if exist "%ProgramFiles%\PowerShell\7\pwsh.exe" (
-    set "PWSH_EXE=%ProgramFiles%\PowerShell\7\pwsh.exe"
+REM Buscar en Program Files (cualquier versión 7+)
+for /d %%i in ("%ProgramFiles%\PowerShell\*") do (
+    if exist "%%i\pwsh.exe" (
+        set "PWSH_EXE=%%i\pwsh.exe"
+        goto :FoundPwsh
+    )
+)
+
+REM Buscar en WindowsApps (Microsoft Store / Winget)
+if exist "%LocalAppData%\Microsoft\WindowsApps\pwsh.exe" (
+    set "PWSH_EXE=%LocalAppData%\Microsoft\WindowsApps\pwsh.exe"
     goto :FoundPwsh
 )
 
-REM Buscar en Program Files (x86)
-if exist "%ProgramFiles(x86)%\PowerShell\7\pwsh.exe" (
-    set "PWSH_EXE=%ProgramFiles(x86)%\PowerShell\7\pwsh.exe"
-    goto :FoundPwsh
-)
+REM ============================================================
+REM PowerShell 7+ NO ENCONTRADO - OFRECER INSTALACIÓN AUTOMÁTICA
+REM ============================================================
 
-REM Versiones más recientes en AppData Local
-if exist "%LocalAppData%\Microsoft\PowerShell\7\pwsh.exe" (
-    set "PWSH_EXE=%LocalAppData%\Microsoft\PowerShell\7\pwsh.exe"
-    goto :FoundPwsh
-)
-
-REM No se encontró PowerShell 7+
 echo.
 echo ================================================================
-echo   ERROR: PowerShell 7 o superior no encontrado
+echo   PowerShell 7 o superior no encontrado
 echo ================================================================
 echo.
 echo LLEVAR requiere PowerShell 7 o superior.
 echo PowerShell 5 no es compatible.
 echo.
-echo Por favor descargue e instale PowerShell 7+ desde:
-echo https://aka.ms/powershell-release?tag=stable
+echo Opciones:
+echo   [1] Descargar e instalar PowerShell 7 automaticamente (Recomendado)
+echo   [2] Abrir pagina de descarga manual
+echo   [3] Cancelar instalacion
 echo.
-echo Abriendo navegador con el link de descarga...
-start https://aka.ms/powershell-release?tag=stable 2>nul
+
+choice /C 123 /N /M "Seleccione una opcion (1/2/3): "
+set INSTALL_CHOICE=!ERRORLEVEL!
+
+if !INSTALL_CHOICE! equ 3 (
+    echo.
+    echo Instalacion cancelada por el usuario.
+    pause
+    exit /b 1
+)
+
+if !INSTALL_CHOICE! equ 2 (
+    echo.
+    echo Abriendo navegador con el link de descarga...
+    start https://aka.ms/powershell-release?tag=stable
+    pause
+    exit /b 1
+)
+
+REM Opción 1: Instalación automática
 echo.
-pause
-exit /b 1
+echo ================================================================
+echo   Instalando PowerShell 7 automaticamente...
+echo ================================================================
+echo.
+echo [*] Descargando PowerShell 7...
+
+REM Crear carpeta temporal
+set "TEMP_DIR=%TEMP%\LlevarInstall"
+if not exist "%TEMP_DIR%" mkdir "%TEMP_DIR%"
+
+REM Descargar instalador MSI (x64)
+powershell -NoProfile -Command "& {$ProgressPreference='SilentlyContinue'; try { Invoke-WebRequest -Uri 'https://github.com/PowerShell/PowerShell/releases/download/v7.4.6/PowerShell-7.4.6-win-x64.msi' -OutFile '%TEMP_DIR%\PowerShell-Setup.msi' -UseBasicParsing; Write-Host '[OK] Descarga completada' -ForegroundColor Green; exit 0 } catch { Write-Host '[ERROR] Error en la descarga:' $_.Exception.Message -ForegroundColor Red; exit 1 }}"
+
+if !ERRORLEVEL! neq 0 (
+    echo.
+    echo Error al descargar PowerShell 7.
+    echo Abriendo navegador para descarga manual...
+    start https://aka.ms/powershell-release?tag=stable
+    pause
+    exit /b 1
+)
+
+echo.
+echo [*] Instalando PowerShell 7 (esto puede tardar un minuto)...
+echo.
+
+REM Instalar MSI silenciosamente
+msiexec /i "%TEMP_DIR%\PowerShell-Setup.msi" /quiet /norestart ADD_EXPLORER_CONTEXT_MENU_OPENPOWERSHELL=1 ADD_FILE_CONTEXT_MENU_RUNPOWERSHELL=1 ENABLE_PSREMOTING=0 REGISTER_MANIFEST=1 USE_MU=1 ENABLE_MU=1
+
+if !ERRORLEVEL! neq 0 (
+    echo.
+    echo [ERROR] Error durante la instalacion.
+    pause
+    exit /b 1
+)
+
+echo.
+echo [OK] PowerShell 7 instalado exitosamente
+echo.
+
+REM Limpiar archivos temporales
+if exist "%TEMP_DIR%\PowerShell-Setup.msi" del /f /q "%TEMP_DIR%\PowerShell-Setup.msi"
+
+REM Buscar nuevamente pwsh.exe después de la instalación
+echo [*] Detectando PowerShell 7 recien instalado...
+
+REM Refrescar PATH
+set "PATH=%ProgramFiles%\PowerShell\7;%PATH%"
+
+REM Buscar con Get-Command nuevamente
+for /f "delims=" %%i in ('powershell -NoProfile -Command "(Get-Command pwsh -ErrorAction SilentlyContinue).Source" 2^>nul') do set "PWSH_EXE=%%i"
+
+if not defined PWSH_EXE (
+    REM Buscar en ubicación por defecto
+    if exist "%ProgramFiles%\PowerShell\7\pwsh.exe" (
+        set "PWSH_EXE=%ProgramFiles%\PowerShell\7\pwsh.exe"
+    )
+)
+
+if not defined PWSH_EXE (
+    echo.
+    echo [ERROR] No se pudo detectar PowerShell 7 despues de la instalacion.
+    echo Por favor reinicie el sistema e intente nuevamente.
+    pause
+    exit /b 1
+)
+
+echo [OK] PowerShell 7 detectado en: !PWSH_EXE!
+echo.
 
 :FoundPwsh
 

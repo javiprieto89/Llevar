@@ -224,7 +224,14 @@ function Install-LlevarToSystem {
     $menuScriptSource = Join-Path $currentDir "Instalar-MenuContextual.ps1"
     $menuScriptDest = Join-Path $installPath "Instalar-MenuContextual.ps1"
     
-    # Copiar script de instalación manual del menú contextual
+    # Copiar script de instalación manual del menú contextual desde Modules/Installation
+    $menuScriptSourceAlt = Join-Path (Join-Path $currentDir "Modules") "Installation\Instalar-MenuContextual.ps1"
+    
+    # Intentar primero la ubicación en Modules/Installation
+    if (Test-Path $menuScriptSourceAlt) {
+        $menuScriptSource = $menuScriptSourceAlt
+    }
+    
     if (Test-Path $menuScriptSource) {
         try {
             Copy-Item -Path $menuScriptSource -Destination $menuScriptDest -Force
@@ -233,6 +240,9 @@ function Install-LlevarToSystem {
         catch {
             Write-Host "⚠ No se pudo copiar Instalar-MenuContextual.ps1" -ForegroundColor Yellow
         }
+    }
+    else {
+        Write-Host "⚠ No se encontró Instalar-MenuContextual.ps1" -ForegroundColor Yellow
     }
     
     if (Test-Path $infSource) {
@@ -246,7 +256,7 @@ function Install-LlevarToSystem {
                 # Método 1: Usar el script PowerShell (más confiable en Windows 10/11)
                 if (Test-Path $menuScriptDest) {
                     Write-Host "  Usando instalador PowerShell..." -ForegroundColor Gray
-                    $result = Start-Process -FilePath "pwsh.exe" -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$menuScriptDest`"" -Wait -PassThru -Verb RunAs -WindowStyle Hidden
+                    $result = Start-Process -FilePath "pwsh.exe" -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$menuScriptDest`" -SkipPause" -Wait -PassThru -Verb RunAs
                     
                     if ($result.ExitCode -eq 0) {
                         Write-Host "✓ Menú contextual 'Llevar A...' instalado exitosamente" -ForegroundColor Green
@@ -297,25 +307,78 @@ function Install-LlevarToSystem {
                     # Ignorar errores al refrescar
                 }
                 
-                # Actualizar valores dinámicos en el registro (versión e icono)
-                Write-Host "  Actualizando información del Panel de Control..." -ForegroundColor Gray
+                # Crear/actualizar entrada en el Panel de Control
+                Write-Host "  Registrando en Panel de Control..." -ForegroundColor Gray
                 try {
                     $uninstallKey = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Llevar"
-                    if (Test-Path $uninstallKey) {
-                        # Actualizar versión desde archivo .version
-                        Set-ItemProperty -Path $uninstallKey -Name "DisplayVersion" -Value $productVersion -ErrorAction SilentlyContinue
-                        
-                        # Actualizar icono
-                        $iconPath = Join-Path $installPath "Data\Llevar.ico"
-                        if (Test-Path $iconPath) {
-                            Set-ItemProperty -Path $uninstallKey -Name "DisplayIcon" -Value "$iconPath,0" -ErrorAction SilentlyContinue
-                        }
-                        
-                        Write-Host "  ✓ Panel de Control actualizado (v$productVersion)" -ForegroundColor Green
+                    
+                    # Crear la clave si no existe
+                    if (-not (Test-Path $uninstallKey)) {
+                        $null = New-Item -Path $uninstallKey -Force -ErrorAction Stop
+                        Write-Host "    • Clave de registro creada" -ForegroundColor DarkGray
                     }
+                    
+                    # Buscar icono personalizado de Llevar
+                    $iconPath = Join-Path $installPath "Data\Llevar_AlexSoft.ico"
+                    
+                    if (-not (Test-Path $iconPath)) {
+                        Write-Host "    ⚠ Icono personalizado no encontrado: $iconPath" -ForegroundColor Yellow
+                        # Buscar alternativas
+                        $iconLocations = @(
+                            "Data\Llevar_ContextMenu.ico",
+                            "Data\Llevar.ico"
+                        )
+                        
+                        foreach ($loc in $iconLocations) {
+                            $fullIconPath = Join-Path $installPath $loc
+                            if (Test-Path $fullIconPath) {
+                                $iconPath = $fullIconPath
+                                Write-Host "    • Usando icono alternativo: $loc" -ForegroundColor DarkGray
+                                break
+                            }
+                        }
+                    }
+                    else {
+                        Write-Host "    • Icono encontrado: Llevar_AlexSoft.ico" -ForegroundColor DarkGray
+                    }
+                    
+                    # Configurar todas las propiedades de desinstalación (REQUERIDAS para aparecer en Panel de Control)
+                    Set-ItemProperty -Path $uninstallKey -Name "DisplayName" -Value "Llevar - Sistema de Transferencia de Archivos" -ErrorAction Stop
+                    Set-ItemProperty -Path $uninstallKey -Name "DisplayVersion" -Value $productVersion -ErrorAction Stop
+                    Set-ItemProperty -Path $uninstallKey -Name "Publisher" -Value "AlexSoft" -ErrorAction Stop
+                    Set-ItemProperty -Path $uninstallKey -Name "InstallLocation" -Value $installPath -ErrorAction Stop
+                    Set-ItemProperty -Path $uninstallKey -Name "UninstallString" -Value "`"$installPath\DESINSTALAR.CMD`"" -ErrorAction Stop
+                    Set-ItemProperty -Path $uninstallKey -Name "InstallDate" -Value (Get-Date -Format "yyyyMMdd") -ErrorAction Stop
+                    Set-ItemProperty -Path $uninstallKey -Name "NoModify" -Value 1 -Type DWord -ErrorAction Stop
+                    Set-ItemProperty -Path $uninstallKey -Name "NoRepair" -Value 1 -Type DWord -ErrorAction Stop
+                    
+                    # Configurar icono (sin comillas adicionales ni índice)
+                    if ($iconPath -and (Test-Path $iconPath)) {
+                        Set-ItemProperty -Path $uninstallKey -Name "DisplayIcon" -Value $iconPath -ErrorAction Stop
+                        Write-Host "    • Icono registrado: $iconPath" -ForegroundColor DarkGray
+                    }
+                    else {
+                        Write-Host "    ⚠ No se pudo configurar icono personalizado" -ForegroundColor Yellow
+                    }
+                    
+                    # Calcular tamaño estimado (en KB) - esto es importante para que aparezca en la lista
+                    try {
+                        $size = (Get-ChildItem -Path $installPath -Recurse -ErrorAction SilentlyContinue | Measure-Object -Property Length -Sum).Sum / 1KB
+                        if ($size -gt 0) {
+                            Set-ItemProperty -Path $uninstallKey -Name "EstimatedSize" -Value ([int]$size) -Type DWord -ErrorAction Stop
+                        }
+                    }
+                    catch {
+                        # Si falla, usar tamaño estimado por defecto
+                        Set-ItemProperty -Path $uninstallKey -Name "EstimatedSize" -Value 10240 -Type DWord -ErrorAction SilentlyContinue
+                    }
+                    
+                    Write-Host "  ✓ Registrado en Panel de Control (v$productVersion)" -ForegroundColor Green
+                    Write-Host "    Busque 'Llevar' en Configuración → Aplicaciones → Aplicaciones instaladas" -ForegroundColor DarkGray
                 }
                 catch {
-                    Write-Host "  ⚠ No se pudo actualizar Panel de Control: $_" -ForegroundColor Yellow
+                    Write-Host "  ✗ No se pudo registrar en Panel de Control: $_" -ForegroundColor Red
+                    Write-Host "    Verifique que está ejecutando como ADMINISTRADOR" -ForegroundColor Yellow
                 }
             }
             catch {
@@ -350,7 +413,7 @@ function Install-LlevarToSystem {
         $shortcut.Description = "Llevar - Sistema de transferencia de archivos (arrastre carpetas/archivos aquí)"
         
         # Buscar icono personalizado
-        $iconPath = Join-Path $installPath "Data\Llevar.ico"
+        $iconPath = Join-Path $installPath "Data\Llevar_AlexSoft.ico"
         if (-not (Test-Path $iconPath)) {
             # Icono alternativo
             $iconPath = Join-Path $installPath "Data\Llevar_ContextMenu.ico"

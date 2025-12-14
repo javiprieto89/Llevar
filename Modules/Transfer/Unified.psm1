@@ -762,9 +762,17 @@ function Invoke-CloudToLocal {
     Write-Log "Carpeta temporal para descarga: $tempDownload" "DEBUG"
     
     try {
-        # Paso 1: Descargar de nube a temporal
+        # ========================================================================
+        # PASO 1/3: DESCARGAR DE LA NUBE
+        # ========================================================================
+        Write-Host ""
+        Write-Host "═══════════════════════════════════════════════════════════" -ForegroundColor Cyan
+        Write-Host "   PASO 1/3: Descargando desde ${CloudType}" -ForegroundColor Yellow
+        Write-Host "═══════════════════════════════════════════════════════════" -ForegroundColor Cyan
+        Write-Host ""
+        
         if ($ShowProgress) {
-            Write-LlevarProgressBar -Percent 10 -StartTime $StartTime -Label "Descargando de ${CloudType}..." -Top $ProgressTop -Width 50 -CheckCancellation
+            Write-LlevarProgressBar -Percent 5 -StartTime $StartTime -Label "[1/3] Descargando de ${CloudType}..." -Top $ProgressTop -Width 50 -CheckCancellation
         }
         
         Write-Host "Descargando archivos desde ${CloudType}..." -ForegroundColor Cyan
@@ -793,19 +801,39 @@ function Invoke-CloudToLocal {
             throw "${CloudType}→Local: Tipo de nube no soportado: $CloudType"
         }
         
-        if ($ShowProgress) {
-            Write-LlevarProgressBar -Percent 40 -StartTime $StartTime -Label "Descarga completada" -Top $ProgressTop -Width 50
+        # Verificar que se descargaron archivos
+        $downloadedFiles = Get-ChildItem -Path $tempDownload -Recurse -File -ErrorAction SilentlyContinue
+        $downloadedCount = if ($downloadedFiles) { @($downloadedFiles).Count } else { 0 }
+        
+        if ($downloadedCount -eq 0) {
+            throw "${CloudType}→Local: No se descargaron archivos. Verifique la ruta en ${CloudType}."
         }
         
-        # Paso 2: Comprimir archivos temporales si está habilitado
+        $totalSizeMB = [math]::Round(($downloadedFiles | Measure-Object -Property Length -Sum).Sum / 1MB, 2)
+        Write-Host "✓ Descarga completada: $downloadedCount archivos ($totalSizeMB MB)" -ForegroundColor Green
+        Write-Log "Descargados $downloadedCount archivos ($totalSizeMB MB) en: $tempDownload" "INFO"
+        
+        if ($ShowProgress) {
+            Write-LlevarProgressBar -Percent 33 -StartTime $StartTime -Label "[1/3] Descarga completada - $downloadedCount archivos" -Top $ProgressTop -Width 50
+        }
+        
+        # ========================================================================
+        # PASO 2/3: COMPRIMIR ARCHIVOS
+        # ========================================================================
+        Write-Host ""
+        Write-Host "═══════════════════════════════════════════════════════════" -ForegroundColor Cyan
+        Write-Host "   PASO 2/3: Comprimiendo archivos" -ForegroundColor Yellow
+        Write-Host "═══════════════════════════════════════════════════════════" -ForegroundColor Cyan
+        Write-Host ""
+        
         $blockSizeMB = $Llevar.Opciones.BlockSizeMB
         
         if ($blockSizeMB -gt 0) {
             if ($ShowProgress) {
-                Write-LlevarProgressBar -Percent 50 -StartTime $StartTime -Label "Comprimiendo archivos..." -Top $ProgressTop -Width 50
+                Write-LlevarProgressBar -Percent 35 -StartTime $StartTime -Label "[2/3] Comprimiendo archivos..." -Top $ProgressTop -Width 50
             }
             
-            Write-Host "Comprimiendo archivos descargados..." -ForegroundColor Cyan
+            Write-Host "Comprimiendo $downloadedCount archivos descargados..." -ForegroundColor Cyan
             
             # Obtener 7-Zip
             $sevenZip = Get-SevenZipLlevar
@@ -818,28 +846,65 @@ function Invoke-CloudToLocal {
                 $compressResult = Compress-Folder -Origen $tempDownload -Temp $tempCompress -SevenZ $sevenZip `
                     -Clave $null -BlockSizeMB $blockSizeMB
                 
-                if ($ShowProgress) {
-                    Write-LlevarProgressBar -Percent 70 -StartTime $StartTime -Label "Copiando bloques..." -Top $ProgressTop -Width 50
+                if (-not $compressResult -or -not $compressResult.Files -or $compressResult.Files.Count -eq 0) {
+                    throw "${CloudType}→Local: Error en la compresión - no se generaron archivos"
                 }
                 
-                # Paso 3: Copiar bloques comprimidos al destino
-                Write-Host "Copiando bloques comprimidos a destino..." -ForegroundColor Cyan
+                Write-Host "✓ Compresión completada: $($compressResult.Files.Count) bloques" -ForegroundColor Green
                 
+                # ========================================================================
+                # PASO 3/3: COPIAR AL DESTINO
+                # ========================================================================
+                Write-Host ""
+                Write-Host "═══════════════════════════════════════════════════════════" -ForegroundColor Cyan
+                Write-Host "   PASO 3/3: Copiando al destino" -ForegroundColor Yellow
+                Write-Host "═══════════════════════════════════════════════════════════" -ForegroundColor Cyan
+                Write-Host ""
+                
+                if ($ShowProgress) {
+                    Write-LlevarProgressBar -Percent 70 -StartTime $StartTime -Label "[3/3] Copiando bloques al destino..." -Top $ProgressTop -Width 50
+                }
+                
+                Write-Host "Copiando $($compressResult.Files.Count) bloques comprimidos a destino..." -ForegroundColor Cyan
+                
+                $copiedFiles = 0
                 foreach ($file in $compressResult.Files) {
                     $fileName = Split-Path $file -Leaf
                     $destFile = Join-Path $destPath $fileName
+                    
+                    if (-not (Test-Path $file)) {
+                        Write-Log "ADVERTENCIA: Archivo de bloque no encontrado: $file" "WARNING"
+                        continue
+                    }
+                    
                     Copy-Item -Path $file -Destination $destFile -Force
-                    Write-Log "Copiado: $fileName" "INFO"
+                    $copiedFiles++
+                    Write-Host "  ✓ $fileName" -ForegroundColor Gray
+                    Write-Log "Copiado bloque: $fileName" "INFO"
+                    
+                    if ($ShowProgress) {
+                        $percent = 70 + (25 * $copiedFiles / $compressResult.Files.Count)
+                        Write-LlevarProgressBar -Percent $percent -StartTime $StartTime -Label "[3/3] Copiando bloque $copiedFiles/$($compressResult.Files.Count)..." -Top $ProgressTop -Width 50
+                    }
                 }
                 
                 if ($ShowProgress) {
-                    Write-LlevarProgressBar -Percent 100 -StartTime $StartTime -Label "Transferencia completada" -Top $ProgressTop -Width 50
+                    Write-LlevarProgressBar -Percent 100 -StartTime $StartTime -Label "[3/3] Transferencia completada" -Top $ProgressTop -Width 50
                 }
                 
-                Write-Host "✓ Transferencia ${CloudType}→Local completada" -ForegroundColor Green
-                Write-Log "${CloudType}→Local: Transferencia completada exitosamente" "INFO"
+                Write-Host ""
+                Write-Host "═══════════════════════════════════════════════════════════" -ForegroundColor Green
+                Write-Host "   ✓ TRANSFERENCIA COMPLETADA" -ForegroundColor Yellow
+                Write-Host "═══════════════════════════════════════════════════════════" -ForegroundColor Green
+                Write-Host "  Descargados: $downloadedCount archivos ($totalSizeMB MB)" -ForegroundColor Cyan
+                Write-Host "  Bloques generados: $($compressResult.Files.Count)" -ForegroundColor Cyan
+                Write-Host "  Destino: $destPath" -ForegroundColor Cyan
+                Write-Host "═══════════════════════════════════════════════════════════" -ForegroundColor Green
+                Write-Host ""
                 
-                return @{ Success = $true; Route = "${CloudType}→Local (comprimido)" }
+                Write-Log "${CloudType}→Local: Transferencia completada - $copiedFiles bloques copiados" "INFO"
+                
+                return @{ Success = $true; Route = "${CloudType}→Local (comprimido)"; Files = $copiedFiles }
             }
             finally {
                 Remove-Item $tempCompress -Recurse -Force -ErrorAction SilentlyContinue

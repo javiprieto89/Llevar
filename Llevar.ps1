@@ -99,9 +99,6 @@
     Versión PowerShell modernizada con soporte ZIP nativo
 #>
 
-# ========================================================================== #
-#                          DEFINICIÓN DE PARÁMETROS                          #
-# ==========================================================================
 param(
     [string]$Origen,
     [string]$Destino,
@@ -133,15 +130,8 @@ param(
     [switch]$ForceLogo
 )
 
-# ========================================================================== #
-#              CONFIGURAR PREFERENCIAS DE ERROR/WARNING TEMPRANO             #
-# ========================================================================== #
-
-# ========================================================================== #
-#              VERIFICACIÓN DE POWERSHELL 7 CON MÓDULO DEDICADO              #
-# ========================================================================== #
-
-# Rutas críticas tempranas
+# Verificar PowerShell 7
+$Global:ScriptDir = $PSScriptRoot
 $Global:ScriptDir = $PSScriptRoot
 $Global:ModulesPath = Join-Path $Global:ScriptDir "Modules"
 
@@ -179,16 +169,18 @@ catch {
     exit 1
 }
 
-# ========================================================================== #
-#              VERIFICACIÓN Y AUTO-ELEVACIÓN DE PERMISOS ADMIN               #
-# ========================================================================== #
-
 # Verificar si se está ejecutando como administrador
 $currentPrincipal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
 $isAdmin = $currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 
-if (-not $isAdmin) {
-    Write-Host "🔒 Elevando permisos de administrador..." -ForegroundColor Cyan
+# Determinar si se necesitan permisos de administrador
+# Solo requerir admin para: instalación, desintalación, o configuración del sistema
+$requiresAdmin = $Instalar -or $Desinstalar
+
+# Si se requieren permisos de admin y no los tiene, elevar
+if ($requiresAdmin -and -not $isAdmin) {
+    Write-Host "🔒 Esta operación requiere permisos de administrador..." -ForegroundColor Cyan
+    Write-Host "   Elevando permisos..." -ForegroundColor Gray
     
     try {
         # Construir argumentos para mantener todos los parámetros
@@ -211,7 +203,7 @@ if (-not $isAdmin) {
             }
         }
         
-        # Iniciar proceso elevado (intenta automáticamente sin preguntar)
+        # Iniciar proceso elevado
         $process = Start-Process -FilePath "pwsh.exe" `
             -ArgumentList $argList `
             -Verb RunAs `
@@ -229,13 +221,12 @@ if (-not $isAdmin) {
         # Si falla la elevación automática (usuario cancela UAC o error de seguridad)
         $errorType = $_.Exception.GetType().Name
         
-        # Si es una cancelación del usuario (OperationCanceledException o similar)
+        # Si es una cancelación del usuario
         if ($errorType -eq "Win32Exception" -or $_.Exception.Message -match "cancel|1223") {
-            # Mostrar popup de advertencia
             try {
                 Add-Type -AssemblyName PresentationFramework
                 [System.Windows.MessageBox]::Show(
-                    "LLEVAR requiere permisos de administrador para funcionar correctamente.`n`n" +
+                    "Esta operación requiere permisos de administrador.`n`n" +
                     "La operación fue cancelada por el usuario.`n`n" +
                     "No se puede continuar sin permisos de administrador.",
                     "Permisos de Administrador Requeridos",
@@ -244,15 +235,11 @@ if (-not $isAdmin) {
                 ) | Out-Null
             }
             catch {
-                # Fallback si no se puede mostrar MessageBox
                 Write-Host ""
                 Write-Host "╔═══════════════════════════════════════════════════════════════╗" -ForegroundColor Yellow
-                Write-Host "║                                                               ║" -ForegroundColor Yellow
                 Write-Host "║  ⚠ PERMISOS DE ADMINISTRADOR REQUERIDOS                      ║" -ForegroundColor Yellow
-                Write-Host "║                                                               ║" -ForegroundColor Yellow
                 Write-Host "║  La operación fue cancelada.                                  ║" -ForegroundColor Yellow
                 Write-Host "║  No se puede continuar sin permisos de administrador.         ║" -ForegroundColor Yellow
-                Write-Host "║                                                               ║" -ForegroundColor Yellow
                 Write-Host "╚═══════════════════════════════════════════════════════════════╝" -ForegroundColor Yellow
                 Write-Host ""
                 Write-Host "Presione cualquier tecla para salir..." -ForegroundColor Gray
@@ -260,7 +247,7 @@ if (-not $isAdmin) {
             }
         }
         else {
-            # Otro tipo de error al elevar permisos
+            # Otro tipo de error
             try {
                 Add-Type -AssemblyName PresentationFramework
                 [System.Windows.MessageBox]::Show(
@@ -273,7 +260,6 @@ if (-not $isAdmin) {
                 ) | Out-Null
             }
             catch {
-                # Fallback
                 Write-Host ""
                 Write-Host "❌ No se pudo elevar permisos de administrador" -ForegroundColor Red
                 Write-Host "Error: $($_.Exception.Message)" -ForegroundColor Yellow
@@ -287,22 +273,20 @@ if (-not $isAdmin) {
         exit 1
     }
 }
+elseif (-not $requiresAdmin -and -not $isAdmin) {
+    # No requiere admin y no lo tiene - mostrar advertencia info pero continuar
+    Write-Host "ℹ Ejecutando sin permisos de administrador" -ForegroundColor Cyan
+    Write-Host "  (Solo se requiere admin para instalar/desinstalar)" -ForegroundColor Gray
+    Write-Host ""
+}
 
-# ========================================================================== #
-#              CONFIGURAR PREFERENCIAS DE ERROR/WARNING TEMPRANO             #
-# ========================================================================== #
-
-# Configurar preferencias ANTES de cualquier importación para silenciar errores/warnings
+# Configurar preferencias de error/warning
 $script:OriginalErrorPreference = $ErrorActionPreference
 $script:OriginalWarningPreference = $WarningPreference
 $ErrorActionPreference = 'SilentlyContinue'
 $WarningPreference = 'SilentlyContinue'
 
-# ========================================================================== #
-#                    INICIALIZACIÓN TEMPRANA DE LOGGING                      #
-# ========================================================================== #
-
-# Crear carpeta de logs si no existe (ScriptDir ya definido en verificación PS7)
+# Crear carpeta de logs
 $Global:LogsDir = Join-Path $Global:ScriptDir "Logs"
 if (-not (Test-Path $Global:LogsDir)) {
     New-Item -Path $Global:LogsDir -ItemType Directory -Force | Out-Null
@@ -356,23 +340,13 @@ Transcript: $(if ($TranscriptFile) { 'Activo' } else { 'No disponible' })
 "@
 Write-InitLogSafe $initLog
 
-# ========================================================================== #
-#                   WRAPPER DE MANEJO DE ERRORES GLOBAL                      #
-# ========================================================================== #
+# Configurar preferencias de error
+$ErrorActionPreference = 'Continue'
 
+$ModulesPath = $Global:ModulesPath
+
+# Importar módulos
 try {
-    # Configurar preferencias de error para capturar todo
-    $ErrorActionPreference = 'Continue'
-    
-    # Alias local para simplicidad
-    $ModulesPath = $Global:ModulesPath
-    
-    # ========================================================================== #
-    #                        IMPORTAR TODOS LOS MÓDULOS                          #
-    # ========================================================================== #
-
-    # Las preferencias de error/warning ya están configuradas al inicio del script
-    # Variables para capturar errores y warnings durante importación
     $importWarnings = @()
     $importErrors = @()
 
@@ -389,12 +363,12 @@ try {
     Import-Module (Join-Path $ModulesPath "UI\Navigator.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
     Import-Module (Join-Path $ModulesPath "UI\Menus.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
 
-    # Módulos de Compresión
+    # Compresión
     Import-Module (Join-Path $ModulesPath "Compression\SevenZip.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
     Import-Module (Join-Path $ModulesPath "Compression\NativeZip.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
     Import-Module (Join-Path $ModulesPath "Compression\BlockSplitter.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
 
-    # Módulos de Transferencia
+    # Transferencia
     Import-Module (Join-Path $ModulesPath "Transfer\Local.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
     Import-Module (Join-Path $ModulesPath "Transfer\FTP.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
     Import-Module (Join-Path $ModulesPath "Transfer\UNC.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
@@ -402,11 +376,9 @@ try {
     Import-Module (Join-Path $ModulesPath "Transfer\Dropbox.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
     Import-Module (Join-Path $ModulesPath "Transfer\Floppy.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
     Import-Module (Join-Path $ModulesPath "Transfer\Unified.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
-
-    # ConfigMenus se importa DESPUÉS de Transfer porque usa funciones de esos módulos
     Import-Module (Join-Path $ModulesPath "UI\ConfigMenus.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
 
-    # Módulos de Instalación
+    # Instalación
     Import-Module (Join-Path $ModulesPath "Installation\SystemInstall.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
     Import-Module (Join-Path $ModulesPath "Installation\Uninstall.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
     Import-Module (Join-Path $ModulesPath "Installation\Installer.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
@@ -414,20 +386,19 @@ try {
     Import-Module (Join-Path $ModulesPath "Installation\Install.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
     Import-Module (Join-Path $ModulesPath "Installation\InstallationCheck.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
 
-    # Módulos de Utilidades
-
+    # Utilidades
     Import-Module (Join-Path $ModulesPath "Utilities\Examples.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
     Import-Module (Join-Path $ModulesPath "Utilities\Help.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
     Import-Module (Join-Path $ModulesPath "Utilities\PathSelectors.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
     Import-Module (Join-Path $ModulesPath "Utilities\VolumeManagement.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
 
-    # Módulos del Sistema
+    # Sistema
     Import-Module (Join-Path $ModulesPath "System\Audio.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
     Import-Module (Join-Path $ModulesPath "System\FileSystem.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
     Import-Module (Join-Path $ModulesPath "System\Robocopy.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
     Import-Module (Join-Path $ModulesPath "System\ISO.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
 
-    # Módulos de Parámetros
+    # Parámetros
     Import-Module (Join-Path $ModulesPath "Parameters\Help.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
     Import-Module (Join-Path $ModulesPath "Parameters\Example.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
     Import-Module (Join-Path $ModulesPath "Parameters\Test.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
@@ -435,11 +406,7 @@ try {
     Import-Module (Join-Path $ModulesPath "Parameters\InteractiveMenu.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
     Import-Module (Join-Path $ModulesPath "Parameters\NormalMode.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
     
-    # --------------------------------------------------------------------------
-    # Manejo genérico de errores / advertencias durante importación de módulos
-    # --------------------------------------------------------------------------
-
-    # Si hubo errores de importación, abortar con log crítico
+    # Manejo de errores/advertencias durante importación
     if ($importErrors -and $importErrors.Count -gt 0) {
 
         $importErrorLog = @"
@@ -480,20 +447,22 @@ La inicialización continuó, pero se detectaron advertencias.
         Write-InitLogSafe $importWarningLog
     }
     
-    # Variable para indicar que hay advertencias a mostrar después del logo
     $script:HasImportWarnings = ($importWarnings -and $importWarnings.Count -gt 0)
 
-    
-    # Restaurar preferencias de error y warning después de la importación
-    # para que el resto del script funcione normalmente
+    # Restaurar preferencias
     $ErrorActionPreference = $script:OriginalErrorPreference
     $WarningPreference = $script:OriginalWarningPreference
+}
+catch {
+    $errorMsg = "Error crítico durante la importación de módulos: $($_.Exception.Message)"
+    Write-InitLogSafe "[ERROR CRÍTICO] $errorMsg"
+    Write-Host "× $errorMsg" -ForegroundColor Red
+    Write-Host "Línea: $($_.InvocationInfo.ScriptLineNumber)" -ForegroundColor Yellow
+    Read-Host "Presione ENTER para salir"
+    exit 1
+}
 
-    # ========================================================================== #
-    #                 VERIFICACIÓN DE PERMISOS DE ADMINISTRADOR                  #
-    # ========================================================================== #
-
-    # Verificar si se está ejecutando como administrador
+try {
     $currentPrincipal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
     $isAdmin = $currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
     
@@ -505,13 +474,14 @@ La inicialización continuó, pero se detectaron advertencias.
         $Verbose = $true
         Write-Host "[DEBUG/IDE] Verbose activado automáticamente" -ForegroundColor DarkGray
     }
+}
+catch {
+    Write-Host "⚠ Error verificando permisos: $($_.Exception.Message)" -ForegroundColor Yellow
+    $isAdmin = $false
+    $isInIDE = $false
+}
 
-    # ========================================================================== #
-    #                   ELEVACIÓN AUTOMÁTICA A ADMINISTRADOR                     #
-    # ========================================================================== #
-    
-    # Si NO está en IDE, NO es admin, y NO es parámetro de instalación -> elevar
-    # (Instalación maneja su propia elevación en Install.psm1)
+try {
     if (-not $isInIDE -and -not $isAdmin -and -not $Instalar) {
         Write-Host "`nLlevar requiere permisos de administrador." -ForegroundColor Yellow
         Write-Host "Elevando automáticamente..." -ForegroundColor Cyan
@@ -532,188 +502,205 @@ La inicialización continuó, pero se detectaron advertencias.
         Start-Process powershell.exe -ArgumentList $arguments -Verb RunAs
         exit
     }
+}
+catch {
+    Write-Host "⚠ Error durante elevación de permisos: $($_.Exception.Message)" -ForegroundColor Yellow
+    Write-Host "Continuando sin permisos de administrador..." -ForegroundColor Gray
+}
 
-    # ========================================================================== #
-    #                            INICIALIZACIÓN                                  #
-    # ========================================================================== #
-
-    # Inicializar sistema de logs
+try {
     Initialize-LogFile -Verbose:$Verbose
+}
+catch {
+    Write-Host "⚠ Error inicializando sistema de logs: $($_.Exception.Message)" -ForegroundColor Yellow
+    # Continuar sin logs
+}
 
+try {
     # Inicializar consola si es necesario (solo si hay consola válida)
     # NO hacer Clear-Host aquí para no borrar errores/warnings antes del logo
     $hostName = $host.Name
     if ($hostName -and ($hostName -ilike '*consolehost*' -or $hostName -ilike '*visual studio code host*')) {
+        $rawUI = $host.UI.RawUI
+        if ($rawUI) {
+            $rawUI.BackgroundColor = 'Black'
+            $rawUI.ForegroundColor = 'White'
+            # Clear-Host eliminado - Show-AsciiLogo lo hará cuando sea necesario
+        }
+    }
+}
+catch {
+    # Si no hay consola válida, continuar sin fallar
+}
+
+$hasExecutionParams = ($Origen -or $Destino -or $RobocopyMirror -or $Ejemplo -or $Ayuda -or $Instalar -or $Desinstalar -or $Test)
+
+# Mostrar logo si corresponde
+$script:LogoWasShown = $false
+
+$forceLogoEnv = $false
+if ($env:LLEVAR_FORCE_LOGO -eq '1' -or $env:LLEVAR_FORCE_LOGO -eq 'true') { $forceLogoEnv = $true }
+    
+# Mostrar logo si:
+# - Se especifica -ForceLogo o variable de entorno -> SIEMPRE mostrar
+# - O si NO hay parámetros de ejecución Y NO está en IDE
+if ($ForceLogo -or $forceLogoEnv) {
+    $shouldShowLogo = $true
+}
+else {
+    $shouldShowLogo = (-not $hasExecutionParams) -and (-not $isInIDE)
+}
+
+if (Get-Command Write-Log -ErrorAction SilentlyContinue) {
+    Write-Log "Logo check -> isInIDE=$isInIDE hasParams=$hasExecutionParams ForceLogo=$ForceLogo EnvForceLogo=$forceLogoEnv" "DEBUG"
+}
+
+if ($shouldShowLogo) {
+    $logoPath = Join-Path $PSScriptRoot "Data\alexsoft.txt"
+    if (Test-Path $logoPath) {
         try {
-            $rawUI = $host.UI.RawUI
-            if ($rawUI) {
-                $rawUI.BackgroundColor = 'Black'
-                $rawUI.ForegroundColor = 'White'
-                # Clear-Host eliminado - Show-AsciiLogo lo hará cuando sea necesario
+            # Usar Show-AsciiLogo como renderer unificado para el logo con sonidos estilo DOS
+            # Show-AsciiLogo hace su propio Clear-Host internamente
+            Show-AsciiLogo -Path $logoPath -DelayMs 30 -ShowProgress $true -Label "Cargando..." -ForegroundColor Gray -PlaySound $true -FinalDelaySeconds 2
+            $script:LogoWasShown = $true
+                
+            # Mostrar mensaje de bienvenida personalizado parpadeante
+            Show-WelcomeMessage -BlinkCount 3 -VisibleDelayMs 450 -TextColor Cyan
+                
+            # Mostrar advertencias si las hay (los errores críticos ya abortaron antes)
+            if ($script:HasImportWarnings) {
+                Write-Host ""
+                Write-Host "═══════════════════════════════════════════════════════════" -ForegroundColor Yellow
+                Write-Host "  ADVERTENCIAS DURANTE LA CARGA DE MÓDULOS" -ForegroundColor Yellow
+                Write-Host "═══════════════════════════════════════════════════════════" -ForegroundColor Yellow
+                Write-Host ""
+                Write-Host "Advertencias ($($importWarnings.Count)):" -ForegroundColor Yellow
+                foreach ($warning in $importWarnings) {
+                    Write-Host "  ⚠ $warning" -ForegroundColor Yellow
+                }
+                Write-Host ""
+                Write-Host "Los detalles completos están en el log: $Global:LogFile" -ForegroundColor Gray
+                Write-Host ""
+                Write-Host "Presione cualquier tecla para continuar..." -ForegroundColor Cyan
+                $null = $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
             }
+                
+            # Limpiar para mostrar el menú
+            Clear-Host
         }
         catch {
-            # Si no hay consola válida (por ejemplo, en algunos hosts embebidos), continuar sin fallar
-        }
-    }
-
-    # ========================================================================== #
-    # ========================================================================== #
-    #                     ⬇⬇⬇ EJECUCIÓN PRINCIPAL ⬇⬇⬇                           #
-    #                          FLUJO PRINCIPAL (LLEVAR)                          #
-    # ========================================================================== #
-    # ========================================================================== #
-    
-    # Verificar si hay parámetros de ejecución directa
-    $hasExecutionParams = ($Origen -or $Destino -or $RobocopyMirror -or $Ejemplo -or $Ayuda -or $Instalar -or $Desinstalar -or $Test)
-
-    # ========================================================================== #
-    #                        LOGO Y MENSAJE DE BIENVENIDA                        #
-    # ========================================================================== #
-    
-    # Variable para rastrear si se mostró el logo
-    $script:LogoWasShown = $false
-
-    $forceLogoEnv = $false
-    if ($env:LLEVAR_FORCE_LOGO -eq '1' -or $env:LLEVAR_FORCE_LOGO -eq 'true') { $forceLogoEnv = $true }
-    
-    # Mostrar logo si:
-    # - Se especifica -ForceLogo o variable de entorno -> SIEMPRE mostrar
-    # - O si NO hay parámetros de ejecución Y NO está en IDE
-    if ($ForceLogo -or $forceLogoEnv) {
-        $shouldShowLogo = $true
-    }
-    else {
-        $shouldShowLogo = (-not $hasExecutionParams) -and (-not $isInIDE)
-    }
-    
-    # Log de depuración solo si Write-Log está disponible
-    if (Get-Command Write-Log -ErrorAction SilentlyContinue) {
-        Write-Log "Logo check -> isInIDE=$isInIDE hasParams=$hasExecutionParams ForceLogo=$ForceLogo EnvForceLogo=$forceLogoEnv" "DEBUG"
-    }
-    
-    # Mostrar logo ASCII si corresponde
-    if ($shouldShowLogo) {
-        $logoPath = Join-Path $PSScriptRoot "Data\alexsoft.txt"
-        if (Test-Path $logoPath) {
+            # Si hay error en el logo (ej: cuando se usa -NoProfile), simplemente continuar
+            # No es un error crítico, solo significa que las funciones de consola no están disponibles
             try {
-                # Usar Show-AsciiLogo como renderer unificado para el logo con sonidos estilo DOS
-                # Show-AsciiLogo hace su propio Clear-Host internamente
-                Show-AsciiLogo -Path $logoPath -DelayMs 30 -ShowProgress $true -Label "Cargando..." -ForegroundColor Gray -PlaySound $true -FinalDelaySeconds 2
-                $script:LogoWasShown = $true
-                
-                # Mostrar mensaje de bienvenida personalizado parpadeante
-                Show-WelcomeMessage -BlinkCount 3 -VisibleDelayMs 450 -TextColor Cyan
-                
-                # Mostrar advertencias si las hay (los errores críticos ya abortaron antes)
-                if ($script:HasImportWarnings) {
-                    Write-Host ""
-                    Write-Host "═══════════════════════════════════════════════════════════" -ForegroundColor Yellow
-                    Write-Host "  ADVERTENCIAS DURANTE LA CARGA DE MÓDULOS" -ForegroundColor Yellow
-                    Write-Host "═══════════════════════════════════════════════════════════" -ForegroundColor Yellow
-                    Write-Host ""
-                    Write-Host "Advertencias ($($importWarnings.Count)):" -ForegroundColor Yellow
-                    foreach ($warning in $importWarnings) {
-                        Write-Host "  ⚠ $warning" -ForegroundColor Yellow
-                    }
-                    Write-Host ""
-                    Write-Host "Los detalles completos están en el log: $Global:LogFile" -ForegroundColor Gray
-                    Write-Host ""
-                    Write-Host "Presione cualquier tecla para continuar..." -ForegroundColor Cyan
-                    $null = $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
-                }
-                
-                # Limpiar para mostrar el menú
+                Write-Log "Error mostrando logo ASCII: $($_.Exception.Message)" "WARNING"
+            }
+            catch {
+                # Ignorar errores al escribir el log
+            }
+            try {
                 Clear-Host
             }
             catch {
-                # Si hay error en el logo (ej: cuando se usa -NoProfile), simplemente continuar
-                # No es un error crítico, solo significa que las funciones de consola no están disponibles
-                try {
-                    Write-Log "Error mostrando logo ASCII: $($_.Exception.Message)" "WARNING"
-                }
-                catch {
-                    # Ignorar errores al escribir el log
-                }
-                try {
-                    Clear-Host
-                }
-                catch {
-                    # Ignorar si Clear-Host falla
-                }
+                # Ignorar si Clear-Host falla
             }
         }
     }
+}
 
-    # Si no se mostró el logo pero hubo advertencias y no hay parámetros, mostrarlas igual
-    if (-not $script:LogoWasShown -and -not $hasExecutionParams -and $script:HasImportWarnings) {
-        Write-Host "═══════════════════════════════════════════════════════════" -ForegroundColor Yellow
-        Write-Host "  ADVERTENCIAS DURANTE LA CARGA DE MÓDULOS" -ForegroundColor Yellow
-        Write-Host "═══════════════════════════════════════════════════════════" -ForegroundColor Yellow
-        Write-Host ""
-        Write-Host "Advertencias ($($importWarnings.Count)):" -ForegroundColor Yellow
-        foreach ($warning in $importWarnings) { Write-Host "  ⚠ $warning" -ForegroundColor Yellow }
-        Write-Host ""
-        Write-Host "Los detalles completos están en el log: $Global:LogFile" -ForegroundColor Gray
-        Write-Host ""
-        Write-Host "Presione cualquier tecla para continuar..." -ForegroundColor Cyan
-        $null = $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
-        Clear-Host
-    }
+# Si no se mostró el logo pero hubo advertencias y no hay parámetros, mostrarlas igual
+if (-not $script:LogoWasShown -and -not $hasExecutionParams -and $script:HasImportWarnings) {
+    Write-Host "═══════════════════════════════════════════════════════════" -ForegroundColor Yellow
+    Write-Host "  ADVERTENCIAS DURANTE LA CARGA DE MÓDULOS" -ForegroundColor Yellow
+    Write-Host "═══════════════════════════════════════════════════════════" -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "Advertencias ($($importWarnings.Count)):" -ForegroundColor Yellow
+    foreach ($warning in $importWarnings) { Write-Host "  ⚠ $warning" -ForegroundColor Yellow }
+    Write-Host ""
+    Write-Host "Los detalles completos están en el log: $Global:LogFile" -ForegroundColor Gray
+    Write-Host ""
+    Write-Host "Presione cualquier tecla para continuar..." -ForegroundColor Cyan
+    $null = $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+    Clear-Host
+}
 
-    # ========================================================================== #
-    #                        VERIFICACIÓN DE INSTALACIÓN                         #
-    # ========================================================================== #
-
-    # Verificar instalación solo si NO hay parámetros de ejecución directa
+try {
     if (-not $hasExecutionParams) {
         Invoke-InstallationCheck -Ejemplo:$Ejemplo -Ayuda:$Ayuda -IsAdmin $isAdmin -IsInIDE $isInIDE -ScriptPath $MyInvocation.MyCommand.Path -LogoWasShown $script:LogoWasShown
     }
+}
+catch {
+    Write-Host "⚠ Error en verificación de instalación: $($_.Exception.Message)" -ForegroundColor Yellow
+}
 
-    # ========================================================================== #
-    #                   PROCESAMIENTO DE PARÁMETROS DE EJECUCIÓN                 #
-    # ========================================================================== #
-
-    # 1. Verificar parámetro -Ayuda
+try {
     Invoke-HelpParameter -Ayuda:$Ayuda
+}
+catch {
+    Write-Host "⚠ Error procesando parámetro -Ayuda: $($_.Exception.Message)" -ForegroundColor Yellow
+}
 
+try {
     # 2. Verificar parámetro -Instalar
     Invoke-InstallParameter -Instalar:$Instalar -IsAdmin $isAdmin -IsInIDE $isInIDE -ScriptPath $MyInvocation.MyCommand.Path
+}
+catch {
+    Write-Host "⚠ Error procesando parámetro -Instalar: $($_.Exception.Message)" -ForegroundColor Yellow
+}
 
+try {
     # 3. Verificar parámetro -Desinstalar
     Invoke-UninstallParameter -Desinstalar:$Desinstalar -IsAdmin $isAdmin -IsInIDE $isInIDE -ScriptPath $MyInvocation.MyCommand.Path
+}
+catch {
+    Write-Host "⚠ Error procesando parámetro -Desinstalar: $($_.Exception.Message)" -ForegroundColor Yellow
+}
 
+try {
     # 4. Verificar parámetro -RobocopyMirror
     Invoke-RobocopyParameter -RobocopyMirror:$RobocopyMirror -Origen $Origen -Destino $Destino
+}
+catch {
+    Write-Host "⚠ Error procesando parámetro -RobocopyMirror: $($_.Exception.Message)" -ForegroundColor Yellow
+}
 
-    # 4. Verificar parámetro -Ejemplo (modo completamente automático)
+try {
+    # 5. Verificar parámetro -Ejemplo (modo completamente automático)
     $ejemploExecuted = Invoke-ExampleParameter -Ejemplo:$Ejemplo -TipoEjemplo $TipoEjemplo
     if ($ejemploExecuted) {
         exit
     }
+}
+catch {
+    Write-Host "⚠ Error procesando parámetro -Ejemplo: $($_.Exception.Message)" -ForegroundColor Yellow
+}
 
-    # 5. Verificar parámetro -Test (modo pruebas individuales)
+try {
     if ($Test) {
         $testExecuted = Invoke-TestParameter -Test $Test
         if ($testExecuted) {
             exit
         }
     }
+}
+catch {
+    Write-Host "⚠ Error procesando parámetro -Test: $($_.Exception.Message)" -ForegroundColor Yellow
+}
 
-    # 6. Configurar TransferConfig según parámetros o menú interactivo
-    
-    # ✅ CREAR INSTANCIA ÚNICA DE TRANSFERCONFIG AL INICIO
+try {
     $transferConfig = New-TransferConfig
+}
+catch {
+    Write-Host "✗ Error creando TransferConfig: $($_.Exception.Message)" -ForegroundColor Red
+    Write-Host "No se puede continuar sin configuración de transferencia." -ForegroundColor Yellow
+    Read-Host "Presione ENTER para salir"
+    exit 1
+}
 
-    # Detectar si hay parámetros de ejecución que configuran origen/destino
-    $hasOriginDestinationParams = ($Origen -or $Destino -or $OnedriveOrigen -or $OnedriveDestino -or $DropboxOrigen -or $DropboxDestino)
-    
-    # Variable para indicar si el origen fue predefinido (desde CMD o menú contextual)
-    $origenPredefinido = $false
+$hasOriginDestinationParams = ($Origen -or $Destino -or $OnedriveOrigen -or $OnedriveDestino -or $DropboxOrigen -or $DropboxDestino)
+$origenPredefinido = $false
 
-    # Si hay parámetros de línea de comandos, configurar TransferConfig directamente
+try {
     if ($hasOriginDestinationParams) {
-        # ===== DETECTAR Y CONFIGURAR ORIGEN =====
         if ($Origen) {
             $origenPredefinido = $true
             # Detectar tipo de origen según formato del path
@@ -725,7 +712,6 @@ La inicialización continuó, pero se detectaron advertencias.
                     $ftpPort = if ($matches[4]) { [int]$matches[4] } else { 21 }
                     $ftpDirectory = if ($matches[5]) { $matches[5] } else { "/" }
                     
-                    # ✅ ASIGNAR DIRECTAMENTE A $transferConfig
                     $transferConfig.Origen.Tipo = "FTP"
                     $transferConfig.Origen.FTP.Server = "$ftpScheme`://$ftpServer"
                     $transferConfig.Origen.FTP.Port = $ftpPort
@@ -766,9 +752,7 @@ La inicialización continuó, pero se detectaron advertencias.
             }
         }
         
-        # ===== DETECTAR Y CONFIGURAR DESTINO =====
         if ($OnedriveDestino) {
-            # OneDrive especificado por parámetro - autenticar
             $authResult = Get-OneDriveAuth
             if ($authResult) {
                 $transferConfig.Destino.Tipo = "OneDrive"
@@ -788,29 +772,24 @@ La inicialización continuó, pero se detectaron advertencias.
             }
         }
         elseif ($DropboxDestino) {
-            # Dropbox especificado por parámetro
             $transferConfig.Destino.Tipo = "Dropbox"
             $transferConfig.Destino.Dropbox.Path = if ($DropboxPath) { $DropboxPath } else { "/" }
             $transferConfig.DestinoIsSet = $true
         }
         elseif ($Destino) {
-            # Detectar tipo de destino según formato y parámetros
             if ($Iso) {
-                # ISO especificado explícitamente
                 $transferConfig.Destino.Tipo = "ISO"
                 $transferConfig.Destino.ISO.OutputPath = $Destino
                 $transferConfig.Destino.ISO.Size = $IsoDestino
                 $transferConfig.DestinoIsSet = $true
             }
             elseif ($Destino -match '^ftp(s)?://') {
-                # Es FTP - parsear URL
                 if ($Destino -match '^(ftp(s)?)://([^:/]+):?(\d+)?(/.*)?$') {
                     $ftpScheme = $matches[1]
                     $ftpServer = $matches[3]
                     $ftpPort = if ($matches[4]) { [int]$matches[4] } else { 21 }
                     $ftpDirectory = if ($matches[5]) { $matches[5] } else { "/" }
                     
-                    # ✅ ASIGNAR DIRECTAMENTE A $transferConfig
                     $transferConfig.Destino.Tipo = "FTP"
                     $transferConfig.Destino.FTP.Server = "$ftpScheme`://$ftpServer"
                     $transferConfig.Destino.FTP.Port = $ftpPort
@@ -826,47 +805,66 @@ La inicialización continuó, pero se detectaron advertencias.
                 }
             }
             elseif ($Destino -match '^\\\\') {
-                # Es UNC - ruta de red
                 $transferConfig.Destino.Tipo = "UNC"
                 $transferConfig.Destino.UNC.Path = $Destino
                 $transferConfig.DestinoIsSet = $true
             }
             elseif ($Destino -ieq "FLOPPY") {
-                # Diskette especificado
                 $transferConfig.Destino.Tipo = "Diskette"
                 $transferConfig.Destino.Diskette.OutputPath = $env:TEMP
                 $transferConfig.Destino.Diskette.MaxDisks = 30
                 $transferConfig.DestinoIsSet = $true
             }
             else {
-                # Es Local por defecto
                 $transferConfig.Destino.Tipo = "Local"
                 $transferConfig.Destino.Local.Path = $Destino
                 $transferConfig.DestinoIsSet = $true
             }
         }
         
-        # ✅ CONFIGURAR OPCIONES GENERALES
         $transferConfig.Opciones.BlockSizeMB = $BlockSizeMB
         $transferConfig.Opciones.Clave = $Clave
         $transferConfig.Opciones.UseNativeZip = $UseNativeZip
         $transferConfig.Opciones.RobocopyMirror = $RobocopyMirror
     }
-    
-    # Si SOLO se configuró el origen (desde arrastrar o menú contextual), mostrar popup y menú interactivo
+}
+catch {
+    Write-Host "⚠ Error configurando origen/destino desde parámetros: $($_.Exception.Message)" -ForegroundColor Yellow
+    Write-Host "Línea: $($_.InvocationInfo.ScriptLineNumber)" -ForegroundColor Gray
+    # Continuar, se podrá configurar desde el menú interactivo
+}
+
+try {
     if ($origenPredefinido -and -not $transferConfig.DestinoIsSet) {
-        # Mostrar popup informativo
-        Show-ConsolePopup -Title "Origen Configurado" `
-            -Message "✓ Origen: $($transferConfig.Origen.Tipo) → $(Get-TransferPath -Config $transferConfig -Section 'Origen')`n`n⚠ Falta configurar el destino`n`nSe mostrará el menú para completar la configuración." `
-            -Options @("*Continuar")
+        $origenPath = Get-TransferPath -Config $transferConfig -Section 'Origen'
         
-        # Marcar que el origen está bloqueado para el menú
-        $transferConfig.OrigenBloqueado = $true
+        if ($origenPath -and -not (Test-Path $origenPath)) {
+            # Origen no existe - mostrar error y permitir reconfigurar
+            Show-ConsolePopup -Title "Error: Origen no Encontrado" `
+                -Message "❌ Origen especificado no existe:`n`n$origenPath`n`n⚠ Se abrirá el menú para que configure origen y destino." `
+                -Options @("*Continuar")
+            
+            # Limpiar origen inválido
+            $transferConfig.OrigenIsSet = $false
+            $transferConfig.Origen.Tipo = $null
+            $origenPredefinido = $false
+            
+            # Mostrar menú normal (sin origen bloqueado)
+            $menuAction = Invoke-InteractiveMenu -TransferConfig $transferConfig -Ayuda:$Ayuda -Instalar:$Instalar -RobocopyMirror:$RobocopyMirror -Ejemplo:$Ejemplo -Origen $Origen -Destino $Destino -Iso:$Iso
+        }
+        else {
+            $origenTipoDisplay = $transferConfig.Origen.Tipo
+            $origenDisplay = if ($origenPath.Length -gt 60) { "..." + $origenPath.Substring($origenPath.Length - 60) } else { $origenPath }
+            
+            Show-ConsolePopup -Title "Origen Configurado desde Menú Contextual" `
+                -Message "✓ Origen: $origenTipoDisplay`n   $origenDisplay`n`n⚠ Configure el destino y opciones de transferencia`n`nEl origen permanecerá bloqueado en este menú." `
+                -Options @("*Continuar")
+            
+            $transferConfig.OrigenBloqueado = $true
+            
+            $menuAction = Invoke-InteractiveMenu -TransferConfig $transferConfig -Ayuda:$Ayuda -Instalar:$Instalar -RobocopyMirror:$RobocopyMirror -Ejemplo:$Ejemplo -Origen $Origen -Destino $Destino -Iso:$Iso -OrigenBloqueado
+        }
         
-        # Mostrar menú interactivo con origen bloqueado
-        $menuAction = Invoke-InteractiveMenu -TransferConfig $transferConfig -Ayuda:$Ayuda -Instalar:$Instalar -RobocopyMirror:$RobocopyMirror -Ejemplo:$Ejemplo -Origen $Origen -Destino $Destino -Iso:$Iso -OrigenBloqueado
-        
-        # Procesar acción retornada del menú
         if ($menuAction -eq "Example") {
             $exampleStartTime = Get-Date
             Invoke-NormalMode -TransferConfig $transferConfig
@@ -875,11 +873,9 @@ La inicialización continuó, pero se detectaron advertencias.
             exit
         }
     }
-    # Si NO hay parámetros de origen/destino, mostrar menú normal
     elseif (-not $hasOriginDestinationParams) {        
         $menuAction = Invoke-InteractiveMenu -TransferConfig $transferConfig -Ayuda:$Ayuda -Instalar:$Instalar -RobocopyMirror:$RobocopyMirror -Ejemplo:$Ejemplo -Origen $Origen -Destino $Destino -Iso:$Iso
         
-        # Procesar acción retornada del menú
         if ($menuAction -eq "Example") {
             $exampleStartTime = Get-Date
             Invoke-NormalMode -TransferConfig $transferConfig
@@ -888,12 +884,13 @@ La inicialización continuó, pero se detectaron advertencias.
             exit
         }
     }
+}
+catch {
+    Write-Host "⚠ Error en configuración interactiva: $($_.Exception.Message)" -ForegroundColor Yellow
+    Write-Host "Línea: $($_.InvocationInfo.ScriptLineNumber)" -ForegroundColor Gray
+}
 
-    # ========================================================================== #
-    #                     MODO NORMAL - EJECUCIÓN PRINCIPAL                      #
-    # ========================================================================== #
-
-    # Ejecutar solo si origen Y destino están configurados
+try {
     if ($transferConfig.OrigenIsSet -and $transferConfig.DestinoIsSet) {
         Invoke-NormalMode -TransferConfig $transferConfig
     }
@@ -911,24 +908,6 @@ La inicialización continuó, pero se detectaron advertencias.
         }
         Write-Host ""
     }
-
-    # ========================================================================== #
-    #                         FINALIZACIÓN Y LIMPIEZA                            #
-    # ========================================================================== #
-
-    # Registrar finalización en el log (solo si está inicializado)
-    if ($Global:LogFile) {
-        try {
-            $endTime = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-            Add-Content -Path $Global:LogFile -Value "========================================" -Encoding UTF8
-            Add-Content -Path $Global:LogFile -Value "Finalización: $endTime" -Encoding UTF8
-            Add-Content -Path $Global:LogFile -Value "========================================" -Encoding UTF8
-        }
-        catch {
-            # Si falla escribir al log, continuar sin fallar
-        }
-    }
-
 }
 catch {
     $errorTime = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
@@ -936,7 +915,7 @@ catch {
 
     $errorLog = @"
 ========================================
-ERROR CRÍTICO NO MANEJADO
+ERROR CRÍTICO EN EJECUCIÓN PRINCIPAL
 Fecha/Hora: $errorTime
 ========================================
 Mensaje: $($ex.Message)
@@ -952,24 +931,21 @@ $($_ | Out-String)
 ========================================
 "@
 
-    # Intentar escribir al log solo si está inicializado
     if ($Global:LogFile) {
         try {
             Add-Content -Path $Global:LogFile -Value $errorLog -Encoding UTF8
         }
         catch {
-            # Si falla escribir al log, continuar sin fallar
         }
     }
 
-    # Mostrar error en consola con formato visible
     try {
-        Show-Banner "❌ ERROR CRÍTICO NO MANEJADO" -BorderColor Red -TextColor White -Padding 2
+        Show-Banner "❌ ERROR CRÍTICO" -BorderColor Red -TextColor White -Padding 2
     }
     catch {
-        Write-Host "╔══════════════════════════════════════╗" -ForegroundColor Red
-        Write-Host "║    ❌ ERROR CRÍTICO NO MANEJADO      ║" -ForegroundColor Red
-        Write-Host "╚══════════════════════════════════════╝" -ForegroundColor Red
+        Write-Host "══════════════════════════════════════" -ForegroundColor Red
+        Write-Host "    ❌ ERROR CRÍTICO EN EJECUCIÓN      " -ForegroundColor Red
+        Write-Host "══════════════════════════════════════" -ForegroundColor Red
     }
 
     Write-Host ""
@@ -986,31 +962,39 @@ $($_ | Out-String)
     Write-Host "  $Global:LogFile" -ForegroundColor Gray
     Write-Host ""
 
-    # Detener transcript si está activo
     try { Stop-Transcript | Out-Null } catch { }
 
-    # Pausar para que el usuario vea el error
     Read-Host "Presione ENTER para salir"
+    exit 1
 }
-finally {
-    # Siempre ejecutar limpieza
 
-    # Detener transcript (si no se ha detenido previamente)
-    try {
-        if ($TranscriptFile) {
-            Stop-Transcript | Out-Null
-        }
+try {
+    if ($Global:LogFile) {
+        $endTime = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+        Add-Content -Path $Global:LogFile -Value "========================================" -Encoding UTF8
+        Add-Content -Path $Global:LogFile -Value "Finalización: $endTime" -Encoding UTF8
+        Add-Content -Path $Global:LogFile -Value "========================================" -Encoding UTF8
     }
-    catch {
-        # Ignorar errores al detener transcript
-    }
+}
+catch {
+}
 
-    # Mostrar ubicación de logs si el modo verbose está activo
-    if ($Verbose) {
+try {
+    if ($TranscriptFile) {
+        Stop-Transcript | Out-Null
+    }
+}
+catch {
+}
+
+try {
+    if ($Verbose -and $Global:LogFile) {
         Write-Host "`nLogs guardados en:" -ForegroundColor Cyan
         Write-Host "  - Log principal: $Global:LogFile" -ForegroundColor Gray
         if ($TranscriptFile) {
             Write-Host "  - Transcript: $TranscriptFile" -ForegroundColor Gray
         }
     }
+}
+catch {
 }

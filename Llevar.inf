@@ -34,7 +34,7 @@ HKLM,"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Llevar","DisplayVersio
 HKLM,"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Llevar","Publisher",0x00000000,"Alex-Soft"
 HKLM,"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Llevar","InstallLocation",0x00000000,"C:\Llevar"
 HKLM,"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Llevar","UninstallString",0x00020000,"C:\Llevar\DESINSTALAR.CMD"
-HKLM,"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Llevar","DisplayIcon",0x00020000,"C:\Llevar\Data\Llevar.ico,0"
+HKLM,"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Llevar","DisplayIcon",0x00020000,"C:\Llevar\Data\Llevar_AlexSoft.ico,0"
 HKLM,"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Llevar","NoModify",0x00010001,1
 HKLM,"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Llevar","NoRepair",0x00010001,1
 HKLM,"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Llevar","EstimatedSize",0x00010001,10240

@@ -444,7 +444,14 @@ function Invoke-CompressedTransfer {
                 New-Item -Type Directory $tempOrigenCloud | Out-Null
             }
             
-            Write-Host "Descargando desde OneDrive a temporal..." -ForegroundColor Cyan
+            Write-Host ""
+            Write-Host "═══════════════════════════════════════════════════════════" -ForegroundColor Cyan
+            Write-Host "   PASO 1/3: Descargando desde OneDrive" -ForegroundColor Yellow
+            Write-Host "═══════════════════════════════════════════════════════════" -ForegroundColor Cyan
+            Write-Host ""
+            Write-Host "No se puede comprimir directamente desde la nube." -ForegroundColor Yellow
+            Write-Host "Descargando contenido de la carpeta seleccionada..." -ForegroundColor Cyan
+            Write-Host ""
             
             # Crear TransferConfig temporal para descarga OneDrive → Local
             $downloadConfig = New-TransferConfig
@@ -455,8 +462,20 @@ function Invoke-CompressedTransfer {
             # Descargar usando Copy-LlevarOneDriveToLocal
             Copy-LlevarOneDriveToLocal -Llevar $downloadConfig
             
+            # Verificar archivos descargados
+            $downloadedFiles = Get-ChildItem -Path $tempOrigenCloud -Recurse -File -ErrorAction SilentlyContinue
+            $downloadedCount = if ($downloadedFiles) { @($downloadedFiles).Count } else { 0 }
+            
+            if ($downloadedCount -eq 0) {
+                throw "No se descargaron archivos desde OneDrive. Verifique la ruta seleccionada."
+            }
+            
+            $totalSizeMB = [math]::Round(($downloadedFiles | Measure-Object -Property Length -Sum).Sum / 1MB, 2)
+            
             $origenParaComprimir = $tempOrigenCloud
-            Write-Host "✓ Descarga de OneDrive completada" -ForegroundColor Green
+            Write-Host ""
+            Write-Host "✓ Descarga completada: $downloadedCount archivos ($totalSizeMB MB)" -ForegroundColor Green
+            Write-Host ""
         }
         
         "Dropbox" {
@@ -465,7 +484,14 @@ function Invoke-CompressedTransfer {
                 New-Item -Type Directory $tempOrigenCloud | Out-Null
             }
             
-            Write-Host "Descargando desde Dropbox a temporal..." -ForegroundColor Cyan
+            Write-Host ""
+            Write-Host "═══════════════════════════════════════════════════════════" -ForegroundColor Cyan
+            Write-Host "   PASO 1/3: Descargando desde Dropbox" -ForegroundColor Yellow
+            Write-Host "═══════════════════════════════════════════════════════════" -ForegroundColor Cyan
+            Write-Host ""
+            Write-Host "No se puede comprimir directamente desde la nube." -ForegroundColor Yellow
+            Write-Host "Descargando contenido de la carpeta seleccionada..." -ForegroundColor Cyan
+            Write-Host ""
             
             # Crear TransferConfig temporal para descarga Dropbox → Local
             $downloadConfig = New-TransferConfig
@@ -476,8 +502,20 @@ function Invoke-CompressedTransfer {
             # Descargar usando Copy-LlevarDropboxToLocal
             Copy-LlevarDropboxToLocal -Llevar $downloadConfig
             
+            # Verificar archivos descargados
+            $downloadedFiles = Get-ChildItem -Path $tempOrigenCloud -Recurse -File -ErrorAction SilentlyContinue
+            $downloadedCount = if ($downloadedFiles) { @($downloadedFiles).Count } else { 0 }
+            
+            if ($downloadedCount -eq 0) {
+                throw "No se descargaron archivos desde Dropbox. Verifique la ruta seleccionada."
+            }
+            
+            $totalSizeMB = [math]::Round(($downloadedFiles | Measure-Object -Property Length -Sum).Sum / 1MB, 2)
+            
             $origenParaComprimir = $tempOrigenCloud
-            Write-Host "✓ Descarga de Dropbox completada" -ForegroundColor Green
+            Write-Host ""
+            Write-Host "✓ Descarga completada: $downloadedCount archivos ($totalSizeMB MB)" -ForegroundColor Green
+            Write-Host ""
         }
         
         "FTP" {
@@ -486,7 +524,14 @@ function Invoke-CompressedTransfer {
                 New-Item -Type Directory $tempOrigenCloud | Out-Null
             }
             
-            Write-Host "Descargando desde FTP a temporal..." -ForegroundColor Cyan
+            Write-Host ""
+            Write-Host "═══════════════════════════════════════════════════════════" -ForegroundColor Cyan
+            Write-Host "   PASO 1/3: Descargando desde FTP" -ForegroundColor Yellow
+            Write-Host "═══════════════════════════════════════════════════════════" -ForegroundColor Cyan
+            Write-Host ""
+            Write-Host "No se puede comprimir directamente desde FTP." -ForegroundColor Yellow
+            Write-Host "Descargando contenido de la carpeta seleccionada..." -ForegroundColor Cyan
+            Write-Host ""
             
             # Crear TransferConfig temporal para descarga FTP → Local
             $downloadConfig = New-TransferConfig
@@ -497,8 +542,20 @@ function Invoke-CompressedTransfer {
             # Descargar usando Copy-LlevarFtpToLocal
             Copy-LlevarFtpToLocal -Llevar $downloadConfig
             
+            # Verificar archivos descargados
+            $downloadedFiles = Get-ChildItem -Path $tempOrigenCloud -Recurse -File -ErrorAction SilentlyContinue
+            $downloadedCount = if ($downloadedFiles) { @($downloadedFiles).Count } else { 0 }
+            
+            if ($downloadedCount -eq 0) {
+                throw "No se descargaron archivos desde FTP. Verifique la ruta seleccionada."
+            }
+            
+            $totalSizeMB = [math]::Round(($downloadedFiles | Measure-Object -Property Length -Sum).Sum / 1MB, 2)
+            
             $origenParaComprimir = $tempOrigenCloud
-            Write-Host "✓ Descarga de FTP completada" -ForegroundColor Green
+            Write-Host ""
+            Write-Host "✓ Descarga completada: $downloadedCount archivos ($totalSizeMB MB)" -ForegroundColor Green
+            Write-Host ""
         }
         
         "Local" { 
@@ -518,6 +575,15 @@ function Invoke-CompressedTransfer {
             }
         }
     }
+    
+    # ========================================================================
+    # PASO 2/3: COMPRIMIR ARCHIVOS
+    # ========================================================================
+    Write-Host ""
+    Write-Host "═══════════════════════════════════════════════════════════" -ForegroundColor Cyan
+    Write-Host "   PASO 2/3: Comprimiendo archivos" -ForegroundColor Yellow
+    Write-Host "═══════════════════════════════════════════════════════════" -ForegroundColor Cyan
+    Write-Host ""
     
     # Ejecutar compresión
     Write-Host "Comprimiendo archivos..." -ForegroundColor Cyan
@@ -553,7 +619,9 @@ function Invoke-CompressedTransfer {
     $blocks = $compressionResult.Files
     $compressionType = $compressionResult.CompressionType
     
-    Write-Host "✓ Compresión completada: $($blocks.Count) bloques" -ForegroundColor Green
+    Write-Host ""
+    Write-Host "✓ Compresión completada: $($blocks.Count) bloques generados" -ForegroundColor Green
+    Write-Host ""
     
     # Generar script instalador
     Write-Host "Generando instalador..." -ForegroundColor Cyan
@@ -568,6 +636,15 @@ function Invoke-CompressedTransfer {
     $sevenZipPath = Get-TransferConfigValue -Config $TransferConfig -Path "Interno.SevenZipPath"
     $tempDir = Get-TransferConfigValue -Config $TransferConfig -Path "Interno.TempDir"
     
+    # ========================================================================
+    # PASO 3/3: TRANSFERIR AL DESTINO
+    # ========================================================================
+    Write-Host ""
+    Write-Host "═══════════════════════════════════════════════════════════" -ForegroundColor Cyan
+    Write-Host "   PASO 3/3: Transfiriendo al destino" -ForegroundColor Yellow
+    Write-Host "═══════════════════════════════════════════════════════════" -ForegroundColor Cyan
+    Write-Host ""
+    
     switch ($destinoTipo) {
         "OneDrive" {
             Write-Host "Subiendo bloques a OneDrive..." -ForegroundColor Cyan
@@ -581,9 +658,9 @@ function Invoke-CompressedTransfer {
                 throw "No se encontró OneDriveTransfer.psm1 en: $onedriveTransferPath"
             }
             
-            $archivosParaSubir = $blocks + @($installerScript)
+            $archivosParaSubir = @($blocks) + @($installerScript)
             if ($sevenZipPath -ne "NATIVE_ZIP") {
-                $archivosParaSubir += $sevenZipPath
+                $archivosParaSubir += @($sevenZipPath)
             }
             
             $onedrivePathValue = Get-TransferConfigValue -Config $TransferConfig -Path "Destino.OneDrive.Path"
@@ -595,18 +672,27 @@ function Invoke-CompressedTransfer {
                 Send-LlevarOneDriveFile -Llevar $TransferConfig -LocalPath $archivo -RemotePath $onedrivePathValue
             }
             
+            Write-Host ""
             Write-Host "✓ Todos los bloques subidos a OneDrive" -ForegroundColor Green
-            Show-Banner "TRANSFERENCIA COMPLETADA" -BorderColor Green -TextColor Yellow
-            Write-Host "Los archivos están en OneDrive: $onedrivePathValue" -ForegroundColor Cyan
-            Write-Host "Descarga los bloques .7z.* y ejecuta INSTALAR.ps1" -ForegroundColor Yellow
+            Write-Host ""
+            Write-Host "═══════════════════════════════════════════════════════════" -ForegroundColor Green
+            Write-Host "   ✓ TRANSFERENCIA COMPLETADA" -ForegroundColor Yellow
+            Write-Host "═══════════════════════════════════════════════════════════" -ForegroundColor Green
+            Write-Host "  Ubicación: OneDrive:$onedrivePathValue" -ForegroundColor Cyan
+            Write-Host "  Bloques: $($blocks.Count)" -ForegroundColor Cyan
+            Write-Host "  Instalador: INSTALAR.ps1" -ForegroundColor Cyan
+            Write-Host "═══════════════════════════════════════════════════════════" -ForegroundColor Green
+            Write-Host ""
+            Write-Host "Para restaurar: descarga los archivos y ejecuta INSTALAR.ps1" -ForegroundColor Yellow
+            Write-Host ""
         }
         
         "Dropbox" {
             Write-Host "Subiendo bloques a Dropbox..." -ForegroundColor Cyan
             
-            $archivosParaSubir = $blocks + @($installerScript)
+            $archivosParaSubir = @($blocks) + @($installerScript)
             if ($sevenZipPath -ne "NATIVE_ZIP") {
-                $archivosParaSubir += $sevenZipPath
+                $archivosParaSubir += @($sevenZipPath)
             }
             
             $dropboxPathValue = Get-TransferConfigValue -Config $TransferConfig -Path "Destino.Dropbox.Path"
@@ -618,10 +704,19 @@ function Invoke-CompressedTransfer {
                 Send-LlevarDropboxFile -Llevar $TransferConfig -LocalPath $archivo -RemotePath $dropboxPathValue
             }
             
+            Write-Host ""
             Write-Host "✓ Todos los bloques subidos a Dropbox" -ForegroundColor Green
-            Show-Banner "TRANSFERENCIA COMPLETADA" -BorderColor Green -TextColor Yellow
-            Write-Host "Los archivos están en Dropbox: $dropboxPathValue" -ForegroundColor Cyan
-            Write-Host "Descarga los bloques .7z.* y ejecuta INSTALAR.ps1" -ForegroundColor Yellow
+            Write-Host ""
+            Write-Host "═══════════════════════════════════════════════════════════" -ForegroundColor Green
+            Write-Host "   ✓ TRANSFERENCIA COMPLETADA" -ForegroundColor Yellow
+            Write-Host "═══════════════════════════════════════════════════════════" -ForegroundColor Green
+            Write-Host "  Ubicación: Dropbox:$dropboxPathValue" -ForegroundColor Cyan
+            Write-Host "  Bloques: $($blocks.Count)" -ForegroundColor Cyan
+            Write-Host "  Instalador: INSTALAR.ps1" -ForegroundColor Cyan
+            Write-Host "═══════════════════════════════════════════════════════════" -ForegroundColor Green
+            Write-Host ""
+            Write-Host "Para restaurar: descarga los archivos y ejecuta INSTALAR.ps1" -ForegroundColor Yellow
+            Write-Host ""
         }
         
         "Local" {
@@ -634,9 +729,9 @@ function Invoke-CompressedTransfer {
             
             Write-Host "Copiando bloques a: $destinoPath" -ForegroundColor Cyan
             
-            $archivosParaCopiar = $blocks + @($installerScript)
+            $archivosParaCopiar = @($blocks) + @($installerScript)
             if ($sevenZipPath -ne "NATIVE_ZIP" -and (Test-Path $sevenZipPath)) {
-                $archivosParaCopiar += $sevenZipPath
+                $archivosParaCopiar += @($sevenZipPath)
             }
             
             foreach ($archivo in $archivosParaCopiar) {
@@ -645,10 +740,19 @@ function Invoke-CompressedTransfer {
                 Copy-Item -Path $archivo -Destination (Join-Path $destinoPath $nombreArchivo) -Force
             }
             
+            Write-Host ""
             Write-Host "✓ Todos los bloques copiados" -ForegroundColor Green
-            Show-Banner "TRANSFERENCIA COMPLETADA" -BorderColor Green -TextColor Green
-            Write-Host "Archivos en: $destinoPath" -ForegroundColor Cyan
-            Write-Host "Para restaurar: ejecuta INSTALAR.ps1" -ForegroundColor Yellow
+            Write-Host ""
+            Write-Host "═══════════════════════════════════════════════════════════" -ForegroundColor Green
+            Write-Host "   ✓ TRANSFERENCIA COMPLETADA" -ForegroundColor Yellow
+            Write-Host "═══════════════════════════════════════════════════════════" -ForegroundColor Green
+            Write-Host "  Ubicación: $destinoPath" -ForegroundColor Cyan
+            Write-Host "  Bloques: $($blocks.Count)" -ForegroundColor Cyan
+            Write-Host "  Instalador: INSTALAR.ps1" -ForegroundColor Cyan
+            Write-Host "═══════════════════════════════════════════════════════════" -ForegroundColor Green
+            Write-Host ""
+            Write-Host "Para restaurar: ejecuta INSTALAR.ps1 desde $destinoPath" -ForegroundColor Yellow
+            Write-Host ""
         }
         
         "USB" {
@@ -657,9 +761,9 @@ function Invoke-CompressedTransfer {
             # TODO: Implementar lógica de detección de USB y copia multi-dispositivo
             $destinoPath = Get-TransferConfigValue -Config $TransferConfig -Path "Destino.USB.Path"
             
-            $archivosParaCopiar = $blocks + @($installerScript)
+            $archivosParaCopiar = @($blocks) + @($installerScript)
             if ($sevenZipPath -ne "NATIVE_ZIP" -and (Test-Path $sevenZipPath)) {
-                $archivosParaCopiar += $sevenZipPath
+                $archivosParaCopiar += @($sevenZipPath)
             }
             
             foreach ($archivo in $archivosParaCopiar) {
@@ -727,9 +831,9 @@ function Invoke-CompressedTransfer {
             Write-Host "Copiando bloques a destino: $destino" -ForegroundColor Cyan
                 
             # Copiar bloques, script instalador y 7z.exe si aplica
-            $archivosParaCopiar = $blocks + @($installerScript)
+            $archivosParaCopiar = @($blocks) + @($installerScript)
             if ($TransferConfig.Interno.SevenZipPath -ne "NATIVE_ZIP" -and (Test-Path $TransferConfig.Interno.SevenZipPath)) {
-                $archivosParaCopiar += $TransferConfig.Interno.SevenZipPath
+                $archivosParaCopiar += @($TransferConfig.Interno.SevenZipPath)
             }
                 
             # TODO: Usar Copy-LlevarFiles o función específica según destino
