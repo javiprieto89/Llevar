@@ -1,25 +1,57 @@
-# Implementación de Requisito de PowerShell 7
+# Requisito de PowerShell 7 y Detección Automática
 
-## Resumen de Cambios
+## Resumen
 
-Se ha implementado la verificación obligatoria de PowerShell 7+ con capacidad de instalación automática.
+Llevar requiere PowerShell 7 o superior. Si no está instalado, INSTALAR.CMD puede instalarlo automáticamente.
 
-## Archivos Creados
+## Detección de PowerShell 7
 
-### 1. `Modules/System/PowerShellVersion.psm1`
-Nuevo módulo dedicado a gestionar la versión de PowerShell:
+### INSTALAR.CMD y LLEVAR.CMD
+**Método de detección:**
+```batch
+# Usa PowerShell 5 para detectar pwsh.exe
+for /f "delims=" %%i in ('powershell -NoProfile -Command "(Get-Command pwsh -ErrorAction SilentlyContinue).Source"') do set "PWSH_EXE=%%i"
 
-**Funciones principales:**
-- `Test-PowerShell7Available` - Verifica si PowerShell 7 está instalado
-- `Test-IsPowerShell7` - Verifica si se está ejecutando en PowerShell 7+
-- `Show-PowerShell7RequiredDialog` - Muestra diálogo de error si no se cumple el requisito
-- `Install-PowerShell7` - Ofrece instalar PowerShell 7 automáticamente
-- `Assert-PowerShell7` - Función principal que orquesta todo el proceso
+# Fallback: búsqueda en ubicaciones comunes
+- PATH (using where pwsh.exe)
+- %ProgramFiles%\PowerShell\*
+- %LocalAppData%\Microsoft\WindowsApps\pwsh.exe
+```
 
-**Métodos de instalación soportados:**
-1. **winget** - Instalación automática (preferido)
-2. **Descarga directa** - Descarga e instala el MSI automáticamente
-3. **Navegador web** - Abre la página de descarga oficial
+**Ventajas:**
+- ✅ Detecta cualquier versión de PowerShell 7+ (7.0, 7.2, 7.4, 7.5, 8.0, etc.)
+- ✅ Encuentra instalaciones de Microsoft Store, Winget, MSI
+- ✅ No depende de rutas hardcodeadas con números de versión
+
+## Instalación Automática de PowerShell 7
+
+### INSTALAR.CMD - Instalación Asistida
+
+Cuando no encuentra PowerShell 7, muestra menú interactivo:
+
+```
+PowerShell 7 o superior no encontrado
+
+Opciones:
+  [1] Descargar e instalar PowerShell 7 automáticamente (Recomendado)
+  [2] Abrir página de descarga manual
+  [3] Cancelar instalación
+```
+
+**Opción 1: Instalación automática**
+1. Descarga PowerShell 7.4.6 MSI desde GitHub oficial
+2. Instala silenciosamente con opciones:
+   - ADD_EXPLORER_CONTEXT_MENU_OPENPOWERSHELL=1
+   - ADD_FILE_CONTEXT_MENU_RUNPOWERSHELL=1
+   - REGISTER_MANIFEST=1
+3. Detecta la nueva instalación automáticamente
+4. Continúa con la instalación de Llevar
+
+**Ventajas:**
+- ✅ Instalación completamente automática
+- ✅ No requiere interacción del usuario (después de elegir opción 1)
+- ✅ Descarga versión oficial desde GitHub
+- ✅ Configura PowerShell 7 correctamente en el sistema
 
 ### 2. `Scripts/Test-PowerShellVersion.ps1`
 Script de prueba para validar el módulo PowerShellVersion.

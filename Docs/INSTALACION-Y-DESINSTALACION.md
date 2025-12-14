@@ -12,6 +12,10 @@ INSTALAR.CMD
 Este script:
 - Eleva automáticamente a permisos de administrador
 - Verifica PowerShell 7+ (requerido)
+- **NUEVO:** Si no encuentra PowerShell 7, ofrece instalarlo automáticamente:
+  - [1] Descargar e instalar automáticamente (descarga PowerShell 7.4.6 MSI)
+  - [2] Abrir página de descarga manual
+  - [3] Cancelar instalación
 - Configura ExecutionPolicy si es necesario
 - Ejecuta la instalación completa
 
@@ -19,6 +23,8 @@ Este script:
 ```powershell
 pwsh.exe -ExecutionPolicy Bypass -File Llevar.ps1 -Instalar
 ```
+
+⚠️ **Nota:** Si no tienes PowerShell 7 instalado, usa INSTALAR.CMD que puede instalarlo automáticamente.
 
 ## ¿Qué hace la instalación?
 
@@ -37,14 +43,19 @@ La instalación realiza las siguientes acciones:
    - Crea acceso directo en el escritorio
 
 3. **Instala menú contextual**
-   - Click derecho en carpetas → "Llevar A..."
+   - Click derecho en carpetas → "Llevar A..." (con icono personalizado)
+   - Click derecho en archivos → "Llevar A..." (con timeout de 10s)
    - Click derecho en unidades → "Llevar A..."
+   - Usa LLEVAR.CMD para verificar PowerShell 7 antes de ejecutar
+   - Mantiene ventana abierta con -NoExit para interacción
 
 4. **Registra en Panel de Control**
-   - Aparece en "Agregar o quitar programas"
-   - Nombre: Llevar
+   - Aparece en "Configuración → Aplicaciones → Aplicaciones instaladas"
+   - Nombre: "Llevar - Sistema de Transferencia de Archivos"
    - Propietario: AlexSoft
-   - Con opción de desinstalación
+   - Icono personalizado: Data\Llevar_AlexSoft.ico
+   - Versión detectada desde Data\.version
+   - Con opción de desinstalación completa
 
 ## Desinstalación
 

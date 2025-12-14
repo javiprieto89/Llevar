@@ -2,23 +2,26 @@
 
 ## Problemas Resueltos
 
-### 1. ❌ Problema: Abría PowerShell 5 en lugar de PowerShell 7
-**Solución:** LLEVAR.CMD y INSTALAR.CMD verifican y requieren PowerShell 7+ antes de ejecutar
+### 1. ✅ Problema: Abría PowerShell 5 en lugar de PowerShell 7
+**Solución:** LLEVAR.CMD usa `(Get-Command pwsh).Source` para detectar correctamente. Si no encuentra PowerShell 7, INSTALAR.CMD ofrece instalarlo automáticamente.
 
-### 2. ❌ Problema: No mostraba el icono en el menú contextual
-**Solución:** Se corrigió la configuración del registro para usar comillas correctas alrededor de la ruta del icono
+### 2. ✅ Problema: Instalación se colgaba al configurar menú para archivos
+**Solución:** Configuración de menú para archivos ahora usa un Job con timeout de 10 segundos. Si tarda más, continúa sin error.
 
-### 3. ❌ Problema: Requería ExecutionPolicy configurado manualmente
-**Solución:** LLEVAR.CMD e INSTALAR.CMD detectan y habilitan ExecutionPolicy automáticamente si es necesario
+### 3. ✅ Problema: Ventana se cerraba inmediatamente al usar menú contextual
+**Solución:** LLEVAR.CMD detecta si se ejecuta con parámetros (desde menú contextual) y usa `-NoExit` para mantener la ventana abierta durante la interacción.
 
-### 4. ❌ Problema: Instalación fallaba sin ExecutionPolicy configurado
-**Solución:** Nuevo INSTALAR.CMD que no requiere scripts habilitados previamente, habilita automáticamente
+### 4. ✅ Problema: No mostraba el icono en el menú contextual ni en Panel de Control
+**Solución:** Corregido el registro del icono sin comillas dobles extras. Busca Data\Llevar_AlexSoft.ico y fallback a alternativas.
 
-### 5. ❌ Problema: El acceso directo del escritorio apuntaba a Llevar.ps1
+### 5. ✅ Problema: Instalación sin PowerShell 7 fallaba silenciosamente
+**Solución:** INSTALAR.CMD detecta si falta PowerShell 7 y ofrece 3 opciones: instalación automática, descarga manual, o cancelar.
+
+### 6. ✅ Problema: El acceso directo del escritorio apuntaba a Llevar.ps1
 **Solución:** Ahora apunta a LLEVAR.CMD, permitiendo arrastrar carpetas/archivos directamente al icono
 
-### 6. ❌ Problema: Requería interacción del usuario para permisos
-**Solución:** LLEVAR.CMD, INSTALAR.CMD y Llevar.ps1 elevan automáticamente sin pedir confirmación (solo UAC del sistema)
+### 7. ✅ Problema: Requería ExecutionPolicy configurado manualmente
+**Solución:** LLEVAR.CMD e INSTALAR.CMD detectan y habilitan ExecutionPolicy automáticamente si es necesario (silenciosamente)
 
 ## Archivos Nuevos y Modificados
 
