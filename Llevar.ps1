@@ -95,7 +95,7 @@
     - Ubicación: %TEMP%\LLEVAR_ERROR.log (origen) y %TEMP%\INSTALAR_ERROR.log (destino)
 
 .NOTES
-    Autor: Basado en LLEVAR.BAT de Alex Soft
+    Autor: Basado en LLEVAR.BAT de Alex Soft propiedad de Alejandro Nacir
     Versión PowerShell modernizada con soporte ZIP nativo
 #>
 
@@ -207,43 +207,7 @@ Write-InitLogSafe $initLog
 
 try {
     # Configurar preferencias de error para capturar todo
-    $ErrorActionPreference = 'Continue'
-
-    # ========================================================================== #
-    #                   CARGAR CLASE TRANSFERCONFIG (ANTES DE MÓDULOS)           #
-    # ========================================================================== #
-    
-    # PowerShell NO exporta clases desde .psm1 con Import-Module
-    # Solución: cargar el archivo TransferConfig.Type.ps1 antes que el resto para exponer el tipo
-    $ModulesPath = Join-Path $PSScriptRoot "Modules"
-    # $ModulesPath = Split-Path $PSScriptRoot -Parent
-
-    $transferConfigType = Join-Path $ModulesPath "Core\TransferConfig.Type.ps1"
-    $transferConfigModule = Join-Path $ModulesPath "Core\TransferConfig.psm1"
-
-    # 1️⃣ Verificar que el archivo exista
-    if (-not (Test-Path -LiteralPath $transferConfigType -PathType Leaf)) {
-        throw "ERROR CRÍTICO: No se encontró TransferConfig.Type.ps1 en $transferConfigType"
-    }
-
-    # 2️⃣ Cargar la clase EN SCOPE GLOBAL (OBLIGATORIO para que esté disponible en módulos)
-    $global:__transferConfigTypeScript = $transferConfigType
-    Invoke-Expression ". `$global:__transferConfigTypeScript"
-
-    # 3️⃣ Verificar que la clase TransferConfig esté disponible
-    $transferConfigClass = $null
-    try {
-        $transferConfigClass = [TransferConfig] -as [type]
-    }
-    catch {
-        $transferConfigClass = $null
-    }
-
-    if (-not $transferConfigClass) {
-        throw "ERROR CRÍTICO: La clase TransferConfig no está disponible luego de cargar $transferConfigType"
-    }
-
-    # ========================================================================== #
+    $ErrorActionPreference = 'Continue'    # ========================================================================== #
     #                        IMPORTAR TODOS LOS MÓDULOS                          #
     # ========================================================================== #
 
@@ -253,7 +217,7 @@ try {
     $importErrors = @()
 
     # Módulos Core
-    Import-Module $transferConfigModule -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
+    Import-Module (Join-Path $ModulesPath "Core\TransferConfig.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
     Import-Module (Join-Path $ModulesPath "Core\Validation.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
     Import-Module (Join-Path $ModulesPath "Core\Logger.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
     
@@ -309,47 +273,74 @@ try {
     Import-Module (Join-Path $ModulesPath "Parameters\InstallationCheck.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
     Import-Module (Join-Path $ModulesPath "Parameters\NormalMode.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
     
-    # Registrar warnings y errores de importacion en el log (sin mostrar en consola todavía)
-    if ($importWarnings -and $importWarnings.Count -gt 0) {
-        $warningLog = "`n[WARNINGS DURANTE IMPORTACION DE MODULOS]`n"
-        foreach ($warning in $importWarnings) {
-            $warningLog += "  - $warning`n"
-        }
-        Write-InitLogSafe $warningLog
-    }
+    # ========================================================================== #
+    #          VERIFICAR QUE LA CLASE TRANSFERCONFIG ESTÉ DISPONIBLE             #
+    # ========================================================================== #
     
-    if ($importErrors -and $importErrors.Count -gt 0) {
-        $errorLog = "`n[ERRORES DURANTE IMPORTACION DE MODULOS]`n"
-        foreach ($err in $importErrors) {
-            $errorLog += "  - $($err.Exception.Message)`n"
-        }
-        Write-InitLogSafe $errorLog
+    # Verificar que TransferConfig.psm1 haya cargado correctamente la clase
+    try {
+        $transferConfigType = [System.Management.Automation.PSTypeName]'TransferConfig'
+        $typeExists = $null -ne $transferConfigType.Type 
+    }
+    catch {
+        $typeExists = $false
     }
 
-    # Verificar que la clase TransferConfig esté disponible (si el módulo falló no existirá)
-    #$transferConfigType = "TransferConfig" -as [type]
-    if (-not $transferConfigType) {
-        $typeErrorLog = "`n[ERROR CRITICO] No se pudo cargar la clase TransferConfig desde $transferConfigType.`n"
+    if (-not $typeExists) {
+        # Registrar error crítico con detalles de importación
+        $typeErrorLog = "`n[ERROR CRÍTICO] La clase TransferConfig no se cargó correctamente desde el módulo Core\TransferConfig.psm1`n"
 
         if ($importErrors -and $importErrors.Count -gt 0) {
-            $typeErrorLog += "Detalles de errores de importacion:`n"
+            $typeErrorLog += "`nErrores durante importación de módulos ($($importErrors.Count)):`n"
             foreach ($err in $importErrors) {
                 $typeErrorLog += "  - $($err.Exception.Message)`n"
             }
         }
-        elseif ($importWarnings -and $importWarnings.Count -gt 0) {
-            $typeErrorLog += "Se detectaron advertencias durante la importacion que podrían haber evitado la carga del tipo:`n"
+        
+        if ($importWarnings -and $importWarnings.Count -gt 0) {
+            $typeErrorLog += "`nAdvertencias durante importación ($($importWarnings.Count)):`n"
             foreach ($warning in $importWarnings) {
                 $typeErrorLog += "  - $warning`n"
             }
         }
-        else {
-            $typeErrorLog += "No se registraron errores ni advertencias, verificar TransferConfig.Type.ps1 manualmente." + "`n"
+        
+        if (-not $importErrors -and -not $importWarnings) {
+            $typeErrorLog += "`nNo se registraron errores ni advertencias explícitos durante la importación.`n"
+            $typeErrorLog += "Posibles causas:`n"
+            $typeErrorLog += "  - Error de sintaxis en TransferConfig.Type.ps1`n"
+            $typeErrorLog += "  - Conflicto con otro módulo que define la misma clase`n"
+            $typeErrorLog += "  - Problema de permisos al leer TransferConfig.Type.ps1`n"
+            $typeErrorLog += "  - El módulo TransferConfig.psm1 no está dot-sourcing TransferConfig.Type.ps1 correctamente`n"
         }
 
         Write-InitLogSafe $typeErrorLog
-        throw "ERROR CRITICO: La clase TransferConfig no está disponible. Revisa el log para más detalles."
+        throw "ERROR CRÍTICO: La clase TransferConfig no está disponible. Revisa el log en: $Global:LogFile"
     }
+    else {
+        # Si la clase se cargó correctamente PERO hay warnings/errors de importación, registrarlos igualmente
+        if (($importWarnings -and $importWarnings.Count -gt 0) -or ($importErrors -and $importErrors.Count -gt 0)) {
+            $importLog = "`n[ADVERTENCIAS/ERRORES DURANTE IMPORTACIÓN DE MÓDULOS]`n"
+            
+            if ($importErrors -and $importErrors.Count -gt 0) {
+                $importLog += "`nErrores ($($importErrors.Count)):`n"
+                foreach ($err in $importErrors) {
+                    $importLog += "  - $($err.Exception.Message)`n"
+                }
+            }
+            
+            if ($importWarnings -and $importWarnings.Count -gt 0) {
+                $importLog += "`nAdvertencias ($($importWarnings.Count)):`n"
+                foreach ($warning in $importWarnings) {
+                    $importLog += "  - $warning`n"
+                }
+            }
+            
+            Write-InitLogSafe $importLog
+        }
+    }
+    
+    # Limpiar variable temporal (ya no se necesita)
+    Remove-Variable -Name transferConfigType -ErrorAction SilentlyContinue
     
     # Restaurar preferencias de error y warning después de la importación
     # para que el resto del script funcione normalmente

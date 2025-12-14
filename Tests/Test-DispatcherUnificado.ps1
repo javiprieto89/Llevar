@@ -5,22 +5,23 @@
 # Propósito: Validar que el dispatcher detecta y ejecuta todas las rutas
 # ========================================================================== #
 
-using module "Q:\Utilidad\LLevar\Modules\Core\TransferConfig.psm1"
-
 Write-Host "════════════════════════════════════════════════════════════" -ForegroundColor Cyan
 Write-Host "    PRUEBA INTEGRAL - DISPATCHER UNIFICADO" -ForegroundColor Yellow
 Write-Host "════════════════════════════════════════════════════════════" -ForegroundColor Cyan
 Write-Host ""
 
-# Importar módulos con rutas absolutas
-$ModulesPath = "Q:\Utilidad\LLevar\Modules"
+
+$RootPath    = Split-Path $PSScriptRoot -Parent
+$ModulesPath = Join-Path $RootPath "Modules"
+
+Import-Module (Join-Path $ModulesPath "Core\TransferConfig.psm1") -Force -ErrorAction Stop
 Import-Module (Join-Path $ModulesPath "Core\Logging.psm1") -Force -Global
 Import-Module (Join-Path $ModulesPath "UI\ProgressBar.psm1") -Force -Global
 Import-Module (Join-Path $ModulesPath "Transfer\Local.psm1") -Force -Global
 Import-Module (Join-Path $ModulesPath "Transfer\Unified.psm1") -Force -Global
 
 # Inicializar logging
-$Global:ScriptDir = "Q:\Utilidad\LLevar"
+$Global:ScriptDir = $PSScriptRoot
 $Global:LogsDir = Join-Path $Global:ScriptDir "Logs"
 if (-not (Test-Path $Global:LogsDir)) {
     New-Item -Path $Global:LogsDir -ItemType Directory -Force | Out-Null

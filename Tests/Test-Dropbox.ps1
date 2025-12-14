@@ -24,7 +24,7 @@ param(
 )
 
 # Importar módulos de Llevar para tests
-. (Join-Path $PSScriptRoot "Import-LlevarModules.ps1")
+. (Join-Path (Split-Path $PSScriptRoot -Parent) "Import-LlevarModules.ps1")
 
 Show-Banner "TESTS DE DROPBOX" -BorderColor Cyan -TextColor Yellow
 

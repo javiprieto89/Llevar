@@ -5,6 +5,28 @@
 # El tipo TransferConfig se define en Core\TransferConfig.Type.ps1 y debe cargarse
 # antes de importar este módulo (Llevar.ps1 ya lo hace).
 # ========================================================================== #
+
+
+# ========================================================================== #
+#            CARGAR LA CLASE TRANSFERCONFIG (AUTO-CONTENIDO)                 #
+# ========================================================================== #
+
+# Verificar si la clase ya está cargada (evitar recargas innecesarias)
+if (-not ([System.Management.Automation.PSTypeName]'TransferConfig').Type) {
+    # Cargar la definición de clase desde el archivo .Type.ps1
+    $typeScript = Join-Path $PSScriptRoot "TransferConfig.Type.ps1"
+    
+    if (-not (Test-Path $typeScript)) {
+        throw "No se encontró la definición de clase TransferConfig: $typeScript"
+    }
+    
+    # Dot-source la clase en el scope del módulo
+    . $typeScript
+    
+    Write-Verbose "Clase TransferConfig cargada desde: $typeScript"
+}
+
+
 # ========================================================================== #
 #                         FUNCIONES HELPER                                   #
 # ========================================================================== #
@@ -1098,13 +1120,3 @@ Export-ModuleMember -Function @(
     'New-ConfigNode'
 )
 
-# ========================================================================== #
-# HACER LA CLASE DISPONIBLE GLOBALMENTE (sin usar "using module")
-# ========================================================================== #
-
-# PowerShell requiere que las clases se definan en el scope global/script
-# para que estén disponibles fuera del módulo sin "using module"
-# Estrategia: Usar New-Module con -AsCustomObject para mantener la clase disponible
-
-# Nada que hacer aquí - la clase ya está definida en el scope del módulo
-# y será accesible cuando se importe con -Global

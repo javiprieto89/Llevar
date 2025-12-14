@@ -15,7 +15,7 @@ param(
 )
 
 # Importar todos los módulos de Llevar
-. (Join-Path $PSScriptRoot "Import-LlevarModules.ps1")
+. (Join-Path (Split-Path $PSScriptRoot -Parent) "Import-LlevarModules.ps1")
 
 Show-Banner "TEST: Local → FTP" -BorderColor Cyan -TextColor Yellow
 
