@@ -11,8 +11,13 @@
 
 # Imports necesarios
 $ModulesPath = Split-Path $PSScriptRoot -Parent
-if (-not (Get-Module -Name 'TransferConfig')) {
+if (-not (Get-Command New-TransferConfig -ErrorAction SilentlyContinue)) {
     Import-Module (Join-Path $ModulesPath "Core\TransferConfig.psm1") -Force -Global
+    
+    # Verificar que la importación funcionó
+    if (-not (Get-Command New-TransferConfig -ErrorAction SilentlyContinue)) {
+        throw "ERROR: No se pudo cargar TransferConfig.psm1 - La función New-TransferConfig no está disponible"
+    }
 }
 Import-Module (Join-Path $ModulesPath "UI\Banners.psm1") -Force -Global
 Import-Module (Join-Path $ModulesPath "UI\Navigator.psm1") -Force -Global
@@ -24,7 +29,7 @@ Import-Module (Join-Path $ModulesPath "Compression\BlockSplitter.psm1") -Force -
 Import-Module (Join-Path $ModulesPath "System\Robocopy.psm1") -Force -Global
 Import-Module (Join-Path $ModulesPath "Transfer\UNC.psm1") -Force -Global
 Import-Module (Join-Path $ModulesPath "Utilities\VolumeManagement.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "Installation\ISO.psm1") -Force -Global
+Import-Module (Join-Path $ModulesPath "System\ISO.psm1") -Force -Global
 Import-Module (Join-Path $ModulesPath "Core\Logger.psm1") -Force -Global
 Import-Module (Join-Path $ModulesPath "UI\Menus.psm1") -Force -Global
 
@@ -206,7 +211,7 @@ function Test-FTPComponent {
     Write-Host ""
     
     # ✅ CREAR INSTANCIA DE TRANSFERCONFIG PARA PRUEBA
-    $llevar = [TransferConfig]::new()
+    $llevar = New-TransferConfig
     
     # ✅ LLAMADA CORRECTA: PASA $llevar y "Destino"
     $success = Get-FtpConfigFromUser -Llevar $llevar -Cual "Destino"
@@ -243,7 +248,7 @@ function Test-OneDriveComponent {
     Write-Host ""
     
     # ✅ CREAR INSTANCIA DE TRANSFERCONFIG PARA PRUEBA
-    $llevar = [TransferConfig]::new()
+    $llevar = New-TransferConfig
     
     # ✅ LLAMADA CORRECTA: PASA $llevar y "Origen"
     $success = Get-OneDriveConfigFromUser -Llevar $llevar -Cual "Origen"
@@ -279,7 +284,7 @@ function Test-DropboxComponent {
     Write-Host ""
     
     # ✅ CREAR INSTANCIA DE TRANSFERCONFIG PARA PRUEBA
-    $llevar = [TransferConfig]::new()
+    $llevar = New-TransferConfig
     
     # ✅ LLAMADA CORRECTA: PASA $llevar y "Destino"
     $success = Get-DropboxConfigFromUser -Llevar $llevar -Cual "Destino"

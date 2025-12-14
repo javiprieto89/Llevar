@@ -36,8 +36,17 @@ function Write-LlevarProgressBar {
         [int]$Left = 0,
         [string]$Label = "",
         [ConsoleColor]$OverlayTextColor = [ConsoleColor]::Yellow,    
-        [ConsoleColor]$OverlayBackgroundColor = [ConsoleColor]::DarkBlue
+        [ConsoleColor]$OverlayBackgroundColor = [ConsoleColor]::DarkBlue,
+        [switch]$CheckCancellation
     )
+    
+    # Verificar cancelación con ESC
+    if ($CheckCancellation -and [Console]::KeyAvailable) {
+        $key = [Console]::ReadKey($true)
+        if ($key.Key -eq 'Escape') {
+            throw "Operación cancelada por el usuario (ESC)"
+        }
+    }
 
     if ($Percent -lt 0) { $Percent = 0 }
     if ($Percent -gt 100) { $Percent = 100 }
@@ -311,10 +320,55 @@ function Update-Spinner {
     }
 }
 
+function Write-LlevarSpinner {
+    <#
+    .SYNOPSIS
+        Muestra un spinner animado para operaciones sin progreso calculable
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [datetime]$StartTime,
+        [string]$Label = "Procesando",
+        [int]$Top = -1,
+        [int]$Left = 0,
+        [switch]$CheckCancellation
+    )
+    
+    # Verificar cancelación con ESC
+    if ($CheckCancellation -and [Console]::KeyAvailable) {
+        $key = [Console]::ReadKey($true)
+        if ($key.Key -eq 'Escape') {
+            throw "Operación cancelada por el usuario (ESC)"
+        }
+    }
+    
+    $spinnerChars = @('⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏')
+    $elapsed = (Get-Date) - $StartTime
+    $index = [int]($elapsed.TotalSeconds * 10) % $spinnerChars.Count
+    $spinnerChar = $spinnerChars[$index]
+    
+    # Formatear tiempo transcurrido
+    $elapsedStr = Format-LlevarTime -Seconds ([int]$elapsed.TotalSeconds)
+    
+    $line = "  $spinnerChar  $Label... [$elapsedStr]"
+    
+    try {
+        if ($Top -ge 0) {
+            [Console]::SetCursorPosition($Left, $Top)
+        }
+        Write-Host $line -ForegroundColor Cyan -NoNewline
+        Write-Host (" " * 20) -NoNewline  # Limpiar caracteres sobrantes
+    }
+    catch {
+        # Ignorar errores de posicionamiento
+    }
+}
+
 # Exportar funciones
 Export-ModuleMember -Function @(
     'Format-LlevarTime',
     'Write-LlevarProgressBar',
     'Show-CalculatingSpinner',
-    'Update-Spinner'
+    'Update-Spinner',
+    'Write-LlevarSpinner'
 )

@@ -15,10 +15,6 @@
 
 # Importar dependencias adicionales
 $ModulesPath = Split-Path $PSScriptRoot -Parent
-#$ModulesPath = Join-Path $PSScriptRoot "Modules"
-if (-not (Get-Module -Name 'TransferConfig')) {
-    Import-Module (Join-Path $ModulesPath "Core\TransferConfig.psm1") -Force -Global
-}
 Import-Module (Join-Path $ModulesPath "Utilities\PathSelectors.psm1") -Force -Global
 Import-Module (Join-Path $ModulesPath "Transfer\Unified.psm1") -Force -Global
 
@@ -64,7 +60,7 @@ function Invoke-NormalMode {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory = $true)]
-        [TransferConfig]$TransferConfig
+        $TransferConfig
     )
     
     try {
@@ -314,7 +310,7 @@ function Initialize-TransferPaths {
         - Guarda todo en $TransferConfig.Interno
     #>
     param(
-        [TransferConfig]$TransferConfig
+        $TransferConfig
     )
     
     # Inicializar TempDir
@@ -390,7 +386,7 @@ function Invoke-DirectTransfer {
         Detecta el tipo desde $TransferConfig automáticamente
     #>
     param(
-        [TransferConfig]$TransferConfig
+        $TransferConfig
     )
     
     Write-Host "Iniciando transferencia directa..." -ForegroundColor Cyan
@@ -429,7 +425,7 @@ function Invoke-CompressedTransfer {
         - Limpia temporales
     #>
     param(
-        [TransferConfig]$TransferConfig
+        $TransferConfig
     )
     
     Write-Host "Iniciando compresión y transferencia..." -ForegroundColor Cyan
@@ -451,7 +447,7 @@ function Invoke-CompressedTransfer {
             Write-Host "Descargando desde OneDrive a temporal..." -ForegroundColor Cyan
             
             # Crear TransferConfig temporal para descarga OneDrive → Local
-            $downloadConfig = [TransferConfig]::new()
+            $downloadConfig = New-TransferConfig
             $downloadConfig.Origen = $TransferConfig.Origen  # OneDrive origen
             $downloadConfig.Destino.Tipo = "Local"
             $downloadConfig.Destino.Local.Path = $tempOrigenCloud
@@ -472,7 +468,7 @@ function Invoke-CompressedTransfer {
             Write-Host "Descargando desde Dropbox a temporal..." -ForegroundColor Cyan
             
             # Crear TransferConfig temporal para descarga Dropbox → Local
-            $downloadConfig = [TransferConfig]::new()
+            $downloadConfig = New-TransferConfig
             $downloadConfig.Origen = $TransferConfig.Origen  # Dropbox origen
             $downloadConfig.Destino.Tipo = "Local"
             $downloadConfig.Destino.Local.Path = $tempOrigenCloud
@@ -493,7 +489,7 @@ function Invoke-CompressedTransfer {
             Write-Host "Descargando desde FTP a temporal..." -ForegroundColor Cyan
             
             # Crear TransferConfig temporal para descarga FTP → Local
-            $downloadConfig = [TransferConfig]::new()
+            $downloadConfig = New-TransferConfig
             $downloadConfig.Origen = $TransferConfig.Origen  # FTP origen
             $downloadConfig.Destino.Tipo = "Local"
             $downloadConfig.Destino.Local.Path = $tempOrigenCloud
@@ -683,7 +679,7 @@ function Invoke-CompressedTransfer {
             
             # Importar módulo ISO
             $modulesRoot = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
-            Import-Module (Join-Path $modulesRoot "Installation\ISO.psm1") -Force -Global -ErrorAction SilentlyContinue
+            Import-Module (Join-Path $modulesRoot "System\ISO.psm1") -Force -Global -ErrorAction SilentlyContinue
             
             # Llamar a New-LlevarIsoMain directamente
             New-LlevarIsoMain `
@@ -765,7 +761,7 @@ function Clear-TransferPaths {
         - Accede a todo desde $TransferConfig.Interno
     #>
     param(
-        [TransferConfig]$TransferConfig
+        $TransferConfig
     )
     
     $origenDrive = Get-TransferConfigValue -Config $TransferConfig -Path "Interno.OrigenDrive"

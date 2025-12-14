@@ -1,12 +1,12 @@
 # ========================================================================== #
-#                   M�DULO: SISTEMA DE ARCHIVOS                              #
+#                   MÓDULO: SISTEMA DE ARCHIVOS                              #
 # ========================================================================== #
-# Prop�sito: Operaciones del sistema de archivos y validaci�n de rutas
+# Propósito: Operaciones del sistema de archivos y validación de rutas
 # Funciones:
 #   - Test-PathWritable: Verifica si una ruta es escribible
-#   - Format-FileSize: Formatea tama�o de archivo en unidades legibles
-#   - Get-DirectorySize: Calcula tama�o recursivo de directorio
-#   - Get-DirectoryItems: Obtiene lista de elementos de directorio con cach�
+#   - Format-FileSize: Formatea tamaño de archivo en unidades legibles
+#   - Get-DirectorySize: Calcula tamaño recursivo de directorio
+#   - Get-DirectoryItems: Obtiene lista de elementos de directorio con caché
 # ========================================================================== #
 
 function Test-PathWritable {
@@ -32,16 +32,16 @@ function Test-PathWritable {
         try {
             $ftpInfo = Get-FtpConnection -DriveName $driveName
             if ($ftpInfo) {
-                Write-ColorOutput "Conexi�n FTP v�lida" -ForegroundColor Green
+                Write-ColorOutput "Conexión FTP válida" -ForegroundColor Green
                 return $true
             }
             else {
-                Write-ColorOutput "Conexi�n FTP no encontrada: $driveName" -ForegroundColor Yellow
+                Write-ColorOutput "Conexión FTP no encontrada: $driveName" -ForegroundColor Yellow
                 return $false
             }
         }
         catch {
-            Write-ColorOutput "Error verificando conexi�n FTP: $driveName" -ForegroundColor Yellow
+            Write-ColorOutput "Error verificando conexión FTP: $driveName" -ForegroundColor Yellow
             return $false
         }
     }
@@ -71,19 +71,19 @@ function Test-PathWritable {
 }
 
 # ========================================================================== #
-#                       FUNCIONES DE AN�LISIS DE ARCHIVOS                    #
+#                       FUNCIONES DE ANÁLISIS DE ARCHIVOS                    #
 # ========================================================================== #
 
 function Format-FileSize {
     <#
     .SYNOPSIS
-        Formatea un tama�o de archivo en el formato m�s apropiado
+        Formatea un tamaño de archivo en el formato más apropiado
     .DESCRIPTION
-        Convierte un tama�o en bytes al formato m�s legible (B, KB, MB, GB, TB)
+        Convierte un tamaño en bytes al formato más legible (B, KB, MB, GB, TB)
     .PARAMETER Size
-        Tama�o en bytes
+        Tamaño en bytes
     .OUTPUTS
-        String con el tama�o formateado
+        String con el tamaño formateado
     .EXAMPLE
         Format-FileSize -Size 1048576
         # Retorna: "1.00 MB"
@@ -123,20 +123,20 @@ function Format-LlevarBytes {
 function Get-DirectorySize {
     <#
     .SYNOPSIS
-        Calcula el tama�o de un directorio recursivamente con opci�n de cancelar
+        Calcula el tamaño de un directorio recursivamente con opción de cancelar
     .DESCRIPTION
-        Recorre un directorio y todos sus subdirectorios calculando el tama�o total,
-        cantidad de archivos y subdirectorios. Permite cancelaci�n mediante variable de referencia.
+        Recorre un directorio y todos sus subdirectorios calculando el tamaño total,
+        cantidad de archivos y subdirectorios. Permite cancelación mediante variable de referencia.
     .PARAMETER Path
         Ruta del directorio a analizar
     .PARAMETER Cancelled
-        Variable de referencia [ref] para indicar cancelaci�n
+        Variable de referencia [ref] para indicar cancelación
     .OUTPUTS
         Hashtable con Size, FileCount y DirCount
     .EXAMPLE
         $cancelled = [ref]$false
         $result = Get-DirectorySize -Path "C:\Temp" -Cancelled $cancelled
-        Write-Host "Tama�o: $($result.Size) bytes, Archivos: $($result.FileCount)"
+        Write-Host "Tamaño: $($result.Size) bytes, Archivos: $($result.FileCount)"
     #>
     param(
         [Parameter(Mandatory = $true)]
@@ -186,16 +186,16 @@ function Get-DirectoryItems {
     .SYNOPSIS
         Obtiene los items (archivos y carpetas) de un directorio
     .DESCRIPTION
-        Lista el contenido de un directorio con informaci�n adicional para navegadores.
-        Incluye soporte para cach� de tama�os calculados.
+        Lista el contenido de un directorio con información adicional para navegadores.
+        Incluye soporte para caché de tamaños calculados.
     .PARAMETER Path
         Ruta del directorio
     .PARAMETER AllowFiles
         Si es $true, incluye archivos en el resultado
     .PARAMETER SizeCache
-        Hashtable con cach� de tama�os calculados previamente
+        Hashtable con caché de tamaños calculados previamente
     .OUTPUTS
-        Array de objetos PSCustomObject con informaci�n de cada item
+        Array de objetos PSCustomObject con información de cada item
     #>
     param(
         [Parameter(Mandatory = $true)]
@@ -209,11 +209,11 @@ function Get-DirectoryItems {
     $items = @()
     
     try {
-        # Detectar si estamos en la ra�z de una unidad (C:\, D:\, etc.)
+        # Detectar si estamos en la raíz de una unidad (C:\, D:\, etc.)
         $isRootDrive = $Path -match '^[A-Za-z]:\\$'
         
         if ($isRootDrive) {
-            # En ra�z: agregar "..." para ir al selector de unidades
+            # En raíz: agregar "..." para ir al selector de unidades
             $items += [PSCustomObject]@{
                 Name            = "..."
                 FullName        = ""
@@ -225,7 +225,7 @@ function Get-DirectoryItems {
             }
         }
         elseif ($Path -ne "") {
-            # No estamos en ra�z: agregar ".." para subir
+            # No estamos en raíz: agregar ".." para subir
             $items += [PSCustomObject]@{
                 Name            = ".."
                 FullName        = Split-Path $Path -Parent
@@ -238,9 +238,9 @@ function Get-DirectoryItems {
         }
         
         # Obtener directorios
-        $dirs = Get-ChildItem -Path $Path -Directory -ErrorAction SilentlyContinue | Sort-Object Name
+        $dirs = @(Get-ChildItem -LiteralPath $Path -Directory -Force -ErrorAction SilentlyContinue | Sort-Object Name)
         foreach ($dir in $dirs) {
-            # Verificar si ya calculamos el tama�o de este directorio
+            # Verificar si ya calculamos el tamaño de este directorio
             $sizeDisplay = "<DIR>"
             if ($SizeCache.ContainsKey($dir.FullName)) {
                 $cachedSize = $SizeCache[$dir.FullName]
@@ -254,14 +254,14 @@ function Get-DirectoryItems {
                 IsParent        = $false
                 IsDriveSelector = $false
                 Size            = $sizeDisplay
-                Icon            = "�"
+                Icon            = "📁"
                 CalculatedSize  = ($SizeCache.ContainsKey($dir.FullName))
             }
         }
         
-        # Obtener archivos si est� permitido
+        # Obtener archivos si está permitido
         if ($AllowFiles) {
-            $files = Get-ChildItem -Path $Path -File -ErrorAction SilentlyContinue | Sort-Object Name
+            $files = @(Get-ChildItem -LiteralPath $Path -File -Force -ErrorAction SilentlyContinue | Sort-Object Name)
             foreach ($file in $files) {
                 $sizeDisplay = Format-FileSize -Size $file.Length
                 $items += [PSCustomObject]@{
@@ -278,7 +278,7 @@ function Get-DirectoryItems {
         }
     }
     catch {
-        # Si hay error accediendo al directorio, volver atr�s
+        # Si hay error accediendo al directorio, volver atrás
     }
     
     return $items

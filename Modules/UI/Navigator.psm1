@@ -66,6 +66,7 @@ function Select-PathNavigator {
     $searchPattern = ""
     $allItems = @()
     $filteredItems = @()
+    $pathHistory = @{}  # Guarda la posición de selección para cada ruta
     
     if (-not $ProviderOptions) {
         $ProviderOptions = @{}
@@ -106,11 +107,12 @@ function Select-PathNavigator {
             [string]$SearchPattern = ""
         )
         
-        # Evitar parpadeo usando SetCursorPosition en lugar de Clear-Host
+        # Evitar parpadeo: usar SetCursorPosition + Write-Host sin Clear-Host
         try {
-            if (System.Management.Automation.Internal.Host.InternalHost.Name -and (System.Management.Automation.Internal.Host.InternalHost.Name -ilike '*consolehost*' -or System.Management.Automation.Internal.Host.InternalHost.Name -ilike '*visual studio code host*')) { try { [Console]::SetCursorPosition(0, 0) } catch { Clear-Host } } else { Clear-Host }
+            [Console]::SetCursorPosition(0, 0)
         }
         catch {
+            # Si falla SetCursorPosition, usar Clear-Host solo como último recurso
             Clear-Host
         }
         $width = [Math]::Min($host.UI.RawUI.WindowSize.Width - 2, 118)
@@ -229,6 +231,7 @@ function Select-PathNavigator {
         else {
             $tokens = @(
                 "↑↓:Nav",
+                "PgUp/PgDn",
                 "Enter",
                 "←:Atrás",
                 "ESPACIO:Tamaño",
@@ -332,9 +335,24 @@ function Select-PathNavigator {
             $items = $allItems
         }
         
+        # Restaurar posición guardada para esta ruta
+        if ($pathHistory.ContainsKey($currentPath)) {
+            $selectedIndex = $pathHistory[$currentPath]
+        }
+        
         # Ajustar índice si está fuera de rango
         if ($selectedIndex -ge $items.Count) {
             $selectedIndex = [Math]::Max(0, $items.Count - 1)
+        }
+        
+        # Ajustar scroll para mantener visible el item seleccionado
+        $visibleHeight = [Math]::Min($host.UI.RawUI.WindowSize.Height - 12, 25)
+        if ($selectedIndex -lt $scrollOffset) {
+            $scrollOffset = $selectedIndex
+        }
+        elseif ($selectedIndex -ge ($scrollOffset + $visibleHeight)) {
+            $scrollOffset = $selectedIndex - $visibleHeight + 1
+            if ($scrollOffset -lt 0) { $scrollOffset = 0 }
         }
         
         Show-Interface -Path $pathDisplay -Items $items -SelectedIndex $selectedIndex -ScrollOffset $scrollOffset -SearchMode $searchMode -SearchPattern $searchPattern
@@ -401,6 +419,23 @@ function Select-PathNavigator {
         
         # Modo navegación normal
         switch ($key.VirtualKeyCode) {
+            33 {
+                # PgUp - Subir una página
+                $visibleHeight = [Math]::Min($host.UI.RawUI.WindowSize.Height - 12, 25)
+                $selectedIndex = [Math]::Max(0, $selectedIndex - $visibleHeight)
+                if ($selectedIndex -lt $scrollOffset) {
+                    $scrollOffset = [Math]::Max(0, $selectedIndex)
+                }
+            }
+            34 {
+                # PgDown - Bajar una página
+                $visibleHeight = [Math]::Min($host.UI.RawUI.WindowSize.Height - 12, 25)
+                $selectedIndex = [Math]::Min($items.Count - 1, $selectedIndex + $visibleHeight)
+                if ($selectedIndex -ge ($scrollOffset + $visibleHeight)) {
+                    $scrollOffset = $selectedIndex - $visibleHeight + 1
+                    if ($scrollOffset -lt 0) { $scrollOffset = 0 }
+                }
+            }
             38 {
                 # Flecha arriba
                 if ($selectedIndex -gt 0) {
@@ -549,7 +584,7 @@ function Select-PathNavigator {
                         else {
                             # Redibujar la interfaz con spinner (sin parpadeo)
                             try {
-                                if (System.Management.Automation.Internal.Host.InternalHost.Name -and (System.Management.Automation.Internal.Host.InternalHost.Name -ilike '*consolehost*' -or System.Management.Automation.Internal.Host.InternalHost.Name -ilike '*visual studio code host*')) { try { [Console]::SetCursorPosition(0, 0) } catch { Clear-Host } } else { Clear-Host }
+                                [Console]::SetCursorPosition(0, 0)
                             }
                             catch {
                                 Clear-Host
@@ -757,9 +792,13 @@ function Select-PathNavigator {
                 }
                 elseif ($selectedItem.IsDirectory) {
                     if ($selectedItem.IsParent) {
+                        # Guardar posición actual antes de salir
+                        $pathHistory[$currentPath] = $selectedIndex
+                        
                         $parentPath = Split-Path $currentPath -Parent
                         if ($parentPath) {
                             $currentPath = $parentPath
+                            # La restauración de posición se hará automáticamente en el siguiente ciclo
                         }
                         else {
                             # Si no hay parent, ir al selector de unidades
@@ -767,6 +806,8 @@ function Select-PathNavigator {
                         }
                     }
                     else {
+                        # Guardar posición actual antes de entrar a subcarpeta
+                        $pathHistory[$currentPath] = $selectedIndex
                         $currentPath = $selectedItem.FullName
                     }
                     $selectedIndex = 0
@@ -790,6 +831,8 @@ function Select-PathNavigator {
                     $scrollOffset = 0
                 }
                 elseif ($selectedItem.IsDirectory -and -not $selectedItem.IsParent) {
+                    # Guardar posición actual antes de entrar a subcarpeta
+                    $pathHistory[$currentPath] = $selectedIndex
                     $currentPath = $selectedItem.FullName
                     $selectedIndex = 0
                     $scrollOffset = 0
@@ -801,6 +844,9 @@ function Select-PathNavigator {
                     # Ya estamos en selector, no hacer nada
                 }
                 else {
+                    # Guardar posición actual antes de salir
+                    $pathHistory[$currentPath] = $selectedIndex
+                    
                     $parentPath = Split-Path $currentPath -Parent
                     if ($parentPath) {
                         $currentPath = $parentPath
@@ -819,6 +865,9 @@ function Select-PathNavigator {
                     # Ya estamos en selector, no hacer nada
                 }
                 else {
+                    # Guardar posición actual antes de salir
+                    $pathHistory[$currentPath] = $selectedIndex
+                    
                     $parentPath = Split-Path $currentPath -Parent
                     if ($parentPath) {
                         $currentPath = $parentPath

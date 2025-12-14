@@ -160,11 +160,34 @@ function Get-OneDriveDeviceToken {
 
         Write-Host "Abriendo navegador para autenticación..." -ForegroundColor Yellow
 
-        # Abrimos el navegador
-        Start-Process $authUri | Out-Null
+        # Generar tag único para identificar la ventana
+        $browserTag = "ONEDRIVE_AUTH_" + (Get-Random -Minimum 100000 -Maximum 999999)
+        
+        # Abrir navegador en ventana nueva usando Start-Browser
+        try {
+            $browserInfo = Start-Browser -Url $authUri -Tag $browserTag
+            Write-Log "Navegador abierto: $($browserInfo.BrowserName) (Tag: $browserTag)" "DEBUG"
+        }
+        catch {
+            Write-Log "Error abriendo navegador con Start-Browser, fallback a Start-Process: $($_.Exception.Message)" "WARNING"
+            Start-Process $authUri | Out-Null
+        }
 
         # Capturar código automáticamente con la función nueva
         $code = Get-BrowserOAuthCode
+        
+        # Cerrar ventana específica del navegador si se capturó el código
+        if ($code -and $browserTag) {
+            try {
+                $closed = Close-BrowserWindow -Tag $browserTag
+                if ($closed) {
+                    Write-Log "Ventana de autenticación cerrada automáticamente" "DEBUG"
+                }
+            }
+            catch {
+                Write-Log "No se pudo cerrar automáticamente la ventana del navegador" "DEBUG"
+            }
+        }
 
         if (-not $code) {
             Write-Host ""
@@ -459,30 +482,54 @@ function Get-OneDriveConfigFromUser {
     }
     
     if ($Cual -eq "Origen") {
-        $Llevar.Origen.Tipo = "OneDrive"
-        $Llevar.Origen.OneDrive.Path = $onedrivePath
-        $Llevar.Origen.OneDrive.Token = $authResult.Token
-        $Llevar.Origen.OneDrive.RefreshToken = $authResult.RefreshToken
-        $Llevar.Origen.OneDrive.Email = $authResult.Email
-        $Llevar.Origen.OneDrive.ApiUrl = $authResult.ApiUrl
-        $Llevar.Origen.OneDrive.UseLocal = $authResult.UseLocal
-        $Llevar.Origen.OneDrive.LocalPath = $authResult.LocalPath
-        $Llevar.Origen.OneDrive.DriveId = $authResult.DriveId
-        $Llevar.Origen.OneDrive.RootId = $authResult.RootId
+        Set-TransferConfigValue -Config $Llevar -Path "Origen.Tipo" -Value "OneDrive"
+        Set-TransferConfigValue -Config $Llevar -Path "Origen.OneDrive.Path" -Value $onedrivePath
+        Set-TransferConfigValue -Config $Llevar -Path "Origen.OneDrive.Token" -Value $authResult.Token
+        Set-TransferConfigValue -Config $Llevar -Path "Origen.OneDrive.RefreshToken" -Value $authResult.RefreshToken
+        Set-TransferConfigValue -Config $Llevar -Path "Origen.OneDrive.Email" -Value $authResult.Email
+        
+        # Propiedades opcionales - solo asignar si no son null
+        if ($authResult.ApiUrl) {
+            Set-TransferConfigValue -Config $Llevar -Path "Origen.OneDrive.ApiUrl" -Value $authResult.ApiUrl
+        }
+        if ($null -ne $authResult.UseLocal) {
+            Set-TransferConfigValue -Config $Llevar -Path "Origen.OneDrive.UseLocal" -Value $authResult.UseLocal
+        }
+        if ($authResult.LocalPath) {
+            Set-TransferConfigValue -Config $Llevar -Path "Origen.OneDrive.LocalPath" -Value $authResult.LocalPath
+        }
+        if ($authResult.DriveId) {
+            Set-TransferConfigValue -Config $Llevar -Path "Origen.OneDrive.DriveId" -Value $authResult.DriveId
+        }
+        if ($authResult.RootId) {
+            Set-TransferConfigValue -Config $Llevar -Path "Origen.OneDrive.RootId" -Value $authResult.RootId
+        }
 
         Write-Log "OneDrive Origen configurado: $onedrivePath (Usuario: $($authResult.Email))" "INFO"
     }
     else {
-        $Llevar.Destino.Tipo = "OneDrive"
-        $Llevar.Destino.OneDrive.Path = $onedrivePath
-        $Llevar.Destino.OneDrive.Token = $authResult.Token
-        $Llevar.Destino.OneDrive.RefreshToken = $authResult.RefreshToken
-        $Llevar.Destino.OneDrive.Email = $authResult.Email
-        $Llevar.Destino.OneDrive.ApiUrl = $authResult.ApiUrl
-        $Llevar.Destino.OneDrive.UseLocal = $authResult.UseLocal
-        $Llevar.Destino.OneDrive.LocalPath = $authResult.LocalPath
-        $Llevar.Destino.OneDrive.DriveId = $authResult.DriveId
-        $Llevar.Destino.OneDrive.RootId = $authResult.RootId
+        Set-TransferConfigValue -Config $Llevar -Path "Destino.Tipo" -Value "OneDrive"
+        Set-TransferConfigValue -Config $Llevar -Path "Destino.OneDrive.Path" -Value $onedrivePath
+        Set-TransferConfigValue -Config $Llevar -Path "Destino.OneDrive.Token" -Value $authResult.Token
+        Set-TransferConfigValue -Config $Llevar -Path "Destino.OneDrive.RefreshToken" -Value $authResult.RefreshToken
+        Set-TransferConfigValue -Config $Llevar -Path "Destino.OneDrive.Email" -Value $authResult.Email
+        
+        # Propiedades opcionales - solo asignar si no son null
+        if ($authResult.ApiUrl) {
+            Set-TransferConfigValue -Config $Llevar -Path "Destino.OneDrive.ApiUrl" -Value $authResult.ApiUrl
+        }
+        if ($null -ne $authResult.UseLocal) {
+            Set-TransferConfigValue -Config $Llevar -Path "Destino.OneDrive.UseLocal" -Value $authResult.UseLocal
+        }
+        if ($authResult.LocalPath) {
+            Set-TransferConfigValue -Config $Llevar -Path "Destino.OneDrive.LocalPath" -Value $authResult.LocalPath
+        }
+        if ($authResult.DriveId) {
+            Set-TransferConfigValue -Config $Llevar -Path "Destino.OneDrive.DriveId" -Value $authResult.DriveId
+        }
+        if ($authResult.RootId) {
+            Set-TransferConfigValue -Config $Llevar -Path "Destino.OneDrive.RootId" -Value $authResult.RootId
+        }
 
         Write-Log "OneDrive Destino configurado: $onedrivePath (Usuario: $($authResult.Email))" "INFO"
     }

@@ -1,29 +1,155 @@
 # ========================================================================== #
 #                  MÓDULO: CONFIGURACIÓN DE TRANSFERENCIA                    #
 # ========================================================================== #
-# Propósito: Funciones de helper que manipulan el tipo TransferConfig
-# El tipo TransferConfig se define en Core\TransferConfig.Type.ps1 y debe cargarse
-# antes de importar este módulo (Llevar.ps1 ya lo hace).
+# Propósito: Objeto unificado para toda la configuración de transferencia
+# Estructura jerárquica que evita mezcla de parámetros
 # ========================================================================== #
 
-
 # ========================================================================== #
-#            CARGAR LA CLASE TRANSFERCONFIG (AUTO-CONTENIDO)                 #
+#                     DEFINICIÓN DEL TIPO TRANSFERCONFIG                     #
 # ========================================================================== #
 
-# Verificar si la clase ya está cargada (evitar recargas innecesarias)
-if (-not ([System.Management.Automation.PSTypeName]'TransferConfig').Type) {
-    # Cargar la definición de clase desde el archivo .Type.ps1
-    $typeScript = Join-Path $PSScriptRoot "TransferConfig.Type.ps1"
+class TransferConfig {
+    # ====== ESTADO DE CONFIGURACIÓN ======
+    [bool]$OrigenIsSet = $false
+    [bool]$DestinoIsSet = $false
     
-    if (-not (Test-Path $typeScript)) {
-        throw "No se encontró la definición de clase TransferConfig: $typeScript"
+    # ====== ORIGEN ======
+    [PSCustomObject]$Origen = [PSCustomObject]@{
+        Tipo     = $null  # "Local", "FTP", "UNC", "OneDrive", "Dropbox", "USB"
+        
+        # Subestructura FTP
+        FTP      = [PSCustomObject]@{
+            Server      = $null
+            Port        = 21
+            User        = $null
+            Password    = $null
+            Credentials = $null
+            UseSsl      = $false
+            Directory   = "/"
+        }
+        
+        # Subestructura UNC
+        UNC      = [PSCustomObject]@{
+            Path        = $null
+            User        = $null
+            Password    = $null
+            Domain      = $null
+            Credentials = $null
+        }
+        
+        # Subestructura OneDrive
+        OneDrive = [PSCustomObject]@{
+            Path         = $null
+            Token        = $null
+            RefreshToken = $null
+            Email        = $null
+            ApiUrl       = "https://graph.microsoft.com/v1.0/me/drive"
+            UseLocal     = $false
+            LocalPath    = $null
+            DriveId      = $null
+            RootId       = $null
+        }
+        
+        # Subestructura Dropbox
+        Dropbox  = [PSCustomObject]@{
+            Path         = $null
+            Token        = $null
+            RefreshToken = $null
+            Email        = $null
+            ApiUrl       = "https://api.dropboxapi.com/2"
+        }
+        
+        # Subestructura Local
+        Local    = [PSCustomObject]@{
+            Path = $null
+        }
     }
     
-    # Dot-source la clase en el scope del módulo
-    . $typeScript
+    # ====== DESTINO ======
+    [PSCustomObject]$Destino = [PSCustomObject]@{
+        Tipo     = $null  # "Local", "USB", "FTP", "UNC", "OneDrive", "Dropbox", "ISO", "Diskette"
+        
+        # Subestructura FTP
+        FTP      = [PSCustomObject]@{
+            Server      = $null
+            Port        = 21
+            User        = $null
+            Password    = $null
+            Credentials = $null
+            UseSsl      = $false
+            Directory   = "/"
+        }
+        
+        # Subestructura UNC
+        UNC      = [PSCustomObject]@{
+            Path        = $null
+            User        = $null
+            Password    = $null
+            Domain      = $null
+            Credentials = $null
+        }
+        
+        # Subestructura OneDrive
+        OneDrive = [PSCustomObject]@{
+            Path         = $null
+            Token        = $null
+            RefreshToken = $null
+            Email        = $null
+            ApiUrl       = "https://graph.microsoft.com/v1.0/me/drive"
+            UseLocal     = $false
+            LocalPath    = $null
+            DriveId      = $null
+            RootId       = $null
+        }
+        
+        # Subestructura Dropbox
+        Dropbox  = [PSCustomObject]@{
+            Path         = $null
+            Token        = $null
+            RefreshToken = $null
+            Email        = $null
+            ApiUrl       = "https://api.dropboxapi.com/2"
+        }
+        
+        # Subestructura Local
+        Local    = [PSCustomObject]@{
+            Path = $null
+        }
+        
+        # Subestructura ISO
+        ISO      = [PSCustomObject]@{
+            OutputPath = $null
+            Size       = "dvd"
+            VolumeSize = $null
+            VolumeName = "LLEVAR"
+        }
+        
+        # Subestructura Diskette
+        Diskette = [PSCustomObject]@{
+            MaxDisks   = 30
+            Size       = 1440
+            OutputPath = $null
+        }
+    }
     
-    Write-Verbose "Clase TransferConfig cargada desde: $typeScript"
+    # ====== OPCIONES GENERALES ======
+    [PSCustomObject]$Opciones = [PSCustomObject]@{
+        BlockSizeMB    = 10
+        Clave          = $null
+        UseNativeZip   = $false
+        RobocopyMirror = $false
+        TransferMode   = "Compress"
+        Verbose        = $false
+    }
+    
+    # ====== INTERNO (uso del sistema) ======
+    [PSCustomObject]$Interno = [PSCustomObject]@{
+        OrigenDrive  = $null  # Drive temporal si origen es UNC
+        DestinoDrive = $null  # Drive temporal si destino es UNC
+        TempDir      = $null  # Directorio temporal para compresión
+        SevenZipPath = $null  # Ruta a 7-Zip
+    }
 }
 
 
@@ -360,13 +486,13 @@ function Set-FTPConfig {
         [int]$Port = 21,
         [string]$User,
         [ArgumentTransformationAttribute({
-            if ($_ -is [string]) {
-                ConvertTo-SecureString -String $_ -AsPlainText -Force
-            }
-            else {
-                $_
-            }
-        })]
+                if ($_ -is [string]) {
+                    ConvertTo-SecureString -String $_ -AsPlainText -Force
+                }
+                else {
+                    $_
+                }
+            })]
         [SecureString]$Password,
         [PSCredential]$Credentials,
         [bool]$UseSsl = $false,
@@ -666,13 +792,13 @@ function Set-UNCConfig {
         [string]$Path,
         [string]$User,
         [ArgumentTransformationAttribute({
-            if ($_ -is [string]) {
-                ConvertTo-SecureString -String $_ -AsPlainText -Force
-            }
-            else {
-                $_
-            }
-        })]
+                if ($_ -is [string]) {
+                    ConvertTo-SecureString -String $_ -AsPlainText -Force
+                }
+                else {
+                    $_
+                }
+            })]
         [SecureString]$Password,
         [string]$Domain,
         [PSCredential]$Credentials
@@ -1088,7 +1214,10 @@ function New-ConfigNode {
     return $obj
 }
 
-# Exportar funciones
+# ========================================================================== #
+#                          EXPORTAR FUNCIONES                                #
+# ========================================================================== #
+
 Export-ModuleMember -Function @(
     'New-TransferConfig',
     'Get-TransferConfigValue',

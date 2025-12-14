@@ -72,4 +72,69 @@ function Invoke-InstallParameter {
     exit
 }
 
-Export-ModuleMember -Function Invoke-InstallParameter
+function Invoke-UninstallParameter {
+    <#
+    .SYNOPSIS
+        Procesa el parámetro -Desinstalar y ejecuta la desinstalación del sistema.
+    
+    .PARAMETER Desinstalar
+        Switch que indica si se debe desinstalar el sistema.
+    
+    .PARAMETER IsAdmin
+        Indica si el proceso actual tiene privilegios de administrador.
+    
+    .PARAMETER IsInIDE
+        Indica si está ejecutándose desde un IDE (VS Code, ISE, etc.).
+    
+    .PARAMETER ScriptPath
+        Ruta completa del script principal.
+    
+    .EXAMPLE
+        Invoke-UninstallParameter -Desinstalar -IsAdmin $true -ScriptPath "C:\...\Llevar.ps1"
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $false)]
+        [switch]$Desinstalar,
+        
+        [Parameter(Mandatory = $true)]
+        [bool]$IsAdmin,
+        
+        [Parameter(Mandatory = $true)]
+        [bool]$IsInIDE,
+        
+        [Parameter(Mandatory = $true)]
+        [string]$ScriptPath
+    )
+    
+    if (-not $Desinstalar) {
+        return $false
+    }
+    
+    # Si está en IDE, omitir verificación de permisos
+    if ($IsInIDE) {
+        Write-Host "`n[DEBUG/IDE] Omitiendo verificación de permisos de administrador" -ForegroundColor Cyan
+    }
+    else {
+        # Verificar permisos de administrador
+        if (-not $IsAdmin) {
+            Write-Host "`n⚠ Se requieren permisos de administrador para desinstalar." -ForegroundColor Yellow
+            Write-Host "Elevando a administrador..." -ForegroundColor Cyan
+            
+            Start-Process powershell.exe -ArgumentList "-NoExit", "-ExecutionPolicy", "Bypass", "-File", "`"$ScriptPath`"", "-Desinstalar" -Verb RunAs
+            exit
+        }
+    }
+    
+    # Realizar desinstalación
+    $exitCode = Uninstall-LlevarFromSystem
+    
+    if ($exitCode -eq 0 -or $exitCode -eq 98 -or $exitCode -eq 99) {
+        Write-Host "Presione cualquier tecla para salir..." -ForegroundColor Gray
+        $null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
+    }
+    
+    exit $exitCode
+}
+
+Export-ModuleMember -Function Invoke-InstallParameter, Invoke-UninstallParameter

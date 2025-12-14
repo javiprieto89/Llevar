@@ -527,7 +527,7 @@ function Get-UncConfigFromUser {
     #>
     param(
         [Parameter(Mandatory = $true)]
-        [TransferConfig]$Llevar,
+        $Llevar,
         
         [Parameter(Mandatory = $true)]
         [ValidateSet("Origen", "Destino")]
@@ -606,24 +606,24 @@ function Get-UncConfigFromUser {
     
     # Guardar configuración
     if ($Cual -eq "Origen") {
-        $Llevar.Origen.Tipo = "UNC"
-        $Llevar.Origen.UNC.Path = $uncPath
+        Set-TransferConfigValue -Config $Llevar -Path "Origen.Tipo" -Value "UNC"
+        Set-TransferConfigValue -Config $Llevar -Path "Origen.UNC.Path" -Value $uncPath
         if ($credentials) {
-            $Llevar.Origen.UNC.Credentials = $credentials
-            $Llevar.Origen.UNC.User = $credentials.UserName
-            $Llevar.Origen.UNC.Password = $credentials.GetNetworkCredential().Password
+            Set-TransferConfigValue -Config $Llevar -Path "Origen.UNC.Credentials" -Value $credentials
+            Set-TransferConfigValue -Config $Llevar -Path "Origen.UNC.User" -Value $credentials.UserName
+            Set-TransferConfigValue -Config $Llevar -Path "Origen.UNC.Password" -Value $credentials.GetNetworkCredential().Password
         }
         
         $userInfo = if ($credentials) { "Usuario: $($credentials.UserName)" } else { "Sin credenciales" }
         Write-Log "UNC Origen configurado: $uncPath ($userInfo)" "INFO"
     }
     else {
-        $Llevar.Destino.Tipo = "UNC"
-        $Llevar.Destino.UNC.Path = $uncPath
+        Set-TransferConfigValue -Config $Llevar -Path "Destino.Tipo" -Value "UNC"
+        Set-TransferConfigValue -Config $Llevar -Path "Destino.UNC.Path" -Value $uncPath
         if ($credentials) {
-            $Llevar.Destino.UNC.Credentials = $credentials
-            $Llevar.Destino.UNC.User = $credentials.UserName
-            $Llevar.Destino.UNC.Password = $credentials.GetNetworkCredential().Password
+            Set-TransferConfigValue -Config $Llevar -Path "Destino.UNC.Credentials" -Value $credentials
+            Set-TransferConfigValue -Config $Llevar -Path "Destino.UNC.User" -Value $credentials.UserName
+            Set-TransferConfigValue -Config $Llevar -Path "Destino.UNC.Password" -Value $credentials.GetNetworkCredential().Password
         }
         
         $userInfo = if ($credentials) { "Usuario: $($credentials.UserName)" } else { "Sin credenciales" }

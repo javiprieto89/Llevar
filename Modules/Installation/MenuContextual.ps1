@@ -19,7 +19,14 @@ Write-Host "══════════════════════�
 Write-Host ""
 
 $llevarPath = "C:\Llevar\Llevar.ps1"
-$iconPath = "$env:SystemRoot\System32\imageres.dll,-1043"
+$llevarCmd = "C:\Llevar\LLEVAR.CMD"
+$iconPath = "C:\Llevar\Data\Llevar_ContextMenu.ico"
+
+# Fallback a icono del sistema si no existe el personalizado
+if (-not (Test-Path $iconPath)) {
+    $iconPath = "%SystemRoot%\System32\shell32.dll,43"
+    Write-Host "⚠ Icono personalizado no encontrado, usando icono del sistema" -ForegroundColor Yellow
+}
 
 if ($Uninstall) {
     Write-Host "MODO: Desinstalación" -ForegroundColor Red
@@ -57,9 +64,16 @@ else {
     Write-Host "MODO: Instalación" -ForegroundColor Green
     Write-Host ""
     
-    # Verificar que Llevar.ps1 existe
+    # Verificar que Llevar.ps1 y LLEVAR.CMD existen
     if (-not (Test-Path $llevarPath)) {
         Write-Host "✗ Error: No se encuentra $llevarPath" -ForegroundColor Red
+        Write-Host "  Ejecute primero la instalación principal de Llevar.ps1" -ForegroundColor Yellow
+        Write-Host ""
+        exit 1
+    }
+    
+    if (-not (Test-Path $llevarCmd)) {
+        Write-Host "✗ Error: No se encuentra $llevarCmd" -ForegroundColor Red
         Write-Host "  Ejecute primero la instalación principal de Llevar.ps1" -ForegroundColor Yellow
         Write-Host ""
         exit 1
@@ -76,22 +90,34 @@ else {
         # Crear claves para carpetas
         $null = New-Item -Path "HKCR:\Directory\shell\Llevar" -Force
         Set-ItemProperty -Path "HKCR:\Directory\shell\Llevar" -Name "(Default)" -Value "Llevar A..."
-        Set-ItemProperty -Path "HKCR:\Directory\shell\Llevar" -Name "Icon" -Value $iconPath
+        Set-ItemProperty -Path "HKCR:\Directory\shell\Llevar" -Name "Icon" -Value "`"$iconPath`""
         
         $null = New-Item -Path "HKCR:\Directory\shell\Llevar\command" -Force
-        Set-ItemProperty -Path "HKCR:\Directory\shell\Llevar\command" -Name "(Default)" -Value "pwsh.exe -NoProfile -ExecutionPolicy Bypass -File `"$llevarPath`" -Origen `"%1`""
+        Set-ItemProperty -Path "HKCR:\Directory\shell\Llevar\command" -Name "(Default)" -Value "`"$llevarCmd`" `"%1`""
         
         Write-Host "  ✓ Menú contextual para carpetas instalado" -ForegroundColor Green
+        
+        Write-Host "Configurando menú contextual para ARCHIVOS..." -ForegroundColor Cyan
+        
+        # Crear claves para archivos (AllFilesystemObjects para mayor compatibilidad)
+        $null = New-Item -Path "HKCR:\*\shell\Llevar" -Force
+        Set-ItemProperty -Path "HKCR:\*\shell\Llevar" -Name "(Default)" -Value "Llevar A..."
+        Set-ItemProperty -Path "HKCR:\*\shell\Llevar" -Name "Icon" -Value "`"$iconPath`""
+        
+        $null = New-Item -Path "HKCR:\*\shell\Llevar\command" -Force
+        Set-ItemProperty -Path "HKCR:\*\shell\Llevar\command" -Name "(Default)" -Value "`"$llevarCmd`" `"%1`""
+        
+        Write-Host "  ✓ Menú contextual para archivos instalado" -ForegroundColor Green
         
         Write-Host "Configurando menú contextual para UNIDADES..." -ForegroundColor Cyan
         
         # Crear claves para unidades (drives)
         $null = New-Item -Path "HKCR:\Drive\shell\Llevar" -Force
         Set-ItemProperty -Path "HKCR:\Drive\shell\Llevar" -Name "(Default)" -Value "Llevar A..."
-        Set-ItemProperty -Path "HKCR:\Drive\shell\Llevar" -Name "Icon" -Value $iconPath
+        Set-ItemProperty -Path "HKCR:\Drive\shell\Llevar" -Name "Icon" -Value "`"$iconPath`""
         
         $null = New-Item -Path "HKCR:\Drive\shell\Llevar\command" -Force
-        Set-ItemProperty -Path "HKCR:\Drive\shell\Llevar\command" -Name "(Default)" -Value "pwsh.exe -NoProfile -ExecutionPolicy Bypass -File `"$llevarPath`" -Origen `"%1`""
+        Set-ItemProperty -Path "HKCR:\Drive\shell\Llevar\command" -Name "(Default)" -Value "`"$llevarCmd`" `"%1`""
         
         Write-Host "  ✓ Menú contextual para unidades instalado" -ForegroundColor Green
         

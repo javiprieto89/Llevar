@@ -8,7 +8,7 @@
 #>
 
 # Ruta al directorio raíz del proyecto
-$ProjectRoot = Split-Path $PSScriptRoot -Parent
+$ProjectRoot = $PSScriptRoot
 $ModulesPath = Join-Path $ProjectRoot "Modules"
 
 # ========================================================================== #
@@ -16,9 +16,9 @@ $ModulesPath = Join-Path $ProjectRoot "Modules"
 # ========================================================================== #
 
 # Módulos Core
+Import-Module (Join-Path $ModulesPath "Core\TransferConfig.psm1") -Force -Global -ErrorAction SilentlyContinue
 Import-Module (Join-Path $ModulesPath "Core\Validation.psm1") -Force -Global -ErrorAction SilentlyContinue
 Import-Module (Join-Path $ModulesPath "Core\Logger.psm1") -Force -Global -ErrorAction SilentlyContinue
-Import-Module (Join-Path $ModulesPath "Core\TransferConfig.psm1") -Force -Global -ErrorAction SilentlyContinue
 
 # Módulos UI
 Import-Module (Join-Path $ModulesPath "UI\Console.psm1") -Force -Global -ErrorAction SilentlyContinue
@@ -44,28 +44,31 @@ Import-Module (Join-Path $ModulesPath "Transfer\Unified.psm1") -Force -Global -E
 
 # Módulos de Instalación
 Import-Module (Join-Path $ModulesPath "Installation\SystemInstall.psm1") -Force -Global -ErrorAction SilentlyContinue
+Import-Module (Join-Path $ModulesPath "Installation\Uninstall.psm1") -Force -Global -ErrorAction SilentlyContinue
 Import-Module (Join-Path $ModulesPath "Installation\Installer.psm1") -Force -Global -ErrorAction SilentlyContinue
-Import-Module (Join-Path $ModulesPath "Installation\ISO.psm1") -Force -Global -ErrorAction SilentlyContinue
+Import-Module (Join-Path $ModulesPath "Installation\Installation.psm1") -Force -Global -ErrorAction SilentlyContinue
+Import-Module (Join-Path $ModulesPath "Installation\Install.psm1") -Force -Global -ErrorAction SilentlyContinue
+Import-Module (Join-Path $ModulesPath "Installation\InstallationCheck.psm1") -Force -Global -ErrorAction SilentlyContinue
 
 # Módulos de Utilidades
-Import-Module (Join-Path $ModulesPath "Utilities\Installation.psm1") -Force -Global -ErrorAction SilentlyContinue
 Import-Module (Join-Path $ModulesPath "Utilities\Examples.psm1") -Force -Global -ErrorAction SilentlyContinue
 Import-Module (Join-Path $ModulesPath "Utilities\Help.psm1") -Force -Global -ErrorAction SilentlyContinue
 Import-Module (Join-Path $ModulesPath "Utilities\PathSelectors.psm1") -Force -Global -ErrorAction SilentlyContinue
 Import-Module (Join-Path $ModulesPath "Utilities\VolumeManagement.psm1") -Force -Global -ErrorAction SilentlyContinue
 
 # Módulos del Sistema
+Import-Module (Join-Path $ModulesPath "System\PowerShellVersion.psm1") -Force -Global -ErrorAction SilentlyContinue
 Import-Module (Join-Path $ModulesPath "System\Audio.psm1") -Force -Global -ErrorAction SilentlyContinue
 Import-Module (Join-Path $ModulesPath "System\FileSystem.psm1") -Force -Global -ErrorAction SilentlyContinue
 Import-Module (Join-Path $ModulesPath "System\Robocopy.psm1") -Force -Global -ErrorAction SilentlyContinue
+Import-Module (Join-Path $ModulesPath "System\ISO.psm1") -Force -Global -ErrorAction SilentlyContinue
+Import-Module (Join-Path $ModulesPath "System\Browser.psm1") -Force -Global -ErrorAction SilentlyContinue
 
 # Módulos de Parámetros
 Import-Module (Join-Path $ModulesPath "Parameters\Help.psm1") -Force -Global -ErrorAction SilentlyContinue
-Import-Module (Join-Path $ModulesPath "Parameters\Install.psm1") -Force -Global -ErrorAction SilentlyContinue
 Import-Module (Join-Path $ModulesPath "Parameters\Example.psm1") -Force -Global -ErrorAction SilentlyContinue
 Import-Module (Join-Path $ModulesPath "Parameters\Robocopy.psm1") -Force -Global -ErrorAction SilentlyContinue
 Import-Module (Join-Path $ModulesPath "Parameters\InteractiveMenu.psm1") -Force -Global -ErrorAction SilentlyContinue
-Import-Module (Join-Path $ModulesPath "Parameters\InstallationCheck.psm1") -Force -Global -ErrorAction SilentlyContinue
 Import-Module (Join-Path $ModulesPath "Parameters\NormalMode.psm1") -Force -Global -ErrorAction SilentlyContinue
 
 Write-Host "✓ Módulos de Llevar cargados para tests" -ForegroundColor Green

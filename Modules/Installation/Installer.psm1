@@ -301,12 +301,29 @@ try {
 
     if ($blocks.Count -eq 0) { throw "No hay bloques de archivo comprimido." }
 
-    # Determinar nombre base (sin extensión de volumen)
+    # Determinar nombre base (sin extensión de volumen ni .7z)
     $first = ($blocks.Keys | Sort-Object)[0]
-    if ($first -match '^(?<n>.+)\.(?<ext>7z|\d{3})$') {
+    
+    # Casos posibles:
+    # - Duke_3D.7z.001 → Duke_3D
+    # - Duke_3D.7z → Duke_3D
+    # - Duke_3D.001 → Duke_3D
+    # - Duke_3D.alx001 → Duke_3D
+    
+    if ($first -match '^(?<n>.+?)\.(?:7z\.)?(?:alx)?\d{3}$') {
+        # Tiene extensión de volumen (.001, .7z.001, .alx001)
+        $FolderName = $matches['n']
+    }
+    elseif ($first -match '^(?<n>.+?)\.7z$') {
+        # Solo .7z sin volúmenes
+        $FolderName = $matches['n']
+    }
+    elseif ($first -match '^(?<n>.+?)\.zip$') {
+        # Solo .zip
         $FolderName = $matches['n']
     }
     else {
+        # Fallback: quitar extensión
         $FolderName = [System.IO.Path]::GetFileNameWithoutExtension($first)
     }
 

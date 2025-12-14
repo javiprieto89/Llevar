@@ -302,17 +302,23 @@ function Start-Browser {
 </html>
 "@
     Set-Content -LiteralPath $tempHtml -Value $htmlContent -Encoding UTF8
+    
+    # CRÍTICO: Para forzar ventana nueva, se debe usar cmd /c start que crea una instancia separada
+    # Esto previene que se abra como pestaña en una ventana existente
+    
     if ($browserName -like "*chrome*") {
         if ($UseTempProfile) {
             $argList += "--user-data-dir=`"$profilePath`""
             $argList += "--no-first-run"
             $argList += "--no-default-browser-check"
         }
+        # Agregar --new-window ANTES de incognito para forzar ventana
         $argList += "--new-window"
         $windowArg = "--new-window"
         if ($Incognito) {
             $argList += "--incognito"
         }
+        # URL al final
         $argList += "`"$tempHtml`""
     }
     elseif ($browserName -like "*msedge*" -or $browserName -like "*edge*") {
@@ -321,11 +327,13 @@ function Start-Browser {
             $argList += "--no-first-run"
             $argList += "--no-default-browser-check"
         }
+        # Agregar --new-window ANTES de inprivate para forzar ventana
         $argList += "--new-window"
         $windowArg = "--new-window"
         if ($Incognito) {
             $argList += "-inprivate"
         }
+        # URL al final
         $argList += "`"$tempHtml`""
     }
     elseif ($browserName -like "*firefox*") {
@@ -345,21 +353,30 @@ function Start-Browser {
         $argList += $windowArg
     }
 
-    # Lanzar proceso y capturar timestamp para identificación
-    $launchTime = Get-Date
-    $proc = Start-Process -FilePath $browserPath -ArgumentList $argList -PassThru
+    # Construir comando completo para cmd
+    $cmdArgs = "/c start `"`" `"$browserPath`" " + ($argList -join " ")
+    $proc = Start-Process -FilePath "cmd.exe" -ArgumentList $cmdArgs -PassThru -WindowStyle Hidden
 
     # Esperar a que la ventana se cree (antes de la redirección)
-    Start-Sleep -Milliseconds 700
+    # Como usamos cmd /c start, necesitamos esperar más tiempo para que el navegador inicie
+    Start-Sleep -Milliseconds 1200
 
     # Capturar handle por título único del HTML temporal
+    # Buscar el proceso del navegador (no cmd.exe)
     $window = $null
-    foreach ($delay in @(0, 200, 200, 200)) {
+    $browserProcessName = if ($browserName -like "*chrome*") { "chrome" } 
+    elseif ($browserName -like "*msedge*" -or $browserName -like "*edge*") { "msedge" }
+    elseif ($browserName -like "*firefox*") { "firefox" }
+    else { "chrome" }
+    
+    foreach ($delay in @(0, 300, 300, 400, 500)) {
         $window = Get-Process | Where-Object {
-            $_.Id -eq $proc.Id -and $_.MainWindowHandle -ne 0 -and $_.MainWindowTitle -like "*$Tag*"
-        } | Select-Object -First 1
+            $_.Name -eq $browserProcessName -and 
+            $_.MainWindowHandle -ne 0 -and 
+            $_.MainWindowTitle -like "*$Tag*"
+        } | Sort-Object StartTime -Descending | Select-Object -First 1
         if ($window) { break }
-        Start-Sleep -Milliseconds $delay
+        if ($delay -gt 0) { Start-Sleep -Milliseconds $delay }
     }
 
     if ($window) {

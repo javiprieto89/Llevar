@@ -5,33 +5,8 @@
 # Funciones refactorizadas para usar TransferConfig como única fuente de verdad
 # ========================================================================== #
 
-# Cargar clase TransferConfig si no está disponible
-$transferConfigTypeLoaded = $false
-try {
-    $null = [TransferConfig] -as [type]
-    $transferConfigTypeLoaded = $true
-}
-catch {
-    $transferConfigTypeLoaded = $false
-}
-
-if (-not $transferConfigTypeLoaded) {
-    $ModulesPath = Split-Path $PSScriptRoot -Parent
-    $transferConfigType = Join-Path $ModulesPath "Core\TransferConfig.Type.ps1"
-    
-    if (Test-Path $transferConfigType) {
-        . $transferConfigType
-    }
-    else {
-        throw "ERROR CRÍTICO: No se puede cargar TransferConfig.Type.ps1 desde $transferConfigType"
-    }
-}
-
 # Imports necesarios
 $ModulesPath = Split-Path $PSScriptRoot -Parent
-if (-not (Get-Module -Name 'TransferConfig')) {
-    Import-Module (Join-Path $ModulesPath "Core\TransferConfig.psm1") -Force -Global
-}
 Import-Module (Join-Path $ModulesPath "UI\Banners.psm1") -Force -Global
 Import-Module (Join-Path $ModulesPath "UI\ProgressBar.psm1") -Force -Global
 Import-Module (Join-Path $ModulesPath "Core\Logger.psm1") -Force -Global
@@ -74,7 +49,7 @@ function Get-FtpConfigFromUser {
     #>
     param(
         [Parameter(Mandatory = $true)]
-        [TransferConfig]$Llevar,
+        $Llevar,
         
         [Parameter(Mandatory = $true)]
         [ValidateSet("Origen", "Destino")]
@@ -257,26 +232,26 @@ function Get-FtpConfigFromUser {
     
     # ✅✅✅ ASIGNAR SOLO LA SECCIÓN FTP CORRESPONDIENTE
     if ($Cual -eq "Origen") {
-        $Llevar.Origen.Tipo = "FTP"
-        $Llevar.Origen.FTP.Server = $server
-        $Llevar.Origen.FTP.Port = $port
-        $Llevar.Origen.FTP.Credentials = $credentials
-        $Llevar.Origen.FTP.User = $credentials.UserName
-        $Llevar.Origen.FTP.Password = $credentials.GetNetworkCredential().Password
-        $Llevar.Origen.FTP.UseSsl = ($server -match '^ftps://')
-        $Llevar.Origen.FTP.Directory = $directory
+        Set-TransferConfigValue -Config $Llevar -Path "Origen.Tipo" -Value "FTP"
+        Set-TransferConfigValue -Config $Llevar -Path "Origen.FTP.Server" -Value $server
+        Set-TransferConfigValue -Config $Llevar -Path "Origen.FTP.Port" -Value $port
+        Set-TransferConfigValue -Config $Llevar -Path "Origen.FTP.Credentials" -Value $credentials
+        Set-TransferConfigValue -Config $Llevar -Path "Origen.FTP.User" -Value $credentials.UserName
+        Set-TransferConfigValue -Config $Llevar -Path "Origen.FTP.Password" -Value $credentials.GetNetworkCredential().Password
+        Set-TransferConfigValue -Config $Llevar -Path "Origen.FTP.UseSsl" -Value ($server -match '^ftps://')
+        Set-TransferConfigValue -Config $Llevar -Path "Origen.FTP.Directory" -Value $directory
         
         Write-Log "FTP Origen configurado: $server$directory (Usuario: $($credentials.UserName), Puerto: $port)" "INFO"
     }
     else {
-        $Llevar.Destino.Tipo = "FTP"
-        $Llevar.Destino.FTP.Server = $server
-        $Llevar.Destino.FTP.Port = $port
-        $Llevar.Destino.FTP.Credentials = $credentials
-        $Llevar.Destino.FTP.User = $credentials.UserName
-        $Llevar.Destino.FTP.Password = $credentials.GetNetworkCredential().Password
-        $Llevar.Destino.FTP.UseSsl = ($server -match '^ftps://')
-        $Llevar.Destino.FTP.Directory = $directory
+        Set-TransferConfigValue -Config $Llevar -Path "Destino.Tipo" -Value "FTP"
+        Set-TransferConfigValue -Config $Llevar -Path "Destino.FTP.Server" -Value $server
+        Set-TransferConfigValue -Config $Llevar -Path "Destino.FTP.Port" -Value $port
+        Set-TransferConfigValue -Config $Llevar -Path "Destino.FTP.Credentials" -Value $credentials
+        Set-TransferConfigValue -Config $Llevar -Path "Destino.FTP.User" -Value $credentials.UserName
+        Set-TransferConfigValue -Config $Llevar -Path "Destino.FTP.Password" -Value $credentials.GetNetworkCredential().Password
+        Set-TransferConfigValue -Config $Llevar -Path "Destino.FTP.UseSsl" -Value ($server -match '^ftps://')
+        Set-TransferConfigValue -Config $Llevar -Path "Destino.FTP.Directory" -Value $directory
         
         Write-Log "FTP Destino configurado: $server$directory (Usuario: $($credentials.UserName), Puerto: $port)" "INFO"
     }
@@ -304,7 +279,7 @@ function Copy-LlevarLocalToFtp {
     #>
     param(
         [Parameter(Mandatory = $true)]
-        [TransferConfig]$Llevar,
+        $Llevar,
         
         [datetime]$StartTime = (Get-Date),
         [bool]$ShowProgress = $true,
@@ -336,7 +311,7 @@ function Copy-LlevarFtpToLocal {
     #>
     param(
         [Parameter(Mandatory = $true)]
-        [TransferConfig]$Llevar,
+        $Llevar,
         
         [datetime]$StartTime = (Get-Date),
         [bool]$ShowProgress = $true,
@@ -796,6 +771,42 @@ function Select-FtpFolder {
         -ProviderOptions $ftpProviderOptions
 }
 
+# ========================================================================== #
+# FUNCIONES DE UPLOAD (WRAPPERS)
+# ========================================================================== #
+
+function Send-LlevarFtpFile {
+    <#
+    .SYNOPSIS
+        Sube un archivo a FTP usando nomenclatura con verbo aprobado
+    .DESCRIPTION
+        Esta función sube archivos a FTP usando el verbo aprobado Send-
+        en lugar del verbo no aprobado Upload-.
+    .PARAMETER LocalPath
+        Ruta local del archivo a subir
+    .PARAMETER DriveName
+        Nombre de la conexión FTP establecida
+    .PARAMETER RemoteFileName
+        Nombre del archivo en el servidor FTP
+    .OUTPUTS
+        $true si el upload fue exitoso, $false si falló
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$LocalPath,
+
+        [Parameter(Mandatory = $true)]
+        [string]$DriveName,
+
+        [Parameter(Mandatory = $true)]
+        [string]$RemoteFileName
+    )
+    
+    return Send-FtpFile -LocalPath $LocalPath `
+        -DriveName $DriveName `
+        -RemoteFileName $RemoteFileName
+}
+
 # Exportar funciones
 Export-ModuleMember -Function @(
     'Test-IsFtpPath',
@@ -807,5 +818,6 @@ Export-ModuleMember -Function @(
     'Send-FtpFile',
     'Receive-FtpFile',
     'Get-FtpNavigatorItems',
-    'Select-FtpFolder'
+    'Select-FtpFolder',
+    'Send-LlevarFtpFile'
 )

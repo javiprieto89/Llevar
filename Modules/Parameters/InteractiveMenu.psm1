@@ -14,7 +14,7 @@ function Invoke-InteractiveMenu {
         Detecta ejecución sin parámetros y muestra menú interactivo.
     
     .PARAMETER TransferConfig
-        Referencia al objeto TransferConfig que se modificará (uso de [ref]).
+        Referencia al objeto TransferConfig que se modificará.
     
     .PARAMETER Ayuda
         Parámetro -Ayuda.
@@ -41,7 +41,7 @@ function Invoke-InteractiveMenu {
         String indicando la acción a realizar: "Execute", "Example", "Help" o $null si se canceló.
     
     .EXAMPLE
-        $transferConfig = [TransferConfig]::new()
+        $transferConfig = New-TransferConfig
         $action = Invoke-InteractiveMenu -TransferConfig $transferConfig -Origen "" -Destino ""
     #>
     [CmdletBinding()]
@@ -68,10 +68,13 @@ function Invoke-InteractiveMenu {
         [string]$Destino,
         
         [Parameter(Mandatory = $false)]
-        [switch]$Iso
+        [switch]$Iso,
+        
+        [Parameter(Mandatory = $false)]
+        [switch]$OrigenBloqueado
     )
     
-    # Detectar si se ejecutó sin parámetros principales
+    # Detectar si se ejecutó sin parámetros principales (excepto si OrigenBloqueado está activo)
     $noParams = (
         -not $Ayuda -and
         -not $Instalar -and
@@ -79,19 +82,27 @@ function Invoke-InteractiveMenu {
         -not $Ejemplo -and
         -not $Origen -and
         -not $Destino -and
-        -not $Iso
+        -not $Iso -and
+        -not $OrigenBloqueado
     )
     
-    if (-not $noParams) {
+    if (-not $noParams -and -not $OrigenBloqueado) {
         return $null
     }
     
-    Show-Banner "MODO INTERACTIVO" -BorderColor Cyan -TextColor Cyan
-    Write-Host "No se especificaron parámetros. Iniciando menú interactivo..." -ForegroundColor Gray
+    # Si el origen está bloqueado, mostrar banner diferente
+    if ($OrigenBloqueado) {
+        Show-Banner "CONFIGURACIÓN DE DESTINO" -BorderColor Yellow -TextColor Yellow
+        Write-Host "Origen configurado y bloqueado. Configure el destino..." -ForegroundColor Gray
+    }
+    else {
+        Show-Banner "MODO INTERACTIVO" -BorderColor Cyan -TextColor Cyan
+        Write-Host "No se especificaron parámetros. Iniciando menú interactivo..." -ForegroundColor Gray
+    }
     Write-Host ""
     
     # Mostrar menú principal pasando TransferConfig por referencia
-    $menuResult = Show-MainMenu -TransferConfig $TransferConfig
+    $menuResult = Show-MainMenu -TransferConfig $TransferConfig -OrigenBloqueado:$OrigenBloqueado
     
     # Si el usuario canceló (salió del menú), terminar
     if ($null -eq $menuResult) {

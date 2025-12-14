@@ -11,11 +11,6 @@
 
 # Imports necesarios
 $ModulesPath = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
-Import-Module (Join-Path $ModulesPath "UI\Banners.psm1") -Force -Global
-Import-Module (Join-Path $ModulesPath "UI\Navigator.psm1") -Force -Global
-if (-not (Get-Module -Name 'TransferConfig')) {
-    Import-Module (Join-Path $ModulesPath "Core\TransferConfig.psm1") -Force -Global
-}
 Import-Module (Join-Path $ModulesPath "Core\Logger.psm1") -Force -Global
 Import-Module (Join-Path $ModulesPath "System\FileSystem.psm1") -Force -Global
 
@@ -687,12 +682,13 @@ function Convert-GraphItemToNavigatorEntry {
     $normalizedParent = Resolve-OneDrivePath -Path $ParentPath
     $name = $Item.name
     $fullName = if ($normalizedParent -eq "/") { "/$name" } else { "$normalizedParent/$name" }
-    $sizeText = if ($Item.size) {
-        # Graph expone size (bytes) también para carpetas; mostrarlo formateado
-        Format-FileSize -Size $Item.size
-    }
-    elseif ($isFolder) {
+    $sizeText = if ($isFolder) {
+        # Para carpetas, solo mostrar <DIR> - el tamaño se calcula al presionar ESPACIO
         "<DIR>"
+    }
+    elseif ($Item.size) {
+        # Para archivos, mostrar el tamaño formateado
+        Format-FileSize -Size $Item.size
     }
     else {
         ""
@@ -1063,6 +1059,191 @@ function Copy-LlevarOneDriveToLocal {
         -ShowProgress $ShowProgress -ProgressTop $ProgressTop
 }
 
+# ========================================================================== #
+# FUNCIONES DE DESCARGA RECURSIVA
+# ========================================================================== #
+
+function Receive-OneDriveFolder {
+    <#
+    .SYNOPSIS
+        Descarga recursivamente una carpeta completa desde OneDrive
+    .PARAMETER Token
+        Token de acceso OneDrive
+    .PARAMETER RefreshToken
+        Refresh token para renovación automática
+    .PARAMETER RemotePath
+        Ruta en OneDrive (ej: /Documentos/Proyecto)
+    .PARAMETER LocalPath
+        Ruta local donde descargar
+    .PARAMETER DriveId
+        ID del drive (opcional)
+    .PARAMETER ItemId
+        ID del item si se conoce (opcional, mejora rendimiento)
+    .OUTPUTS
+        Hashtable con Downloaded (archivos descargados), Errors (cantidad de errores)
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Token,
+
+        [string]$RefreshToken,
+        
+        [Parameter(Mandatory = $true)]
+        [string]$RemotePath,
+
+        [Parameter(Mandatory = $true)]
+        [string]$LocalPath,
+
+        [string]$DriveId,
+        [string]$ItemId
+    )
+    
+    Write-Log "Iniciando descarga recursiva desde OneDrive: $RemotePath → $LocalPath" "INFO"
+    
+    $downloaded = 0
+    $errors = 0
+    
+    # Crear carpeta local si no existe
+    if (-not (Test-Path $LocalPath)) {
+        New-Item -ItemType Directory -Path $LocalPath -Force | Out-Null
+    }
+    
+    try {
+        # Normalizar ruta remota
+        $normalizedPath = Resolve-OneDrivePath -Path $RemotePath
+        $relativePath = $normalizedPath.TrimStart('/')
+        
+        # Construir URL para listar items
+        if ($ItemId -and $DriveId) {
+            $url = "https://graph.microsoft.com/v1.0/drives/$DriveId/items/$ItemId/children"
+        }
+        elseif ([string]::IsNullOrEmpty($relativePath)) {
+            $url = "https://graph.microsoft.com/v1.0/me/drive/root/children"
+        }
+        else {
+            $escapedPath = [System.Uri]::EscapeDataString($relativePath)
+            $url = "https://graph.microsoft.com/v1.0/me/drive/root:/$escapedPath/children"
+        }
+        
+        Write-Log "Listando items en: $normalizedPath" "DEBUG"
+        
+        # Obtener lista de items
+        $response = Invoke-OneDriveApiCall -Uri $url `
+            -Token $Token `
+            -RefreshToken $RefreshToken `
+            -Method Get
+        
+        if (-not $response -or -not $response.value) {
+            Write-Log "No se encontraron items en: $normalizedPath" "WARNING"
+            return @{ Downloaded = 0; Errors = 0 }
+        }
+        
+        foreach ($item in $response.value) {
+            $itemName = $item.name
+            $localItemPath = Join-Path $LocalPath $itemName
+            
+            if ($item.folder) {
+                # Es una carpeta - recursión
+                Write-Host "  📁 $itemName" -ForegroundColor Cyan
+                Write-Log "Descargando carpeta: $itemName" "DEBUG"
+                
+                $subResult = Receive-OneDriveFolder `
+                    -Token $Token `
+                    -RefreshToken $RefreshToken `
+                    -RemotePath "$normalizedPath/$itemName" `
+                    -LocalPath $localItemPath `
+                    -DriveId $item.parentReference.driveId `
+                    -ItemId $item.id
+                
+                $downloaded += $subResult.Downloaded
+                $errors += $subResult.Errors
+            }
+            else {
+                # Es un archivo - descargar
+                try {
+                    if (-not $item.'@microsoft.graph.downloadUrl') {
+                        Write-Log "Item sin URL de descarga: $itemName" "WARNING"
+                        $errors++
+                        continue
+                    }
+                    
+                    $downloadUrl = $item.'@microsoft.graph.downloadUrl'
+                    Write-Host "  📄 $itemName" -ForegroundColor Gray
+                    Write-Log "Descargando: $itemName" "DEBUG"
+                    
+                    Invoke-WebRequest -Uri $downloadUrl -OutFile $localItemPath -ErrorAction Stop
+                    $downloaded++
+                }
+                catch {
+                    Write-Log "Error descargando $itemName : $($_.Exception.Message)" "ERROR" -ErrorRecord $_
+                    $errors++
+                }
+            }
+        }
+        
+        return @{
+            Downloaded = $downloaded
+            Errors     = $errors
+        }
+    }
+    catch {
+        Write-Log "Error en Receive-OneDriveFolder: $($_.Exception.Message)" "ERROR" -ErrorRecord $_
+        return @{
+            Downloaded = $downloaded
+            Errors     = $errors + 1
+        }
+    }
+}
+
+function Receive-OneDriveItem {
+    <#
+    .SYNOPSIS
+        Descarga un archivo o carpeta desde OneDrive (detecta automáticamente el tipo)
+    .PARAMETER Llevar
+        Objeto TransferConfig con configuración de OneDrive
+    .PARAMETER LocalDestination
+        Ruta local donde descargar
+    .OUTPUTS
+        $true si la descarga fue exitosa, $false si falló
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        $Llevar,
+
+        [Parameter(Mandatory = $true)]
+        [string]$LocalDestination
+    )
+    
+    $token = $Llevar.Origen.OneDrive.Token
+    $refreshToken = $Llevar.Origen.OneDrive.RefreshToken
+    $remotePath = Get-TransferPath -Config $Llevar -Section "Origen"
+    
+    if (-not $token) {
+        throw "Receive-OneDriveItem: Falta token de OneDrive"
+    }
+    
+    if (-not $remotePath) {
+        throw "Receive-OneDriveItem: Falta ruta remota"
+    }
+    
+    Write-Host "Descargando desde OneDrive: $remotePath" -ForegroundColor Cyan
+    
+    $result = Receive-OneDriveFolder `
+        -Token $token `
+        -RefreshToken $refreshToken `
+        -RemotePath $remotePath `
+        -LocalPath $LocalDestination
+    
+    Write-Host "✓ Descarga completada: $($result.Downloaded) archivos" -ForegroundColor Green
+    if ($result.Errors -gt 0) {
+        Write-Host "⚠ Errores: $($result.Errors)" -ForegroundColor Yellow
+    }
+    
+    Write-Log "OneDrive descarga completada: $($result.Downloaded) archivos, $($result.Errors) errores" "INFO"
+    
+    return ($result.Errors -eq 0)
+}
+
 # Exportar funciones
 Export-ModuleMember -Function @(
     'Test-IsOneDrivePath',
@@ -1081,5 +1262,7 @@ Export-ModuleMember -Function @(
     'Select-OneDrivePath',
     'Select-OneDriveFolder',
     'Copy-LlevarLocalToOneDrive',
-    'Copy-LlevarOneDriveToLocal'
+    'Copy-LlevarOneDriveToLocal',
+    'Receive-OneDriveFolder',
+    'Receive-OneDriveItem'
 )

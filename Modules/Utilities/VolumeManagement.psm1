@@ -282,17 +282,17 @@ function Copy-BlocksToUSB {
 
             # Construir TransferConfig específico para Local -> FTP
             $ftpConfig = New-TransferConfig
-            $ftpConfig.Origen.Tipo = "Local"
-            $ftpConfig.Origen.Local.Path = $uploadRoot
+            Set-TransferConfigValue -Config $ftpConfig -Path "Origen.Tipo" -Value "Local"
+            Set-TransferConfigValue -Config $ftpConfig -Path "Origen.Local.Path" -Value $uploadRoot
 
-            $ftpConfig.Destino.Tipo = "FTP"
+            Set-TransferConfigValue -Config $ftpConfig -Path "Destino.Tipo" -Value "FTP"
             foreach ($prop in $TransferConfig.Destino.FTP.PSObject.Properties) {
-                $ftpConfig.Destino.FTP.$($prop.Name) = $prop.Value
+                Set-TransferConfigValue -Config $ftpConfig -Path "Destino.FTP.$($prop.Name)" -Value $prop.Value
             }
 
             # Mantener opciones generales relevantes
-            $ftpConfig.Opciones.BlockSizeMB = $TransferConfig.Opciones.BlockSizeMB
-            $ftpConfig.Opciones.Clave = $TransferConfig.Opciones.Clave
+            Set-TransferConfigValue -Config $ftpConfig -Path "Opciones.BlockSizeMB" -Value $TransferConfig.Opciones.BlockSizeMB
+            Set-TransferConfigValue -Config $ftpConfig -Path "Opciones.Clave" -Value $TransferConfig.Opciones.Clave
 
             # Usar dispatcher unificado
             $modulesRoot = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent

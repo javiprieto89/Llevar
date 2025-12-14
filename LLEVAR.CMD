@@ -1,10 +1,50 @@
 @echo off
 REM ============================================================
-REM  LLEVAR.CMD - Launcher con manejo de ExecutionPolicy
-REM  Detecta errores de política y los soluciona automáticamente
+REM  LLEVAR.CMD - Launcher inteligente con auto-elevación
+REM  - Verifica y requiere PowerShell 7+
+REM  - Eleva permisos automáticamente
+REM  - Habilita ExecutionPolicy si es necesario
+REM  - Soporta arrastrar carpetas/archivos al icono
 REM ============================================================
 
 setlocal EnableDelayedExpansion
+
+REM ============================================================
+REM VERIFICAR SI YA ESTÁ EJECUTÁNDOSE COMO ADMINISTRADOR
+REM ============================================================
+
+net session >nul 2>&1
+if %errorLevel% == 0 (
+    REM Ya es administrador, continuar con la ejecución
+    goto :IsAdmin
+)
+
+REM ============================================================
+REM NO ES ADMINISTRADOR - INTENTAR ELEVAR PERMISOS
+REM ============================================================
+
+echo Elevando permisos de administrador...
+
+REM Guardar argumentos para pasarlos al proceso elevado
+set "ARGS=%*"
+
+REM Re-ejecutar este script con permisos de administrador
+powershell -NoProfile -Command "Start-Process -FilePath '%~f0' -ArgumentList '%ARGS%' -Verb RunAs" 2>nul
+
+REM Verificar si la elevación fue exitosa
+if %errorLevel% neq 0 (
+    REM El usuario canceló o hubo error
+    powershell -NoProfile -Command "& {Add-Type -AssemblyName PresentationFramework;[System.Windows.MessageBox]::Show('LLEVAR requiere permisos de administrador.`n`nLa operación fue cancelada.`n`nNo se puede continuar sin permisos de administrador.', 'Permisos de Administrador Requeridos', 'OK', 'Warning')}" 2>nul
+    exit /b 1
+)
+
+REM Si llegó aquí, se lanzó el proceso elevado correctamente
+exit /b 0
+
+:IsAdmin
+REM ============================================================
+REM EJECUTÁNDOSE COMO ADMINISTRADOR
+REM ============================================================
 
 REM Obtener la ruta del script PowerShell
 set "SCRIPT_DIR=%~dp0"
@@ -12,122 +52,102 @@ set "PS_SCRIPT=%SCRIPT_DIR%Llevar.ps1"
 
 REM Verificar que existe el script
 if not exist "%PS_SCRIPT%" (
-    echo.
-    echo ERROR: No se encuentra Llevar.ps1 en: %SCRIPT_DIR%
-    echo.
-    pause
+    powershell -NoProfile -Command "& {Add-Type -AssemblyName PresentationFramework;[System.Windows.MessageBox]::Show('No se encuentra Llevar.ps1 en: %SCRIPT_DIR%', 'Error - Llevar', 'OK', 'Error')}" 2>nul
     exit /b 1
 )
 
-REM Construir argumentos pasados al CMD
-set "ARGS=%*"
+REM ============================================================
+REM VERIFICAR POWERSHELL 7+
+REM ============================================================
 
-REM Intentar ejecutar el script de PowerShell
+REM Buscar pwsh.exe (PowerShell 7+) en ubicaciones comunes
+set "PWSH_EXE="
+
+REM Primero buscar en PATH
+where pwsh.exe >nul 2>&1
+if !ERRORLEVEL! equ 0 (
+    set "PWSH_EXE=pwsh.exe"
+    goto :FoundPwsh
+)
+
+REM Buscar en Program Files
+if exist "%ProgramFiles%\PowerShell\7\pwsh.exe" (
+    set "PWSH_EXE=%ProgramFiles%\PowerShell\7\pwsh.exe"
+    goto :FoundPwsh
+)
+
+REM Buscar en Program Files (x86)
+if exist "%ProgramFiles(x86)%\PowerShell\7\pwsh.exe" (
+    set "PWSH_EXE=%ProgramFiles(x86)%\PowerShell\7\pwsh.exe"
+    goto :FoundPwsh
+)
+
+REM No se encontró PowerShell 7+
+powershell -NoProfile -Command "& {Add-Type -AssemblyName PresentationFramework;[System.Windows.MessageBox]::Show('LLEVAR requiere PowerShell 7 o superior.`n`nPowerShell 5 no es compatible con este script.`n`nPor favor descargue PowerShell 7+ desde:`nhttps://aka.ms/powershell-release?tag=stable', 'Error - PowerShell 7 Requerido', 'OK', 'Error')}" 2>nul
+
+REM Intentar abrir el navegador con el link de descarga
+start https://aka.ms/powershell-release?tag=stable 2>nul
+
+exit /b 1
+
+:FoundPwsh
+
+REM ============================================================
+REM VERIFICAR Y HABILITAR EXECUTIONPOLICY
+REM ============================================================
+
+echo Verificando ExecutionPolicy...
+
+REM Verificar política actual
+for /f "delims=" %%i in ('"%PWSH_EXE%" -NoProfile -Command "Get-ExecutionPolicy -Scope LocalMachine"') do set "CURRENT_POLICY=%%i"
+
+REM Si es Restricted o Undefined, habilitar RemoteSigned
+if /i "%CURRENT_POLICY%"=="Restricted" goto :EnablePolicy
+if /i "%CURRENT_POLICY%"=="Undefined" goto :EnablePolicy
+goto :PolicyOK
+
+:EnablePolicy
+echo Habilitando ejecucion de scripts de PowerShell...
+"%PWSH_EXE%" -NoProfile -Command "try { Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope LocalMachine -Force; Write-Host 'ExecutionPolicy configurado correctamente' -ForegroundColor Green } catch { Write-Host 'Error al configurar ExecutionPolicy:' $_.Exception.Message -ForegroundColor Red; exit 1 }"
+
+if !ERRORLEVEL! neq 0 (
+    powershell -NoProfile -Command "& {Add-Type -AssemblyName PresentationFramework;[System.Windows.MessageBox]::Show('No se pudo habilitar la ejecución de scripts de PowerShell.`n`nPor favor ejecute manualmente:`nSet-ExecutionPolicy RemoteSigned -Scope LocalMachine', 'Error - ExecutionPolicy', 'OK', 'Error')}" 2>nul
+    exit /b 1
+)
+
+:PolicyOK
+
+REM ============================================================
+REM PROCESAR ARGUMENTOS
+REM ============================================================
+
+set "FIRST_ARG=%~1"
+set "SCRIPT_ARGS="
+
+if exist "%FIRST_ARG%" (
+    REM El primer argumento es un archivo o carpeta válido - usarlo como origen
+    set "SCRIPT_ARGS=-Origen ""%FIRST_ARG%"""
+    
+    REM Agregar el resto de argumentos (si los hay)
+    shift
+    :ArgLoop
+    if "%~1"=="" goto ArgEnd
+    set "SCRIPT_ARGS=!SCRIPT_ARGS! %1"
+    shift
+    goto ArgLoop
+    :ArgEnd
+) else (
+    REM No se detectó archivo/carpeta como primer arg - pasar todos los argumentos tal cual
+    set "SCRIPT_ARGS=%*"
+)
+
+REM ============================================================
+REM EJECUTAR LLEVAR.PS1 CON POWERSHELL 7
+REM ============================================================
+
 echo Ejecutando Llevar.ps1...
 echo.
 
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%PS_SCRIPT%" %ARGS%
+"%PWSH_EXE%" -NoProfile -ExecutionPolicy Bypass -File "%PS_SCRIPT%" !SCRIPT_ARGS!
 
-REM Capturar código de error
-set "ERROR_CODE=%ERRORLEVEL%"
-
-REM Si el error es relacionado con ExecutionPolicy (usualmente -196608 o 1)
-if !ERROR_CODE! neq 0 (
-    echo.
-    echo ============================================================
-    echo  ERROR DETECTADO - Codigo: !ERROR_CODE!
-    echo ============================================================
-    echo.
-    echo Es posible que la politica de ejecucion este bloqueando
-    echo la ejecucion de scripts de PowerShell.
-    echo.
-    echo Desea habilitar la ejecucion de scripts con permisos de
-    echo administrador? ^(Esto configurara ExecutionPolicy a RemoteSigned^)
-    echo.
-    choice /C SN /M "Presione S para Solucionarlo o N para Cancelar"
-    
-    if !ERRORLEVEL! equ 1 (
-        echo.
-        echo Elevando permisos de administrador...
-        echo.
-        
-        REM Crear script temporal para cambiar ExecutionPolicy
-        set "TEMP_PS=%TEMP%\fix_execution_policy.ps1"
-        
-        echo # Script temporal para habilitar ExecutionPolicy > "!TEMP_PS!"
-        echo try { >> "!TEMP_PS!"
-        echo     Write-Host "Verificando politica actual..." -ForegroundColor Cyan >> "!TEMP_PS!"
-        echo     $currentPolicy = Get-ExecutionPolicy -Scope LocalMachine >> "!TEMP_PS!"
-        echo     Write-Host "Politica actual: $currentPolicy" -ForegroundColor Yellow >> "!TEMP_PS!"
-        echo     Write-Host "" >> "!TEMP_PS!"
-        echo     Write-Host "Configurando ExecutionPolicy a RemoteSigned..." -ForegroundColor Cyan >> "!TEMP_PS!"
-        echo     Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope LocalMachine -Force >> "!TEMP_PS!"
-        echo     Write-Host "" >> "!TEMP_PS!"
-        echo     Write-Host "Exito: ExecutionPolicy configurado correctamente" -ForegroundColor Green >> "!TEMP_PS!"
-        echo     Write-Host "Ahora puede ejecutar scripts de PowerShell sin problemas." -ForegroundColor Green >> "!TEMP_PS!"
-        echo     Write-Host "" >> "!TEMP_PS!"
-        echo     $newPolicy = Get-ExecutionPolicy -Scope LocalMachine >> "!TEMP_PS!"
-        echo     Write-Host "Nueva politica: $newPolicy" -ForegroundColor Green >> "!TEMP_PS!"
-        echo     exit 0 >> "!TEMP_PS!"
-        echo } >> "!TEMP_PS!"
-        echo catch { >> "!TEMP_PS!"
-        echo     Write-Host "" >> "!TEMP_PS!"
-        echo     Write-Host "ERROR: No se pudo cambiar la politica de ejecucion" -ForegroundColor Red >> "!TEMP_PS!"
-        echo     Write-Host $_.Exception.Message -ForegroundColor Red >> "!TEMP_PS!"
-        echo     Write-Host "" >> "!TEMP_PS!"
-        echo     Write-Host "Intente ejecutar manualmente como administrador:" -ForegroundColor Yellow >> "!TEMP_PS!"
-        echo     Write-Host "  Set-ExecutionPolicy RemoteSigned -Scope LocalMachine" -ForegroundColor White >> "!TEMP_PS!"
-        echo     exit 1 >> "!TEMP_PS!"
-        echo } >> "!TEMP_PS!"
-        
-        REM Ejecutar con permisos de administrador
-        powershell.exe -NoProfile -Command "Start-Process powershell.exe -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File','\"%TEMP_PS%\"' -Verb RunAs -Wait"
-        
-        set "FIX_RESULT=!ERRORLEVEL!"
-        
-        REM Limpiar archivo temporal
-        if exist "!TEMP_PS!" del /f /q "!TEMP_PS!" >nul 2>&1
-        
-        if !FIX_RESULT! equ 0 (
-            echo.
-            echo ============================================================
-            echo  POLITICA CONFIGURADA CORRECTAMENTE
-            echo ============================================================
-            echo.
-            echo Reintentando ejecucion de Llevar.ps1...
-            echo.
-            
-            REM Reintentar ejecución del script original
-            powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%PS_SCRIPT%" %ARGS%
-            set "RETRY_CODE=!ERRORLEVEL!"
-            
-            if !RETRY_CODE! equ 0 (
-                echo.
-                echo Ejecucion completada exitosamente.
-                echo.
-            ) else (
-                echo.
-                echo Advertencia: El script se ejecuto pero finalizo con codigo: !RETRY_CODE!
-                echo.
-            )
-        ) else (
-            echo.
-            echo ============================================================
-            echo  NO SE PUDO CONFIGURAR LA POLITICA
-            echo ============================================================
-            echo.
-            echo Puede intentar ejecutar manualmente como administrador:
-            echo   Set-ExecutionPolicy RemoteSigned -Scope LocalMachine
-            echo.
-        )
-    ) else (
-        echo.
-        echo Operacion cancelada por el usuario.
-        echo.
-    )
-)
-
-echo.
-echo Presione cualquier tecla para salir...
-pause >nul
-exit /b 0
+exit /b !ERRORLEVEL!

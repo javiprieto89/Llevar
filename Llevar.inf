@@ -20,19 +20,28 @@ DelReg=Llevar.DelReg
 ; Menú contextual para CARPETAS
 HKCR,"Directory\shell\Llevar",,0x00000000,"Llevar A..."
 HKCR,"Directory\shell\Llevar","Icon",0x00020000,"%SystemRoot%\System32\imageres.dll,-1043"
-HKCR,"Directory\shell\Llevar\command",,0x00020000,"pwsh.exe -NoProfile -ExecutionPolicy Bypass -File ""C:\Llevar\Llevar.ps1"" -Origen ""%1"""
+HKCR,"Directory\shell\Llevar\command",,0x00020000,"""C:\Llevar\LLEVAR.CMD"" ""%1"""
 
 ; Menú contextual para UNIDADES (drives)
 HKCR,"Drive\shell\Llevar",,0x00000000,"Llevar A..."
 HKCR,"Drive\shell\Llevar","Icon",0x00020000,"%SystemRoot%\System32\imageres.dll,-1043"
-HKCR,"Drive\shell\Llevar\command",,0x00020000,"pwsh.exe -NoProfile -ExecutionPolicy Bypass -File ""C:\Llevar\Llevar.ps1"" -Origen ""%1"""
+HKCR,"Drive\shell\Llevar\command",,0x00020000,"""C:\Llevar\LLEVAR.CMD"" ""%1"""
 
-; Información de desinstalación
-HKLM,"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Llevar","DisplayName",0x00000000,"Llevar.ps1"
+; Información de desinstalación (Panel de Control - Agregar o Quitar Programas)
+; NOTA: La versión y otros valores dinámicos se actualizan mediante SystemInstall.psm1
+HKLM,"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Llevar","DisplayName",0x00000000,"Llevar"
 HKLM,"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Llevar","DisplayVersion",0x00000000,"2.0"
-HKLM,"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Llevar","Publisher",0x00000000,"AlexSoft"
+HKLM,"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Llevar","Publisher",0x00000000,"Alex-Soft"
 HKLM,"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Llevar","InstallLocation",0x00000000,"C:\Llevar"
-HKLM,"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Llevar","UninstallString",0x00020000,"rundll32.exe setupapi.dll,InstallHinfSection DefaultUninstall 132 C:\Llevar\Llevar.inf"
+HKLM,"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Llevar","UninstallString",0x00020000,"C:\Llevar\DESINSTALAR.CMD"
+HKLM,"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Llevar","DisplayIcon",0x00020000,"C:\Llevar\Data\Llevar.ico,0"
+HKLM,"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Llevar","NoModify",0x00010001,1
+HKLM,"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Llevar","NoRepair",0x00010001,1
+HKLM,"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Llevar","EstimatedSize",0x00010001,10240
+HKLM,"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Llevar","HelpLink",0x00000000,"https://github.com/alexsoft"
+HKLM,"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Llevar","URLInfoAbout",0x00000000,"https://github.com/alexsoft"
+HKLM,"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Llevar","Contact",0x00000000,"Alex-Soft"
+HKLM,"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Llevar","Comments",0x00000000,"Sistema de transferencia de archivos con compresion y soporte multi-destino"
 
 ; ============================================================================
 ; DESINSTALACIÓN: Eliminar entradas del registro

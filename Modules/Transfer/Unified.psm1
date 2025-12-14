@@ -54,32 +54,32 @@ function Copy-LlevarFiles {
 }
 
 function Copy-LlevarLocalToFtp {
-    param([Parameter(Mandatory = $true)][TransferConfig]$Llevar)
+    param([Parameter(Mandatory = $true)]$Llevar)
     Invoke-TransferDispatcher -Llevar $Llevar
 }
 
 function Copy-LlevarFtpToLocal {
-    param([Parameter(Mandatory = $true)][TransferConfig]$Llevar)
+    param([Parameter(Mandatory = $true)]$Llevar)
     Invoke-TransferDispatcher -Llevar $Llevar
 }
 
 function Copy-LlevarLocalToOneDrive {
-    param([Parameter(Mandatory = $true)][TransferConfig]$Llevar)
+    param([Parameter(Mandatory = $true)]$Llevar)
     Invoke-TransferDispatcher -Llevar $Llevar
 }
 
 function Copy-LlevarOneDriveToLocal {
-    param([Parameter(Mandatory = $true)][TransferConfig]$Llevar)
+    param([Parameter(Mandatory = $true)]$Llevar)
     Invoke-TransferDispatcher -Llevar $Llevar
 }
 
 function Copy-LlevarLocalToDropbox {
-    param([Parameter(Mandatory = $true)][TransferConfig]$Llevar)
+    param([Parameter(Mandatory = $true)]$Llevar)
     Invoke-TransferDispatcher -Llevar $Llevar
 }
 
 function Copy-LlevarDropboxToLocal {
-    param([Parameter(Mandatory = $true)][TransferConfig]$Llevar)
+    param([Parameter(Mandatory = $true)]$Llevar)
     Invoke-TransferDispatcher -Llevar $Llevar
 }
 
@@ -94,7 +94,7 @@ function Invoke-TransferDispatcher {
     #>
     param(
         [Parameter(Mandatory = $true)]
-        [TransferConfig]$Llevar,
+        $Llevar,
         [bool]$ShowProgress = $true,
         [int]$ProgressTop = -1
     )
@@ -111,7 +111,7 @@ function Invoke-TransferDispatcher {
     Write-Log "Dispatcher: Ruta detectada = $route" "INFO"
 
     if ($ShowProgress) {
-        Write-LlevarProgressBar -Percent 0 -StartTime $startTime -Label "Analizando ruta: $route..." -Top $ProgressTop -Width 50
+        Write-LlevarProgressBar -Percent 0 -StartTime $startTime -Label "Analizando ruta: $route..." -Top $ProgressTop -Width 50 -CheckCancellation
     }
 
     try {
@@ -237,7 +237,7 @@ function Invoke-TransferDispatcher {
 # ========================================================================== #
 
 function Invoke-LocalToLocal {
-    param([TransferConfig]$Llevar, [bool]$ShowProgress, [int]$ProgressTop, [datetime]$StartTime)
+    param($Llevar, [bool]$ShowProgress, [int]$ProgressTop, [datetime]$StartTime)
     
     Write-Log "Handler: Local→Local" "INFO"
     
@@ -257,7 +257,7 @@ function Invoke-LocalToFtp {
         Handler: Local→FTP (sube archivos locales a servidor FTP)
     #>
     param(
-        [TransferConfig]$Llevar,
+        $Llevar,
         [bool]$ShowProgress,
         [int]$ProgressTop,
         [datetime]$StartTime
@@ -321,7 +321,7 @@ function Invoke-LocalToFtp {
     Write-Log "Local→FTP: $sourcePath → $($ftpConfig.Server)$($ftpConfig.Directory)" "INFO"
     
     if ($ShowProgress) {
-        Write-LlevarProgressBar -Percent 0 -StartTime $StartTime -Label "Subiendo a FTP..." -Top $ProgressTop -Width 50
+        Write-LlevarProgressBar -Percent 0 -StartTime $StartTime -Label "Subiendo a FTP..." -Top $ProgressTop -Width 50 -CheckCancellation
     }
     
     # Función auxiliar para subir un archivo
@@ -469,7 +469,7 @@ function Invoke-LocalToCloud {
         Handler: Local→OneDrive/Dropbox (sube archivos locales a servicio cloud)
     #>
     param(
-        [TransferConfig]$Llevar,
+        $Llevar,
         [string]$CloudType,
         [bool]$ShowProgress,
         [int]$ProgressTop,
@@ -514,7 +514,7 @@ function Invoke-LocalToCloud {
     Write-Log "Local→${CloudType}: $sourcePath → $cloudPath" "INFO"
     
     if ($ShowProgress) {
-        Write-LlevarProgressBar -Percent 0 -StartTime $StartTime -Label "Subiendo a ${CloudType}..." -Top $ProgressTop -Width 50
+        Write-LlevarProgressBar -Percent 0 -StartTime $StartTime -Label "Subiendo a ${CloudType}..." -Top $ProgressTop -Width 50 -CheckCancellation
     }
     
     # Módulos OneDrive/Dropbox ya fueron importados por Llevar.ps1
@@ -544,7 +544,7 @@ function Invoke-LocalToCloud {
         
         if ($ShowProgress) {
             $percent = [Math]::Min(99, ($uploadedFiles * 100 / $totalFiles))
-            Write-LlevarProgressBar -Percent $percent -StartTime $StartTime -Label "Subiendo: $($file.Name)..." -Top $ProgressTop -Width 50
+            Write-LlevarProgressBar -Percent $percent -StartTime $StartTime -Label "Subiendo: $($file.Name)..." -Top $ProgressTop -Width 50 -CheckCancellation
         }
         
         try {
@@ -574,7 +574,7 @@ function Invoke-LocalToCloud {
 }
 
 function Invoke-FtpToLocal {
-    param([TransferConfig]$Llevar, [bool]$ShowProgress, [int]$ProgressTop, [datetime]$StartTime)
+    param($Llevar, [bool]$ShowProgress, [int]$ProgressTop, [datetime]$StartTime)
     
     Write-Log "Handler: FTP→Local (descarga recursiva)" "INFO"
     
@@ -662,8 +662,8 @@ function Invoke-FtpToLocal {
             else {
                 # Descargar archivo
                 if ($ShowProgress) {
-                    Write-LlevarProgressBar -Percent 50 -StartTime $StartTime `
-                        -Label "Descargando: $($item.Name)..." -Top $ProgressTop -Width 50
+                    Write-LlevarSpinner -StartTime $StartTime `
+                        -Label "Descargando: $($item.Name)" -Top $ProgressTop -CheckCancellation
                 }
                 
                 try {
@@ -699,7 +699,7 @@ function Invoke-FtpToLocal {
 }
 
 function Invoke-FtpToFtp {
-    param([TransferConfig]$Llevar, [bool]$ShowProgress, [int]$ProgressTop, [datetime]$StartTime)
+    param($Llevar, [bool]$ShowProgress, [int]$ProgressTop, [datetime]$StartTime)
     
     Write-Log "Handler: FTP→FTP (vía temporal)" "INFO"
     
@@ -727,13 +727,150 @@ function Invoke-FtpToFtp {
 }
 
 function Invoke-CloudToLocal {
-    param([TransferConfig]$Llevar, [string]$CloudType, [bool]$ShowProgress, [int]$ProgressTop, [datetime]$StartTime)
-    Write-Log "Handler: ${CloudType}→Local (en desarrollo)" "WARNING"
-    throw "${CloudType}→Local: Implementación pendiente"
+    <#
+    .SYNOPSIS
+        Handler: OneDrive/Dropbox→Local (descarga de nube, comprime y copia a local)
+    #>
+    param(
+        $Llevar,
+        [string]$CloudType,
+        [bool]$ShowProgress,
+        [int]$ProgressTop,
+        [datetime]$StartTime
+    )
+    
+    Write-Log "Handler: ${CloudType}→Local (con compresión)" "INFO"
+    
+    # Validar origen
+    if ($Llevar.Origen.Tipo -ne $CloudType) {
+        throw "${CloudType}→Local: Origen no es ${CloudType}"
+    }
+    
+    # Validar destino
+    $destPath = Get-TransferPath -Config $Llevar -Section "Destino"
+    if ($Llevar.Destino.Tipo -ne "Local") {
+        throw "${CloudType}→Local: Destino no es Local"
+    }
+    
+    if (-not $destPath) {
+        throw "${CloudType}→Local: Ruta destino no especificada"
+    }
+    
+    # Crear carpeta temporal para descarga
+    $tempDownload = Join-Path $env:TEMP "LLEVAR_CLOUD_DOWNLOAD_$(Get-Date -Format 'yyyyMMddHHmmss')"
+    New-Item -Type Directory $tempDownload | Out-Null
+    Write-Log "Carpeta temporal para descarga: $tempDownload" "DEBUG"
+    
+    try {
+        # Paso 1: Descargar de nube a temporal
+        if ($ShowProgress) {
+            Write-LlevarProgressBar -Percent 10 -StartTime $StartTime -Label "Descargando de ${CloudType}..." -Top $ProgressTop -Width 50 -CheckCancellation
+        }
+        
+        Write-Host "Descargando archivos desde ${CloudType}..." -ForegroundColor Cyan
+        
+        if ($CloudType -eq "OneDrive") {
+            # Descargar de OneDrive usando Receive-OneDriveItem
+            Import-Module (Join-Path (Split-Path $PSScriptRoot -Parent) "Transfer\OneDrive\OneDriveTransfer.psm1") -Force
+            
+            $downloadSuccess = Receive-OneDriveItem -Llevar $Llevar -LocalDestination $tempDownload
+            
+            if (-not $downloadSuccess) {
+                throw "OneDrive→Local: Error al descargar archivos desde OneDrive"
+            }
+        }
+        elseif ($CloudType -eq "Dropbox") {
+            # Descargar de Dropbox usando Receive-DropboxItem
+            Import-Module (Join-Path (Split-Path $PSScriptRoot -Parent) "Transfer\Dropbox.psm1") -Force
+            
+            $downloadSuccess = Receive-DropboxItem -Llevar $Llevar -LocalDestination $tempDownload
+            
+            if (-not $downloadSuccess) {
+                throw "Dropbox→Local: Error al descargar archivos desde Dropbox"
+            }
+        }
+        else {
+            throw "${CloudType}→Local: Tipo de nube no soportado: $CloudType"
+        }
+        
+        if ($ShowProgress) {
+            Write-LlevarProgressBar -Percent 40 -StartTime $StartTime -Label "Descarga completada" -Top $ProgressTop -Width 50
+        }
+        
+        # Paso 2: Comprimir archivos temporales si está habilitado
+        $blockSizeMB = $Llevar.Opciones.BlockSizeMB
+        
+        if ($blockSizeMB -gt 0) {
+            if ($ShowProgress) {
+                Write-LlevarProgressBar -Percent 50 -StartTime $StartTime -Label "Comprimiendo archivos..." -Top $ProgressTop -Width 50
+            }
+            
+            Write-Host "Comprimiendo archivos descargados..." -ForegroundColor Cyan
+            
+            # Obtener 7-Zip
+            $sevenZip = Get-SevenZipLlevar
+            
+            # Comprimir archivos temporales
+            $tempCompress = Join-Path $env:TEMP "LLEVAR_COMPRESSED_$(Get-Date -Format 'yyyyMMddHHmmss')"
+            New-Item -Type Directory $tempCompress | Out-Null
+            
+            try {
+                $compressResult = Compress-Folder -Origen $tempDownload -Temp $tempCompress -SevenZ $sevenZip `
+                    -Clave $null -BlockSizeMB $blockSizeMB
+                
+                if ($ShowProgress) {
+                    Write-LlevarProgressBar -Percent 70 -StartTime $StartTime -Label "Copiando bloques..." -Top $ProgressTop -Width 50
+                }
+                
+                # Paso 3: Copiar bloques comprimidos al destino
+                Write-Host "Copiando bloques comprimidos a destino..." -ForegroundColor Cyan
+                
+                foreach ($file in $compressResult.Files) {
+                    $fileName = Split-Path $file -Leaf
+                    $destFile = Join-Path $destPath $fileName
+                    Copy-Item -Path $file -Destination $destFile -Force
+                    Write-Log "Copiado: $fileName" "INFO"
+                }
+                
+                if ($ShowProgress) {
+                    Write-LlevarProgressBar -Percent 100 -StartTime $StartTime -Label "Transferencia completada" -Top $ProgressTop -Width 50
+                }
+                
+                Write-Host "✓ Transferencia ${CloudType}→Local completada" -ForegroundColor Green
+                Write-Log "${CloudType}→Local: Transferencia completada exitosamente" "INFO"
+                
+                return @{ Success = $true; Route = "${CloudType}→Local (comprimido)" }
+            }
+            finally {
+                Remove-Item $tempCompress -Recurse -Force -ErrorAction SilentlyContinue
+            }
+        }
+        else {
+            # Sin compresión, copiar directamente
+            if ($ShowProgress) {
+                Write-LlevarProgressBar -Percent 70 -StartTime $StartTime -Label "Copiando archivos..." -Top $ProgressTop -Width 50
+            }
+            
+            Write-Host "Copiando archivos a destino..." -ForegroundColor Cyan
+            Copy-Item -Path "$tempDownload\*" -Destination $destPath -Recurse -Force
+            
+            if ($ShowProgress) {
+                Write-LlevarProgressBar -Percent 100 -StartTime $StartTime -Label "Copia completada" -Top $ProgressTop -Width 50
+            }
+            
+            Write-Host "✓ Transferencia ${CloudType}→Local completada" -ForegroundColor Green
+            Write-Log "${CloudType}→Local: Copia completada exitosamente" "INFO"
+            
+            return @{ Success = $true; Route = "${CloudType}→Local (directo)" }
+        }
+    }
+    finally {
+        Remove-Item $tempDownload -Recurse -Force -ErrorAction SilentlyContinue
+    }
 }
 
 function Invoke-CloudToCloud {
-    param([TransferConfig]$Llevar, [string]$SourceCloud, [string]$DestCloud, [bool]$ShowProgress, [int]$ProgressTop, [datetime]$StartTime)
+    param($Llevar, [string]$SourceCloud, [string]$DestCloud, [bool]$ShowProgress, [int]$ProgressTop, [datetime]$StartTime)
     
     Write-Log "Handler: ${SourceCloud}→${DestCloud} (vía temporal)" "INFO"
     
@@ -766,7 +903,7 @@ function Invoke-LocalToUNC {
         Handler: Local→UNC (copia archivos locales a ruta UNC de red)
     #>
     param(
-        [TransferConfig]$Llevar,
+        $Llevar,
         [bool]$ShowProgress,
         [int]$ProgressTop,
         [datetime]$StartTime
@@ -797,7 +934,7 @@ function Invoke-LocalToUNC {
     Write-Log "Local→UNC: $sourcePath → $destPath" "INFO"
     
     if ($ShowProgress) {
-        Write-LlevarProgressBar -Percent 0 -StartTime $StartTime -Label "Copiando a UNC..." -Top $ProgressTop -Width 50
+        Write-LlevarProgressBar -Percent 0 -StartTime $StartTime -Label "Copiando a UNC..." -Top $ProgressTop -Width 50 -CheckCancellation
     }
     
     # Montar UNC si es necesario
@@ -840,7 +977,7 @@ function Invoke-LocalToISO {
         Handler: Local→ISO (crea imagen ISO desde archivos locales)
     #>
     param(
-        [TransferConfig]$Llevar,
+        $Llevar,
         [bool]$ShowProgress,
         [int]$ProgressTop,
         [datetime]$StartTime
@@ -947,7 +1084,7 @@ function Invoke-LocalToISO {
 }
 function Invoke-LocalToDiskette {
     param(
-        [TransferConfig]$Llevar,
+        $Llevar,
         [bool]$ShowProgress,
         [int]$ProgressTop,
         [datetime]$StartTime
@@ -986,7 +1123,167 @@ function Invoke-FtpToUNC { param($Llevar, $ShowProgress, $ProgressTop, $StartTim
 function Invoke-FtpToUSB { param($Llevar, $ShowProgress, $ProgressTop, $StartTime); throw "FTP→USB: En desarrollo" }
 function Invoke-FtpToISO { param($Llevar, $ShowProgress, $ProgressTop, $StartTime); throw "FTP→ISO: En desarrollo" }
 function Invoke-FtpToDiskette { param($Llevar, $ShowProgress, $ProgressTop, $StartTime); throw "FTP→Diskette: En desarrollo" }
-function Invoke-CloudToFtp { param($Llevar, $CloudType, $ShowProgress, $ProgressTop, $StartTime); throw "${CloudType}→FTP: En desarrollo" }
+function Invoke-CloudToFtp {
+    <#
+    .SYNOPSIS
+        Handler: OneDrive/Dropbox→FTP (descarga de nube, comprime y sube a FTP)
+    #>
+    param(
+        $Llevar,
+        [string]$CloudType,
+        [bool]$ShowProgress,
+        [int]$ProgressTop,
+        [datetime]$StartTime
+    )
+    
+    Write-Log "Handler: ${CloudType}→FTP (con compresión)" "INFO"
+    
+    # Validar origen
+    if ($Llevar.Origen.Tipo -ne $CloudType) {
+        throw "${CloudType}→FTP: Origen no es ${CloudType}"
+    }
+    
+    # Validar destino
+    if ($Llevar.Destino.Tipo -ne "FTP") {
+        throw "${CloudType}→FTP: Destino no es FTP"
+    }
+    
+    # Crear carpeta temporal para descarga
+    $tempDownload = Join-Path $env:TEMP "LLEVAR_CLOUD_DOWNLOAD_$(Get-Date -Format 'yyyyMMddHHmmss')"
+    New-Item -Type Directory $tempDownload | Out-Null
+    Write-Log "Carpeta temporal para descarga: $tempDownload" "DEBUG"
+    
+    try {
+        # Paso 1: Descargar de nube a temporal
+        if ($ShowProgress) {
+            Write-LlevarProgressBar -Percent 10 -StartTime $StartTime -Label "Descargando de ${CloudType}..." -Top $ProgressTop -Width 50
+        }
+        
+        Write-Host "Descargando archivos desde ${CloudType}..." -ForegroundColor Cyan
+        
+        if ($CloudType -eq "OneDrive") {
+            # Descargar de OneDrive usando Receive-OneDriveItem
+            Import-Module (Join-Path (Split-Path $PSScriptRoot -Parent) "Transfer\OneDrive\OneDriveTransfer.psm1") -Force
+            
+            $downloadSuccess = Receive-OneDriveItem -Llevar $Llevar -LocalDestination $tempDownload
+            
+            if (-not $downloadSuccess) {
+                throw "OneDrive→FTP: Error al descargar archivos desde OneDrive"
+            }
+        }
+        elseif ($CloudType -eq "Dropbox") {
+            # Descargar de Dropbox usando Receive-DropboxItem
+            Import-Module (Join-Path (Split-Path $PSScriptRoot -Parent) "Transfer\Dropbox.psm1") -Force
+            
+            $downloadSuccess = Receive-DropboxItem -Llevar $Llevar -LocalDestination $tempDownload
+            
+            if (-not $downloadSuccess) {
+                throw "Dropbox→FTP: Error al descargar archivos desde Dropbox"
+            }
+        }
+        else {
+            throw "${CloudType}→FTP: Tipo de nube no soportado: $CloudType"
+        }
+        
+        if ($ShowProgress) {
+            Write-LlevarProgressBar -Percent 40 -StartTime $StartTime -Label "Descarga completada" -Top $ProgressTop -Width 50
+        }
+        
+        # Paso 2: Comprimir archivos temporales
+        $blockSizeMB = $Llevar.Opciones.BlockSizeMB
+        
+        if ($blockSizeMB -gt 0) {
+            if ($ShowProgress) {
+                Write-LlevarProgressBar -Percent 50 -StartTime $StartTime -Label "Comprimiendo..." -Top $ProgressTop -Width 50
+            }
+            
+            Write-Host "Comprimiendo archivos descargados..." -ForegroundColor Cyan
+            
+            $sevenZip = Get-SevenZipLlevar
+            $tempCompress = Join-Path $env:TEMP "LLEVAR_COMPRESSED_$(Get-Date -Format 'yyyyMMddHHmmss')"
+            New-Item -Type Directory $tempCompress | Out-Null
+            
+            try {
+                $compressResult = Compress-Folder -Origen $tempDownload -Temp $tempCompress -SevenZ $sevenZip `
+                    -Clave $null -BlockSizeMB $blockSizeMB
+                
+                if ($ShowProgress) {
+                    Write-LlevarProgressBar -Percent 70 -StartTime $StartTime -Label "Subiendo a FTP..." -Top $ProgressTop -Width 50
+                }
+                
+                # Paso 3: Subir bloques comprimidos a FTP
+                Write-Host "Subiendo bloques comprimidos a FTP..." -ForegroundColor Cyan
+                
+                # Obtener configuración FTP desde TransferConfig
+                $ftpConfig = [PSCustomObject]@{
+                    Server      = $Llevar.Destino.FTP.Server
+                    Port        = if ($Llevar.Destino.FTP.Port) { $Llevar.Destino.FTP.Port } else { 21 }
+                    Directory   = if ($Llevar.Destino.FTP.Directory) { $Llevar.Destino.FTP.Directory } else { "/" }
+                    Credentials = $Llevar.Destino.FTP.Credentials
+                    UseSsl      = $Llevar.Destino.FTP.UseSsl
+                }
+                
+                $uploadedCount = 0
+                foreach ($file in $compressResult.Files) {
+                    $fileName = Split-Path $file -Leaf
+                    $remotePath = "$($ftpConfig.Directory)/$fileName".Replace('//', '/')
+                    
+                    Write-Log "Subiendo: $fileName → $remotePath" "INFO"
+                    
+                    # Usar función auxiliar del handler Local→FTP
+                    try {
+                        $uri = [uri]"$($ftpConfig.Server)$remotePath"
+                        $request = [System.Net.FtpWebRequest]::Create($uri)
+                        $request.Method = [System.Net.WebRequestMethods+Ftp]::UploadFile
+                        $request.Credentials = $ftpConfig.Credentials.GetNetworkCredential()
+                        $request.UsePassive = $true
+                        $request.UseBinary = $true
+                        $request.KeepAlive = $false
+                        
+                        if ($ftpConfig.UseSsl) {
+                            $request.EnableSsl = $true
+                        }
+                        
+                        $fileContent = [System.IO.File]::ReadAllBytes($file)
+                        $request.ContentLength = $fileContent.Length
+                        
+                        $requestStream = $request.GetRequestStream()
+                        $requestStream.Write($fileContent, 0, $fileContent.Length)
+                        $requestStream.Close()
+                        
+                        $response = $request.GetResponse()
+                        $response.Close()
+                        
+                        $uploadedCount++
+                        Write-Log "Subido exitosamente: $fileName ($uploadedCount/$($compressResult.Files.Count))" "INFO"
+                    }
+                    catch {
+                        Write-Log "Error subiendo $fileName a FTP: $($_.Exception.Message)" "ERROR" -ErrorRecord $_
+                        throw "Error al subir bloque $fileName a FTP"
+                    }
+                }
+                
+                if ($ShowProgress) {
+                    Write-LlevarProgressBar -Percent 100 -StartTime $StartTime -Label "Transferencia completada" -Top $ProgressTop -Width 50
+                }
+                
+                Write-Host "✓ Transferencia ${CloudType}→FTP completada" -ForegroundColor Green
+                Write-Log "${CloudType}→FTP: Transferencia completada exitosamente" "INFO"
+                
+                return @{ Success = $true; Route = "${CloudType}→FTP (comprimido)" }
+            }
+            finally {
+                Remove-Item $tempCompress -Recurse -Force -ErrorAction SilentlyContinue
+            }
+        }
+        else {
+            throw "${CloudType}→FTP sin compresión: No implementado"
+        }
+    }
+    finally {
+        Remove-Item $tempDownload -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
 function Invoke-CloudToUNC { param($Llevar, $CloudType, $ShowProgress, $ProgressTop, $StartTime); throw "${CloudType}→UNC: En desarrollo" }
 function Invoke-CloudToUSB { param($Llevar, $CloudType, $ShowProgress, $ProgressTop, $StartTime); throw "${CloudType}→USB: En desarrollo" }
 function Invoke-CloudToISO { param($Llevar, $CloudType, $ShowProgress, $ProgressTop, $StartTime); throw "${CloudType}→ISO: En desarrollo" }
@@ -1009,7 +1306,7 @@ function Invoke-DisketteToDiskette {
         Handler: Diskette→Diskette (copia directa entre diskettes)
     #>
     param(
-        [TransferConfig]$Llevar,
+        $Llevar,
         [bool]$ShowProgress,
         [int]$ProgressTop,
         [datetime]$StartTime
@@ -1026,7 +1323,7 @@ function Invoke-DisketteToLocal {
         Handler: Diskette→Local
     #>
     param(
-        [TransferConfig]$Llevar,
+        $Llevar,
         [bool]$ShowProgress,
         [int]$ProgressTop,
         [datetime]$StartTime
@@ -1043,7 +1340,7 @@ function Invoke-DisketteToFtp {
         Handler: Diskette→FTP
     #>
     param(
-        [TransferConfig]$Llevar,
+        $Llevar,
         [bool]$ShowProgress,
         [int]$ProgressTop,
         [datetime]$StartTime
@@ -1060,7 +1357,7 @@ function Invoke-DisketteToUNC {
         Handler: Diskette→UNC
     #>
     param(
-        [TransferConfig]$Llevar,
+        $Llevar,
         [bool]$ShowProgress,
         [int]$ProgressTop,
         [datetime]$StartTime
@@ -1077,7 +1374,7 @@ function Invoke-DisketteToCloud {
         Handler: Diskette→OneDrive/Dropbox
     #>
     param(
-        [TransferConfig]$Llevar,
+        $Llevar,
         [string]$CloudType,
         [bool]$ShowProgress,
         [int]$ProgressTop,
@@ -1095,7 +1392,7 @@ function Invoke-DisketteToISO {
         Handler: Diskette→ISO
     #>
     param(
-        [TransferConfig]$Llevar,
+        $Llevar,
         [bool]$ShowProgress,
         [int]$ProgressTop,
         [datetime]$StartTime
@@ -1107,4 +1404,4 @@ function Invoke-DisketteToISO {
 }
 
 # Exportar funciones PÚBLICAS solamente
-Export-ModuleMember -Function Copy-LlevarFiles, Copy-LlevarLocalToFtp, Copy-LlevarFtpToLocal, Copy-LlevarLocalToOneDrive, Copy-LlevarOneDriveToLocal, Copy-LlevarLocalToDropbox, Copy-LlevarDropboxToLocal
+Export-ModuleMember -Function Copy-LlevarFiles, Copy-LlevarLocalToFtp, Copy-LlevarFtpToLocal, Copy-LlevarLocalToOneDrive, Copy-LlevarOneDriveToLocal, Copy-LlevarLocalToDropbox, Copy-LlevarDropboxToLocal, Invoke-TransferDispatcher

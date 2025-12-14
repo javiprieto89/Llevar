@@ -5,30 +5,6 @@
 # Funciones refactorizadas para usar TransferConfig como única fuente de verdad
 # ========================================================================== #
 
-# Cargar clase TransferConfig si no está disponible (GLOBAL SCOPE)
-$transferConfigTypeLoaded = $false
-try {
-    $null = [TransferConfig] -as [type]
-    $transferConfigTypeLoaded = $true
-}
-catch {
-    $transferConfigTypeLoaded = $false
-}
-
-if (-not $transferConfigTypeLoaded) {
-    $ModulesPath = Split-Path $PSScriptRoot -Parent
-    $transferConfigType = Join-Path $ModulesPath "Core\TransferConfig.Type.ps1"
-    
-    if (Test-Path $transferConfigType) {
-        # Dot-source en GLOBAL scope para que el tipo esté disponible en toda la sesión
-        $global:__transferConfigScript = $transferConfigType
-        Invoke-Expression ". `$global:__transferConfigScript"
-    }
-    else {
-        throw "ERROR CRÍTICO: No se puede cargar TransferConfig.Type.ps1 desde $transferConfigType"
-    }
-}
-
 # Todos los módulos necesarios ya fueron importados por Llevar.ps1
 # Solo verificar que TransferConfig esté disponible
 $ModulesPath = Split-Path $PSScriptRoot -Parent
@@ -50,10 +26,15 @@ function Show-MainMenu {
         ✅ Se pasa [TransferConfig]$TransferConfig desde el llamador
         ✅ Se modifica directamente cuando el usuario interactúa
         ✅ Origen y Destino son opciones INDEPENDIENTES del menú
+    .PARAMETER OrigenBloqueado
+        Si está activo, el origen no se puede modificar (viene desde arrastrar o menú contextual)
     #>
     param(
         [Parameter(Mandatory = $true)]
-        [TransferConfig]$TransferConfig
+        $TransferConfig,
+        
+        [Parameter(Mandatory = $false)]
+        [switch]$OrigenBloqueado
     )
     
     while ($true) {
@@ -68,6 +49,11 @@ function Show-MainMenu {
         $origenPath = Get-TransferPath -Config $TransferConfig -Section "Origen"
         if ($origenPath) {
             $origenDisplay += " → $origenPath"
+        }
+        
+        # Si el origen está bloqueado, agregar indicador
+        if ($OrigenBloqueado) {
+            $origenDisplay += " [BLOQUEADO]"
         }
         
         # Construir display del destino desde TransferConfig
@@ -101,7 +87,15 @@ function Show-MainMenu {
         switch ($selection) {
             0 { return $null }  # Salir
             1 { 
-                Show-OrigenDestinoMenu -TransferConfig $TransferConfig -Cual "Origen" | Out-Null
+                # Si el origen está bloqueado, mostrar mensaje y no permitir cambios
+                if ($OrigenBloqueado) {
+                    Show-ConsolePopup -Title "Origen Bloqueado" `
+                        -Message "El origen fue configurado desde el menú contextual o al arrastrar al ícono.`n`nNo se puede modificar en esta sesión." `
+                        -Options @("*OK") | Out-Null
+                }
+                else {
+                    Show-OrigenDestinoMenu -TransferConfig $TransferConfig -Cual "Origen" | Out-Null
+                }
             }
             2 { 
                 Show-OrigenDestinoMenu -TransferConfig $TransferConfig -Cual "Destino" | Out-Null
@@ -208,7 +202,7 @@ function Show-OrigenDestinoMenu {
     #>
     param(
         [Parameter(Mandatory = $true)]
-        [TransferConfig]$TransferConfig,
+        $TransferConfig,
         
         [Parameter(Mandatory = $true)]
         [ValidateSet("Origen", "Destino")]
@@ -338,7 +332,7 @@ function Show-BlockSizeMenu {
     #>
     param(
         [Parameter(Mandatory = $true)]
-        [TransferConfig]$TransferConfig
+        $TransferConfig
     )
     
     $options = @(
@@ -397,7 +391,7 @@ function Show-PasswordMenu {
     #>
     param(
         [Parameter(Mandatory = $true)]
-        [TransferConfig]$TransferConfig
+        $TransferConfig
     )
     
     if ($TransferConfig.Opciones.Clave) {
@@ -446,7 +440,7 @@ function Show-IsoMenu {
     #>
     param(
         [Parameter(Mandatory = $true)]
-        [TransferConfig]$TransferConfig
+        $TransferConfig
     )
     
     $wasISO = ($TransferConfig.Destino.Tipo -eq "ISO")

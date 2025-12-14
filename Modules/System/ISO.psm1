@@ -1,5 +1,5 @@
 # ========================================================================== #
-#                   MÓDULO: CREACIÓN DE IM�GENES ISO                         #
+#                   MÓDULO: CREACIÓN DE IMÁGENES ISO                         #
 # ========================================================================== #
 # Propósito: Crear imágenes ISO para distribución en CD/DVD/USB
 # Funciones:

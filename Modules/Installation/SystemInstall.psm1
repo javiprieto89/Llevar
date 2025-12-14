@@ -56,6 +56,95 @@ function Install-LlevarToSystem {
         return $false
     }
     
+    # Copiar LLEVAR.CMD
+    try {
+        $cmdSource = Join-Path $currentDir "LLEVAR.CMD"
+        if (Test-Path $cmdSource) {
+            $cmdDest = Join-Path $installPath "LLEVAR.CMD"
+            Copy-Item -Path $cmdSource -Destination $cmdDest -Force
+            Write-Host "✓ LLEVAR.CMD copiado: $cmdDest" -ForegroundColor Green
+        }
+        else {
+            Write-Host "⚠ LLEVAR.CMD no encontrado en el directorio de origen" -ForegroundColor Yellow
+        }
+    }
+    catch {
+        Write-Host "⚠ Error al copiar LLEVAR.CMD: $_" -ForegroundColor Yellow
+    }
+    
+    # Copiar DESINSTALAR.CMD
+    try {
+        $desinstalarSource = Join-Path $currentDir "DESINSTALAR.CMD"
+        if (Test-Path $desinstalarSource) {
+            $desinstalarDest = Join-Path $installPath "DESINSTALAR.CMD"
+            Copy-Item -Path $desinstalarSource -Destination $desinstalarDest -Force
+            Write-Host "✓ DESINSTALAR.CMD copiado: $desinstalarDest" -ForegroundColor Green
+        }
+        else {
+            Write-Host "⚠ DESINSTALAR.CMD no encontrado en el directorio de origen" -ForegroundColor Yellow
+        }
+    }
+    catch {
+        Write-Host "⚠ Error al copiar DESINSTALAR.CMD: $_" -ForegroundColor Yellow
+    }
+    
+    # Copiar carpeta Modules completa
+    Write-Host "`nCopiando módulos..." -ForegroundColor Cyan
+    try {
+        $origenModules = Join-Path $currentDir "Modules"
+        $destinoModules = Join-Path $installPath "Modules"
+        if (Test-Path $origenModules) {
+            if (Test-Path $destinoModules) {
+                Remove-Item -Path $destinoModules -Recurse -Force
+            }
+            Copy-Item -Path $origenModules -Destination $destinoModules -Recurse -Force
+            Write-Host "✓ Módulos copiados" -ForegroundColor Green
+        }
+    }
+    catch {
+        Write-Host "⚠ Error al copiar módulos: $_" -ForegroundColor Yellow
+    }
+    
+    # Copiar carpeta Data
+    Write-Host "Copiando datos..." -ForegroundColor Cyan
+    try {
+        $origenData = Join-Path $currentDir "Data"
+        $destinoData = Join-Path $installPath "Data"
+        if (Test-Path $origenData) {
+            if (Test-Path $destinoData) {
+                Remove-Item -Path $destinoData -Recurse -Force
+            }
+            Copy-Item -Path $origenData -Destination $destinoData -Recurse -Force
+            Write-Host "✓ Datos copiados" -ForegroundColor Green
+        }
+    }
+    catch {
+        Write-Host "⚠ Error al copiar datos: $_" -ForegroundColor Yellow
+    }
+    
+    # Crear carpeta Logs si no existe
+    $logsDir = Join-Path $installPath "Logs"
+    if (-not (Test-Path $logsDir)) {
+        New-Item -Path $logsDir -ItemType Directory -Force | Out-Null
+        Write-Host "✓ Carpeta Logs creada" -ForegroundColor Green
+    }
+    
+    # Leer versión del archivo .version
+    $versionFile = Join-Path $installPath "Data\.version"
+    $productVersion = "2.0"  # Valor por defecto
+    if (Test-Path $versionFile) {
+        try {
+            $productVersion = (Get-Content -Path $versionFile -Raw).Trim()
+            Write-Host "✓ Versión detectada: $productVersion" -ForegroundColor Green
+        }
+        catch {
+            Write-Host "⚠ No se pudo leer .version, usando versión por defecto: $productVersion" -ForegroundColor Yellow
+        }
+    }
+    else {
+        Write-Host "⚠ Archivo .version no encontrado, usando versión por defecto: $productVersion" -ForegroundColor Yellow
+    }
+    
     # Buscar archivos de 7-Zip en la carpeta actual
     $currentDir = Split-Path $scriptSource -Parent
     $sevenZipFiles = @(
@@ -207,6 +296,27 @@ function Install-LlevarToSystem {
                 catch {
                     # Ignorar errores al refrescar
                 }
+                
+                # Actualizar valores dinámicos en el registro (versión e icono)
+                Write-Host "  Actualizando información del Panel de Control..." -ForegroundColor Gray
+                try {
+                    $uninstallKey = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Llevar"
+                    if (Test-Path $uninstallKey) {
+                        # Actualizar versión desde archivo .version
+                        Set-ItemProperty -Path $uninstallKey -Name "DisplayVersion" -Value $productVersion -ErrorAction SilentlyContinue
+                        
+                        # Actualizar icono
+                        $iconPath = Join-Path $installPath "Data\Llevar.ico"
+                        if (Test-Path $iconPath) {
+                            Set-ItemProperty -Path $uninstallKey -Name "DisplayIcon" -Value "$iconPath,0" -ErrorAction SilentlyContinue
+                        }
+                        
+                        Write-Host "  ✓ Panel de Control actualizado (v$productVersion)" -ForegroundColor Green
+                    }
+                }
+                catch {
+                    Write-Host "  ⚠ No se pudo actualizar Panel de Control: $_" -ForegroundColor Yellow
+                }
             }
             catch {
                 Write-Host "⚠ Error al instalar menú contextual: $_" -ForegroundColor Yellow
@@ -222,6 +332,44 @@ function Install-LlevarToSystem {
     else {
         Write-Host "⚠ No se encontró Llevar.inf en la carpeta actual" -ForegroundColor Yellow
         Write-Host "  El menú contextual no se instalará" -ForegroundColor Gray
+    }
+    
+    # Crear acceso directo en el escritorio
+    Write-Host "`nCreando acceso directo en el escritorio..." -ForegroundColor Cyan
+    try {
+        $escritorio = [Environment]::GetFolderPath("Desktop")
+        $accesoDirecto = Join-Path $escritorio "Llevar.lnk"
+        
+        $llevarCmd = Join-Path $installPath "LLEVAR.CMD"
+        
+        $shell = New-Object -ComObject WScript.Shell
+        $shortcut = $shell.CreateShortcut($accesoDirecto)
+        $shortcut.TargetPath = $llevarCmd
+        $shortcut.Arguments = ""
+        $shortcut.WorkingDirectory = $installPath
+        $shortcut.Description = "Llevar - Sistema de transferencia de archivos (arrastre carpetas/archivos aquí)"
+        
+        # Buscar icono personalizado
+        $iconPath = Join-Path $installPath "Data\Llevar.ico"
+        if (-not (Test-Path $iconPath)) {
+            # Icono alternativo
+            $iconPath = Join-Path $installPath "Data\Llevar_ContextMenu.ico"
+        }
+        
+        if (Test-Path $iconPath) {
+            $shortcut.IconLocation = $iconPath
+        }
+        else {
+            # Icono por defecto del sistema
+            $shortcut.IconLocation = "$env:SystemRoot\System32\imageres.dll,-1043"
+        }
+        
+        $shortcut.Save()
+        Write-Host "✓ Acceso directo creado: $accesoDirecto" -ForegroundColor Green
+        Write-Host "  Puede arrastrar carpetas/archivos al ícono del escritorio" -ForegroundColor Gray
+    }
+    catch {
+        Write-Host "⚠ No se pudo crear el acceso directo en el escritorio: $_" -ForegroundColor Yellow
     }
     
     Show-Banner "✓ INSTALACIÓN COMPLETADA" -BorderColor Green -TextColor Green
