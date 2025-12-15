@@ -42,7 +42,7 @@ function Invoke-RobocopyParameter {
     )
     
     if (-not $RobocopyMirror) {
-        return $false
+        return
     }
     
     # Solicitar origen y destino usando la función centralizada
