@@ -43,7 +43,6 @@ Import-Module (Join-Path $ModulesPath "Transfer\Floppy.psm1") -Force -Global -Er
 Import-Module (Join-Path $ModulesPath "Transfer\Unified.psm1") -Force -Global -ErrorAction SilentlyContinue
 
 # Módulos de Instalación
-Import-Module (Join-Path $ModulesPath "Installation\SystemInstall.psm1") -Force -Global -ErrorAction SilentlyContinue
 Import-Module (Join-Path $ModulesPath "Installation\Uninstall.psm1") -Force -Global -ErrorAction SilentlyContinue
 Import-Module (Join-Path $ModulesPath "Installation\Installer.psm1") -Force -Global -ErrorAction SilentlyContinue
 Import-Module (Join-Path $ModulesPath "Installation\Installation.psm1") -Force -Global -ErrorAction SilentlyContinue
@@ -57,7 +56,7 @@ Import-Module (Join-Path $ModulesPath "Utilities\PathSelectors.psm1") -Force -Gl
 Import-Module (Join-Path $ModulesPath "Utilities\VolumeManagement.psm1") -Force -Global -ErrorAction SilentlyContinue
 
 # Módulos del Sistema
-Import-Module (Join-Path $ModulesPath "System\PowerShellVersion.psm1") -Force -Global -ErrorAction SilentlyContinue
+Import-Module (Join-Path $ModulesPath "System\PowerShell7Installer.psm1") -Force -Global -ErrorAction SilentlyContinue
 Import-Module (Join-Path $ModulesPath "System\Audio.psm1") -Force -Global -ErrorAction SilentlyContinue
 Import-Module (Join-Path $ModulesPath "System\FileSystem.psm1") -Force -Global -ErrorAction SilentlyContinue
 Import-Module (Join-Path $ModulesPath "System\Robocopy.psm1") -Force -Global -ErrorAction SilentlyContinue

@@ -22,15 +22,6 @@ Import-Module $authModulePath -Force -Global
 # FUNCIONES AUXILIARES
 # ========================================================================== #
 
-function Test-IsOneDrivePath {
-    <#
-    .SYNOPSIS
-        Detecta si una ruta es OneDrive
-    #>
-    param([string]$Path)
-    return $Path -match '^onedrive://|^ONEDRIVE:'
-}
-
 function Invoke-OneDriveApiCall {
     <#
     .SYNOPSIS
@@ -1246,7 +1237,6 @@ function Receive-OneDriveItem {
 
 # Exportar funciones
 Export-ModuleMember -Function @(
-    'Test-IsOneDrivePath',
     'Invoke-OneDriveApiCall',
     'Get-OneDriveFiles',
     'Send-OneDriveFile',

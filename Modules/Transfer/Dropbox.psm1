@@ -19,19 +19,6 @@ Import-Module (Join-Path $ModulesPath "UI\Menus.psm1") -Force -Global
 #                          FUNCIONES AUXILIARES                              #
 # ========================================================================== #
 
-function Test-IsDropboxPath {
-    <#
-    .SYNOPSIS
-        Detecta si una ruta es Dropbox
-    .PARAMETER Path
-        Ruta a verificar
-    .OUTPUTS
-        $true si es Dropbox, $false si no
-    #>
-    param([string]$Path)
-    return $Path -match '^dropbox://|^DROPBOX:'
-}
-
 function Send-LlevarDropboxFile {
     <#
     .SYNOPSIS
@@ -505,7 +492,6 @@ function Receive-DropboxItem {
 
 # Exportar funciones
 Export-ModuleMember -Function @(
-    'Test-IsDropboxPath',
     'Get-DropboxConfigFromUser',
     'Copy-LlevarLocalToDropbox',
     'Copy-LlevarDropboxToLocal',

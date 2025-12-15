@@ -90,7 +90,7 @@ function Invoke-InteractiveMenu {
         return $null
     }
     
-    # Si el origen está bloqueado, mostrar banner diferente
+    # Mostrar banner apropiado según el contexto
     if ($OrigenBloqueado) {
         Show-Banner "CONFIGURACIÓN DE DESTINO" -BorderColor Yellow -TextColor Yellow
         Write-Host "Origen configurado y bloqueado. Configure el destino..." -ForegroundColor Gray

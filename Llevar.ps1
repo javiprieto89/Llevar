@@ -135,38 +135,16 @@ $Global:ScriptDir = $PSScriptRoot
 $Global:ScriptDir = $PSScriptRoot
 $Global:ModulesPath = Join-Path $Global:ScriptDir "Modules"
 
-# Importar módulo de verificación de PowerShell
-try {
-    $psVersionPath = Join-Path $Global:ModulesPath "System\PowerShellVersion.psm1"
-    if (Test-Path $psVersionPath) {
-        Import-Module $psVersionPath -Force -Global -WarningAction SilentlyContinue -ErrorAction SilentlyContinue
-        
-        # Verificar PowerShell 7 - si falla, el script terminará
-        if (-not (Assert-PowerShell7)) {
-            exit 1
-        }
+# Importar módulo de instalación de PowerShell 7
+$ps7InstallerPath = Join-Path $Global:ModulesPath "System\PowerShell7Installer.psm1"
+if (Test-Path $ps7InstallerPath) {
+    Import-Module $ps7InstallerPath -Force -Global -WarningAction SilentlyContinue -ErrorAction SilentlyContinue
+    
+    # Verificar/Instalar PowerShell 7 - el módulo maneja toda la UI
+    $ps7Check = Assert-PowerShell7Required
+    if (-not $ps7Check) {
+        exit 1
     }
-    else {
-        # Si no existe el módulo, hacer verificación básica
-        if ($PSVersionTable.PSVersion.Major -lt 7) {
-            Write-Host ""
-            Write-Host "═══════════════════════════════════════════════════════════" -ForegroundColor Red
-            Write-Host " ⚠ POWERSHELL 7 REQUERIDO" -ForegroundColor Yellow
-            Write-Host "═══════════════════════════════════════════════════════════" -ForegroundColor Red
-            Write-Host ""
-            Write-Host "Este programa requiere PowerShell 7 o superior." -ForegroundColor White
-            Write-Host "Versión actual: PowerShell $($PSVersionTable.PSVersion)" -ForegroundColor Gray
-            Write-Host "Descargue desde: https://aka.ms/powershell" -ForegroundColor Cyan
-            Write-Host ""
-            Write-Host "Presione cualquier tecla para salir..." -ForegroundColor Gray
-            $null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
-            exit 1
-        }
-    }
-}
-catch {
-    Write-Host "Error al verificar versión de PowerShell: $_" -ForegroundColor Red
-    exit 1
 }
 
 # Verificar si se está ejecutando como administrador
@@ -379,7 +357,6 @@ try {
     Import-Module (Join-Path $ModulesPath "UI\ConfigMenus.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
 
     # Instalación
-    Import-Module (Join-Path $ModulesPath "Installation\SystemInstall.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
     Import-Module (Join-Path $ModulesPath "Installation\Uninstall.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
     Import-Module (Join-Path $ModulesPath "Installation\Installer.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
     Import-Module (Join-Path $ModulesPath "Installation\Installation.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
@@ -499,7 +476,11 @@ try {
         if ($ForceLogo) { $arguments += "-ForceLogo" }
         if ($Verbose) { $arguments += "-Verbose" }
         
-        Start-Process powershell.exe -ArgumentList $arguments -Verb RunAs
+        # Usar PowerShell 7 para elevar (nunca PowerShell 5)
+        $pwsh = (Get-Command pwsh -ErrorAction SilentlyContinue).Source
+        if (-not $pwsh) { $pwsh = "pwsh.exe" }
+
+        Start-Process -FilePath $pwsh -ArgumentList $arguments -Verb RunAs
         exit
     }
 }
@@ -548,7 +529,7 @@ if ($ForceLogo -or $forceLogoEnv) {
     $shouldShowLogo = $true
 }
 else {
-    $shouldShowLogo = (-not $hasExecutionParams) -and (-not $isInIDE)
+    $shouldShowLogo = ((-not $hasExecutionParams) -and (-not $isInIDE))
 }
 
 if (Get-Command Write-Log -ErrorAction SilentlyContinue) {
@@ -625,7 +606,7 @@ if (-not $script:LogoWasShown -and -not $hasExecutionParams -and $script:HasImpo
 
 try {
     if (-not $hasExecutionParams) {
-        Invoke-InstallationCheck -Ejemplo:$Ejemplo -Ayuda:$Ayuda -IsAdmin $isAdmin -IsInIDE $isInIDE -ScriptPath $MyInvocation.MyCommand.Path -LogoWasShown $script:LogoWasShown
+        $null = Invoke-InstallationCheck -Ejemplo:$Ejemplo -Ayuda:$Ayuda -IsAdmin $isAdmin -IsInIDE $isInIDE -ScriptPath $MyInvocation.MyCommand.Path -LogoWasShown $script:LogoWasShown
     }
 }
 catch {
@@ -633,7 +614,7 @@ catch {
 }
 
 try {
-    Invoke-HelpParameter -Ayuda:$Ayuda
+    $null = Invoke-HelpParameter -Ayuda:$Ayuda
 }
 catch {
     Write-Host "⚠ Error procesando parámetro -Ayuda: $($_.Exception.Message)" -ForegroundColor Yellow
@@ -641,7 +622,7 @@ catch {
 
 try {
     # 2. Verificar parámetro -Instalar
-    Invoke-InstallParameter -Instalar:$Instalar -IsAdmin $isAdmin -IsInIDE $isInIDE -ScriptPath $MyInvocation.MyCommand.Path
+    $null = Invoke-InstallParameter -Instalar:$Instalar -IsAdmin $isAdmin -IsInIDE $isInIDE -ScriptPath $MyInvocation.MyCommand.Path
 }
 catch {
     Write-Host "⚠ Error procesando parámetro -Instalar: $($_.Exception.Message)" -ForegroundColor Yellow
@@ -649,7 +630,7 @@ catch {
 
 try {
     # 3. Verificar parámetro -Desinstalar
-    Invoke-UninstallParameter -Desinstalar:$Desinstalar -IsAdmin $isAdmin -IsInIDE $isInIDE -ScriptPath $MyInvocation.MyCommand.Path
+    $null = Invoke-UninstallParameter -Desinstalar:$Desinstalar -IsAdmin $isAdmin -IsInIDE $isInIDE -ScriptPath $MyInvocation.MyCommand.Path
 }
 catch {
     Write-Host "⚠ Error procesando parámetro -Desinstalar: $($_.Exception.Message)" -ForegroundColor Yellow
@@ -840,7 +821,7 @@ try {
         
         if ($origenPath -and -not (Test-Path $origenPath)) {
             # Origen no existe - mostrar error y permitir reconfigurar
-            Show-ConsolePopup -Title "Error: Origen no Encontrado" `
+            $null = Show-ConsolePopup -Title "Error: Origen no Encontrado" `
                 -Message "❌ Origen especificado no existe:`n`n$origenPath`n`n⚠ Se abrirá el menú para que configure origen y destino." `
                 -Options @("*Continuar")
             
@@ -853,13 +834,8 @@ try {
             $menuAction = Invoke-InteractiveMenu -TransferConfig $transferConfig -Ayuda:$Ayuda -Instalar:$Instalar -RobocopyMirror:$RobocopyMirror -Ejemplo:$Ejemplo -Origen $Origen -Destino $Destino -Iso:$Iso
         }
         else {
-            $origenTipoDisplay = $transferConfig.Origen.Tipo
-            $origenDisplay = if ($origenPath.Length -gt 60) { "..." + $origenPath.Substring($origenPath.Length - 60) } else { $origenPath }
-            
-            Show-ConsolePopup -Title "Origen Configurado desde Menú Contextual" `
-                -Message "✓ Origen: $origenTipoDisplay`n   $origenDisplay`n`n⚠ Configure el destino y opciones de transferencia`n`nEl origen permanecerá bloqueado en este menú." `
-                -Options @("*Continuar")
-            
+            # Mostrar notificación de origen bloqueado (función centralizada)
+            Show-OrigenBloqueadoNotification -TransferConfig $transferConfig
             $transferConfig.OrigenBloqueado = $true
             
             $menuAction = Invoke-InteractiveMenu -TransferConfig $transferConfig -Ayuda:$Ayuda -Instalar:$Instalar -RobocopyMirror:$RobocopyMirror -Ejemplo:$Ejemplo -Origen $Origen -Destino $Destino -Iso:$Iso -OrigenBloqueado
@@ -867,7 +843,7 @@ try {
         
         if ($menuAction -eq "Example") {
             $exampleStartTime = Get-Date
-            Invoke-NormalMode -TransferConfig $transferConfig
+            $null = Invoke-NormalMode -TransferConfig $transferConfig
             $exampleElapsed = (Get-Date) - $exampleStartTime
             Show-ExampleSummary -ExampleInfo $script:ExampleInfo -TransferConfig $transferConfig -ElapsedTime $exampleElapsed
             exit
@@ -878,7 +854,7 @@ try {
         
         if ($menuAction -eq "Example") {
             $exampleStartTime = Get-Date
-            Invoke-NormalMode -TransferConfig $transferConfig
+            $null = Invoke-NormalMode -TransferConfig $transferConfig
             $exampleElapsed = (Get-Date) - $exampleStartTime
             Show-ExampleSummary -ExampleInfo $script:ExampleInfo -TransferConfig $transferConfig -ElapsedTime $exampleElapsed
             exit
@@ -892,7 +868,7 @@ catch {
 
 try {
     if ($transferConfig.OrigenIsSet -and $transferConfig.DestinoIsSet) {
-        Invoke-NormalMode -TransferConfig $transferConfig
+        $null = Invoke-NormalMode -TransferConfig $transferConfig
     }
     elseif (-not $transferConfig.OrigenIsSet -and -not $transferConfig.DestinoIsSet) {
         # Sin configuración, no hacer nada (modo ayuda, ejemplo, etc. ya se ejecutaron)

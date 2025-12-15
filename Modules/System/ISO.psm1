@@ -8,58 +8,6 @@
 #   - New-LlevarIsoMain: Orquestador de creación ISO con volúmenes
 # ========================================================================== #
 
-function Show-IsoMenu {
-    <#
-    .SYNOPSIS
-        Menú para configurar modo ISO y tipo de medio
-    .DESCRIPTION
-        Permite seleccionar entre:
-        - Modo USB (normal, sin ISO)
-        - Generar CD (700 MB)
-        - Generar DVD (4.5 GB)
-        - Generar ISO tipo USB (4.5 GB)
-    .PARAMETER Config
-        Objeto de configuración a modificar
-    .OUTPUTS
-        Objeto de configuración actualizado
-    #>
-    param($Config)
-    
-    $options = @(
-        "Modo *USB (normal)",
-        "Generar *CD (700 MB)",
-        "Generar *DVD (4.5 GB)",
-        "Generar ISO tipo *USB (4.5 GB)"
-    )
-    
-    $selection = Show-DosMenu -Title "MODO ISO" -Items $options -CancelValue 0 -DefaultValue $(if ($Config.Iso) { 2 } else { 1 })
-    
-    switch ($selection) {
-        0 { return $Config }
-        1 {
-            $Config.Iso = $false
-            Show-ConsolePopup -Title "Modo USB" -Message "Modo USB activado (normal)" -Options @("*OK") | Out-Null
-        }
-        2 {
-            $Config.Iso = $true
-            $Config.IsoDestino = "cd"
-            Show-ConsolePopup -Title "Modo ISO" -Message "Generará imágenes ISO de CD (700 MB)" -Options @("*OK") | Out-Null
-        }
-        3 {
-            $Config.Iso = $true
-            $Config.IsoDestino = "dvd"
-            Show-ConsolePopup -Title "Modo ISO" -Message "Generará imágenes ISO de DVD (4.5 GB)" -Options @("*OK") | Out-Null
-        }
-        4 {
-            $Config.Iso = $true
-            $Config.IsoDestino = "usb"
-            Show-ConsolePopup -Title "Modo ISO" -Message "Generará imágenes ISO tipo USB (4.5 GB)" -Options @("*OK") | Out-Null
-        }
-    }
-    
-    return $Config
-}
-
 function New-LlevarIsoImage {
     <#
     .SYNOPSIS

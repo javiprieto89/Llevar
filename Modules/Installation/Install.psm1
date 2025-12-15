@@ -56,7 +56,11 @@ function Invoke-InstallParameter {
             Write-Host "`n⚠ Se requieren permisos de administrador para instalar." -ForegroundColor Yellow
             Write-Host "Elevando a administrador..." -ForegroundColor Cyan
             
-            Start-Process powershell.exe -ArgumentList "-NoExit", "-ExecutionPolicy", "Bypass", "-File", "`"$ScriptPath`"", "-Instalar" -Verb RunAs
+            # Usar PowerShell 7 para elevar
+            $ps7Check = Test-PowerShell7Installed
+            $pwsh = if ($ps7Check.IsInstalled) { $ps7Check.Path } else { "pwsh.exe" }
+            
+            Start-Process $pwsh -ArgumentList "-NoExit", "-ExecutionPolicy", "Bypass", "-File", "`"$ScriptPath`"", "-Instalar" -Verb RunAs
             exit
         }
     }
@@ -121,7 +125,11 @@ function Invoke-UninstallParameter {
             Write-Host "`n⚠ Se requieren permisos de administrador para desinstalar." -ForegroundColor Yellow
             Write-Host "Elevando a administrador..." -ForegroundColor Cyan
             
-            Start-Process powershell.exe -ArgumentList "-NoExit", "-ExecutionPolicy", "Bypass", "-File", "`"$ScriptPath`"", "-Desinstalar" -Verb RunAs
+            # Usar PowerShell 7 para elevar
+            $ps7Check = Test-PowerShell7Installed
+            $pwsh = if ($ps7Check.IsInstalled) { $ps7Check.Path } else { "pwsh.exe" }
+            
+            Start-Process $pwsh -ArgumentList "-NoExit", "-ExecutionPolicy", "Bypass", "-File", "`"$ScriptPath`"", "-Desinstalar" -Verb RunAs
             exit
         }
     }

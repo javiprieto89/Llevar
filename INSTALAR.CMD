@@ -16,7 +16,7 @@ echo ================================================================
 echo.
 
 REM ============================================================
-REM VERIFICAR SI YA ESTÃ EJECUTÃNDOSE COMO ADMINISTRADOR
+REM VERIFICAR SI YA ESTÁ EJECUTÁNDOSE COMO ADMINISTRADOR
 REM ============================================================
 
 net session >nul 2>&1
@@ -35,9 +35,9 @@ echo.
 REM Re-ejecutar este script con permisos de administrador
 powershell -NoProfile -Command "Start-Process -FilePath '%~f0' -Verb RunAs" 2>nul
 
-REM Verificar si la elevaciÃ³n fue exitosa
+REM Verificar si la elevación fue exitosa
 if %errorLevel% neq 0 (
-    REM El usuario cancelÃ³ o hubo error
+    REM El usuario canceló o hubo error
     echo.
     echo ================================================================
     echo   ERROR: Se requieren permisos de administrador
@@ -53,12 +53,12 @@ if %errorLevel% neq 0 (
     exit /b 1
 )
 
-REM Si llegÃ³ aquÃ­, se lanzÃ³ el proceso elevado correctamente
+REM Si llegá aquí­, se lanzá el proceso elevado correctamente
 exit /b 0
 
 :IsAdmin
 REM ============================================================
-REM EJECUTÃNDOSE COMO ADMINISTRADOR
+REM EJECUTÁNDOSE COMO ADMINISTRADOR
 REM ============================================================
 
 echo [OK] Ejecutando como administrador
@@ -111,7 +111,7 @@ for /f "delims=" %%i in ('where pwsh.exe 2^>nul') do (
     goto :FoundPwsh
 )
 
-REM Buscar en Program Files (cualquier versiÃ³n 7+)
+REM Buscar en Program Files (cualquier versión 7+)
 for /d %%i in ("%ProgramFiles%\PowerShell\*") do (
     if exist "%%i\pwsh.exe" (
         set "PWSH_EXE=%%i\pwsh.exe"
@@ -126,7 +126,7 @@ if exist "%LocalAppData%\Microsoft\WindowsApps\pwsh.exe" (
 )
 
 REM ============================================================
-REM PowerShell 7+ NO ENCONTRADO - OFRECER INSTALACIÃ“N AUTOMÃTICA
+REM PowerShell 7+ NO ENCONTRADO - OFRECER INSTALACIÓN AUTOMÁTICA
 REM ============================================================
 
 echo.
@@ -161,7 +161,7 @@ if !INSTALL_CHOICE! equ 2 (
     exit /b 1
 )
 
-REM OpciÃ³n 1: InstalaciÃ³n automÃ¡tica
+REM Opción 1: Instalación automática
 echo.
 echo ================================================================
 echo   Instalando PowerShell 7 automaticamente...
@@ -206,7 +206,7 @@ echo.
 REM Limpiar archivos temporales
 if exist "%TEMP_DIR%\PowerShell-Setup.msi" del /f /q "%TEMP_DIR%\PowerShell-Setup.msi"
 
-REM Buscar nuevamente pwsh.exe despuÃ©s de la instalaciÃ³n
+REM Buscar nuevamente pwsh.exe después de la instalación
 echo [*] Detectando PowerShell 7 recien instalado...
 
 REM Refrescar PATH
@@ -216,7 +216,7 @@ REM Buscar con Get-Command nuevamente
 for /f "delims=" %%i in ('powershell -NoProfile -Command "(Get-Command pwsh -ErrorAction SilentlyContinue).Source" 2^>nul') do set "PWSH_EXE=%%i"
 
 if not defined PWSH_EXE (
-    REM Buscar en ubicaciÃ³n por defecto
+    REM Buscar en ubicación por defecto
     if exist "%ProgramFiles%\PowerShell\7\pwsh.exe" (
         set "PWSH_EXE=%ProgramFiles%\PowerShell\7\pwsh.exe"
     )
@@ -244,7 +244,7 @@ REM ============================================================
 
 echo [*] Verificando ExecutionPolicy...
 
-REM Verificar polÃ­tica actual
+REM Verificar política actual
 for /f "delims=" %%i in ('"%PWSH_EXE%" -NoProfile -Command "Get-ExecutionPolicy -Scope LocalMachine" 2^>nul') do set "CURRENT_POLICY=%%i"
 
 echo     Politica actual: !CURRENT_POLICY!
@@ -284,7 +284,7 @@ echo.
 :PolicyOK
 
 REM ============================================================
-REM EJECUTAR INSTALACIÃ“N
+REM EJECUTAR INSTALACIÓN
 REM ============================================================
 
 echo ================================================================

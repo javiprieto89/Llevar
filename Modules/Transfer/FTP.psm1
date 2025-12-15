@@ -16,19 +16,6 @@ Import-Module (Join-Path $ModulesPath "UI\Menus.psm1") -Force -Global
 #                          FUNCIONES AUXILIARES                              #
 # ========================================================================== #
 
-function Test-IsFtpPath {
-    <#
-    .SYNOPSIS
-        Detecta si una ruta es FTP o FTPS
-    .PARAMETER Path
-        Ruta a verificar
-    .OUTPUTS
-        $true si es FTP/FTPS, $false si no
-    #>
-    param([string]$Path)
-    return $Path -match '^ftp://|^ftps://'
-}
-
 function Get-FtpConfigFromUser {
     <#
     .SYNOPSIS
@@ -809,7 +796,6 @@ function Send-LlevarFtpFile {
 
 # Exportar funciones
 Export-ModuleMember -Function @(
-    'Test-IsFtpPath',
     'Get-FtpConfigFromUser',
     'Copy-LlevarLocalToFtp',
     'Copy-LlevarFtpToLocal',

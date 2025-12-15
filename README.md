@@ -41,14 +41,17 @@ Y eso es parte de la gracia 🙂
 
 Toda la documentación técnica está en la carpeta `/Docs`:
 
-- Instalación y desinstalación
-- Menú interactivo
-- TransferConfig
-- OneDrive / Dropbox
-- Testing
-- Banners y UI
+- **[Instalación y desinstalación](Docs/INSTALACION-Y-DESINSTALACION.md)**
+- **[PowerShell 7 - Detección e Instalación](Docs/POWERSHELL7-REQUIREMENT.md)** ⭐ NUEVO
+- **[Módulo PowerShell7Installer](Docs/POWERSHELL7-INSTALLER-MODULE.md)** ⭐ NUEVO
+- **[Menú interactivo](Docs/MENU-INTERACTIVO.md)**
+- **[TransferConfig](Docs/TRANSFERCONFIG.md)**
+- **[OneDrive / Dropbox](Docs/ONEDRIVE-README.md)**
+- **[Testing](Docs/TESTING.md)**
+- **[Banners y UI](Docs/BANNERS.md)**
+- **[Navegador](Docs/NAVEGADOR.md)**
 
-👉 [Ver documentación](Docs)
+👉 [Ver documentación completa](Docs)
 
 ---
 

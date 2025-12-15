@@ -13,6 +13,36 @@ if (-not (Get-Module -Name 'TransferConfig')) {
 }
 
 # ========================================================================== #
+#                          FUNCIONES HELPER                                  #
+# ========================================================================== #
+
+function Show-OrigenBloqueadoNotification {
+    <#
+    .SYNOPSIS
+        Muestra notificación cuando el origen está bloqueado (una sola vez)
+    .DESCRIPTION
+        Centraliza la lógica de mostrar el popup/banner de origen bloqueado
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        $TransferConfig
+    )
+    
+    $origenPath = Get-TransferPath -Config $TransferConfig -Section "Origen"
+    $origenTipo = $TransferConfig.Origen.Tipo
+    $origenDisplay = if ($origenPath.Length -gt 60) { 
+        "..." + $origenPath.Substring($origenPath.Length - 60) 
+    }
+    else { 
+        $origenPath 
+    }
+    
+    $null = Show-ConsolePopup -Title "Origen Configurado desde Menú Contextual" `
+        -Message "✓ Origen: $origenTipo`n   $origenDisplay`n`n⚠ Configure el destino y opciones de transferencia`n`nEl origen permanecerá bloqueado en este menú." `
+        -Options @("*Continuar")
+}
+
+# ========================================================================== #
 #                          FUNCIÓN PRINCIPAL                                 #
 # ========================================================================== #
 
@@ -476,5 +506,6 @@ Export-ModuleMember -Function @(
     'Show-OrigenDestinoMenu',
     'Show-BlockSizeMenu',
     'Show-PasswordMenu',
-    'Show-IsoMenu'
+    'Show-IsoMenu',
+    'Show-OrigenBloqueadoNotification'
 )

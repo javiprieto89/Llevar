@@ -13,6 +13,7 @@ class TransferConfig {
     # ====== ESTADO DE CONFIGURACIÓN ======
     [bool]$OrigenIsSet = $false
     [bool]$DestinoIsSet = $false
+    [bool]$OrigenBloqueado = $false  # TRUE cuando el origen viene del menú contextual
     
     # ====== ORIGEN ======
     [PSCustomObject]$Origen = [PSCustomObject]@{
