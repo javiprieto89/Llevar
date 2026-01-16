@@ -1,4 +1,4 @@
-blank_issues_enabled: false
+blank_issues_enabled: true
 contact_links:
   - name: 📖 Documentación
     url: https://github.com/javiprieto89/Llevar/tree/master/Docs
