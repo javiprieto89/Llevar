@@ -106,10 +106,15 @@ function Test-UncPathAccess {
             $password = $Credential.GetNetworkCredential().Password
             
             # Intentar montar con credenciales
-            $netUseCmd = "net use `"$UncPath`" /user:$username $password 2>&1"
-            Invoke-Expression $netUseCmd | Out-Null
+            $netArgs = @(
+                "use"
+                $UncPath
+                "/user:$username"
+                $password
+            )
+            $netProcess = Start-Process -FilePath "net.exe" -ArgumentList $netArgs -Wait -NoNewWindow -PassThru
             
-            if ($LASTEXITCODE -eq 0) {
+            if ($netProcess.ExitCode -eq 0) {
                 # Verificar acceso real
                 if (Test-Path $UncPath) {
                     return @{

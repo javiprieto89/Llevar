@@ -3,8 +3,23 @@
 # ========================================================================== #
 # Propósito: Funciones de sincronización con Robocopy
 # Funciones:
+#   - Get-RobocopyExePath: Resuelve robocopy.exe desde C:\Llevar\robocopy
 #   - Invoke-RobocopyMirror: Copia espejo completa con Robocopy /MIR
 # ========================================================================== #
+
+function Get-RobocopyExePath {
+    $preferred = "C:\Llevar\robocopy\robocopy.exe"
+    if (Test-Path $preferred) {
+        try {
+            $null = & $preferred /? 2>$null
+            if ($LASTEXITCODE -le 7) {
+                return $preferred
+            }
+        }
+        catch { }
+    }
+    return "robocopy.exe"
+}
 
 function Invoke-RobocopyMirror {
     <#
@@ -75,7 +90,8 @@ function Invoke-RobocopyMirror {
     Write-Host "    Ejecutando: robocopy $($robocopyArgs -join ' ')" -ForegroundColor DarkGray
     Write-Host ""
     
-    $process = Start-Process -FilePath "robocopy.exe" -ArgumentList $robocopyArgs -Wait -PassThru -NoNewWindow
+    $robocopyExe = Get-RobocopyExePath
+    $process = Start-Process -FilePath $robocopyExe -ArgumentList $robocopyArgs -Wait -PassThru -NoNewWindow
     $exitCode = $process.ExitCode
     
     Write-Host ""
@@ -109,5 +125,6 @@ function Invoke-RobocopyMirror {
 
 # Exportar funciones
 Export-ModuleMember -Function @(
+    'Get-RobocopyExePath',
     'Invoke-RobocopyMirror'
 )

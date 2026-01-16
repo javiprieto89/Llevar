@@ -30,7 +30,7 @@ function Invoke-HelpParameter {
         exit
     }
     
-    return $false
+    return
 }
 
 Export-ModuleMember -Function Invoke-HelpParameter

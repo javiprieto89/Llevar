@@ -386,34 +386,25 @@ catch {
 function New-InstallerScript {
     <#
     .SYNOPSIS
-        Genera script INSTALAR.ps1 con destino y tipo de compresión configurados
-    .DESCRIPTION
-        Toma el template $InstallerBaseScript y lo modifica para incluir:
-        - Destino predeterminado
-        - Tipo de compresión (7ZIP o NATIVE_ZIP)
-        - Función Get-SevenZip mejorada
-    .PARAMETER Destino
-        Ruta de destino predeterminada para la instalación
-    .PARAMETER Temp
-        Carpeta temporal donde se generará INSTALAR.ps1
-    .PARAMETER CompressionType
-        Tipo de compresión usado: "7ZIP" o "NATIVE_ZIP"
-    .OUTPUTS
-        String con ruta completa al INSTALAR.ps1 generado
+        Genera el ecosistema de restauración: Instalar.ps1 (lógica) e Instalar.cmd (lanzador).
     #>
     param(
-        [string]$Destino,
-        
+        [string]$Destino,        
         [Parameter(Mandatory = $true)]
-        [string]$Temp,
-        
+        [string]$Temp,        
         [string]$CompressionType = "7ZIP"
     )
     
+    # 1. Obtener el template base
+    if (-not $script:InstallerBaseScript) {
+        Write-Log "Error: El template base del instalador no está cargado." "ERROR"
+        return $null
+    }
+
     # Dividir template en líneas
     $lines = $script:InstallerBaseScript -split "`r?`n"
     
-    # Buscar bloque param()
+    # 2. Localizar bloque param() para inyectar variables de configuración
     $paramStart = $null
     for ($i = 0; $i -lt $lines.Count; $i++) {
         if ($lines[$i] -match '^\s*param\(') {
@@ -422,160 +413,114 @@ function New-InstallerScript {
         }
     }
     
-    # Si no hay param(), retornar script sin modificar
     if ($null -eq $paramStart) {
         $installerPath = Join-Path $Temp "Instalar.ps1"
         Set-Content -Path $installerPath -Value $lines -Encoding UTF8
-        return $installerPath
     }
-    
-    # Encontrar fin del bloque param()
-    $paramEnd = $paramStart
-    while ($paramEnd -lt ($lines.Count - 1) -and $lines[$paramEnd] -notmatch '^\s*\)') {
-        $paramEnd++
-    }
-    $insertIndex = $paramEnd + 1
-    
-    # Preparar línea de destino predeterminado
-    $insertLine = "# Destino por defecto no especificado"
-    if ($Destino) {
-        $escaped = $Destino -replace "'", "''"
-        $insertLine = "`$script:DefaultDestino = '$escaped'"
-    }
-    
-    # Dividir en antes/después del punto de inserción
-    $before = @()
-    if ($insertIndex -gt 0) {
-        $before = $lines[0..($insertIndex - 1)]
-    }
-    
-    $after = @()
-    if ($insertIndex -lt $lines.Count) {
-        $after = $lines[$insertIndex..($lines.Count - 1)]
-    }
-    
-    # Reconstruir con línea de destino
-    $newLines = $before + $insertLine + $after
-    
-    # Agregar variable de tipo de compresión
-    $compressionLine = "`$script:CompressionType = '$CompressionType'"
-    $newLines = $newLines[0..($insertIndex)] + $compressionLine + $newLines[($insertIndex + 1)..($newLines.Count - 1)]
-    
-    # Inyectar función Get-SevenZip ANTES de las funciones que la usan
-    # Buscar la línea "# Get-SevenZip ahora está en Modules..." para insertar después
-    $get7zInsertIndex = -1
-    for ($i = 0; $i -lt $newLines.Count; $i++) {
-        if ($newLines[$i] -match "# Get-SevenZip ahora está en Modules") {
-            $get7zInsertIndex = $i + 1
-            break
+    else {
+        # Encontrar fin del bloque param()
+        $paramEnd = $paramStart
+        while ($paramEnd -lt ($lines.Count - 1) -and $lines[$paramEnd] -notmatch '^\s*\)') {
+            $paramEnd++
         }
-    }
-    
-    if ($get7zInsertIndex -gt 0) {
-        $get7zPatch = @'
-
-# ========================================================================== #
-#                 FUNCIÓN Get-SevenZip MEJORADA (INYECTADA)                 #
-# ========================================================================== #
-function Get-SevenZip {
-    <#
-    .SYNOPSIS
-        Busca 7-Zip en múltiples ubicaciones o lo descarga si es necesario
-    .DESCRIPTION
-        1. Busca en PATH del sistema
-        2. Busca junto al script INSTALAR.ps1 (USB)
-        3. Busca en instalaciones estándar (C:\Program Files)
-        4. Descarga versión portable si no se encuentra
-    #>
-    
-    # 1) Intentar ejecutar 7z desde el PATH
-    try {
-        $cmd = Get-Command 7z -ErrorAction SilentlyContinue
-        if ($cmd) {
-            # Verificar que funciona
-            $testResult = & $cmd.Source 2>&1
-            if ($LASTEXITCODE -ne 255 -and $testResult) {
-                return $cmd.Source
+        $insertIndex = $paramEnd + 1
+        
+        # Preparar líneas a inyectar (Destino y Tipo de Compresión)
+        $escapedDestino = if ($Destino) { $Destino -replace "'", "''" } else { "" }
+        $injectionBlock = @(
+            "",
+            "# --- Variables inyectadas por LLEVAR-USB ---",
+            "`$script:DefaultDestino = '$escapedDestino'",
+            "`$script:CompressionType = '$CompressionType'",
+            "# ------------------------------------------",
+            ""
+        )
+        
+        # Reconstruir con las variables inyectadas
+        $newLines = $lines[0..($insertIndex - 1)] + $injectionBlock + $lines[$insertIndex..($lines.Count - 1)]
+        
+        # 3. Inyectar la función Get-SevenZip (Búsqueda inteligente en destino)
+        $get7zInsertIndex = -1
+        for ($i = 0; $i -lt $newLines.Count; $i++) {
+            if ($newLines[$i] -match "# Get-SevenZip ahora está en Modules") {
+                $get7zInsertIndex = $i + 1
+                break
             }
         }
-    }
-    catch {
-        # Continuar con búsqueda en rutas
-    }
-    
-    # 2) Buscar 7z/7za junto al INSTALAR.ps1 (en USB)
-    $localCandidates = @(
-        (Join-Path $PSScriptRoot "7za.exe"),
-        (Join-Path $PSScriptRoot "7z.exe")
-    )
-    foreach ($p in $localCandidates) {
-        if (Test-Path $p) { return $p }
-    }
-    
-    # 3) Buscar instalación estándar en el sistema
-    $paths = @(
-        "C:\Program Files\7-Zip\7z.exe",
-        "C:\Program Files (x86)\7-Zip\7z.exe"
-    )
-    
-    foreach ($p in $paths) {
-        if (Test-Path $p) { return $p }
-    }
-    
-    # 4) Descargar versión portable a carpeta TEMP local
-    Write-Host "7-Zip no encontrado. Descargando versión portable..." -ForegroundColor Yellow
-    
-    try {
-        $url = "https://www.7-zip.org/a/7za920.zip"
-        $tempRoot = Join-Path $env:TEMP "INSTALAR_7ZIP"
-        if (-not (Test-Path $tempRoot)) {
-            New-Item -ItemType Directory -Path $tempRoot | Out-Null
-        }
         
-        $zipPath = Join-Path $tempRoot "7za_portable.zip"
-        $destExe = Join-Path $tempRoot "7za.exe"
-        
-        Invoke-WebRequest -Uri $url -OutFile $zipPath -UseBasicParsing
-        
-        Add-Type -AssemblyName System.IO.Compression.FileSystem
-        [System.IO.Compression.ZipFile]::ExtractToDirectory($zipPath, $tempRoot, $true)
-        
-        Remove-Item $zipPath -ErrorAction SilentlyContinue
-        
-        if (Test-Path $destExe) {
-            Write-Host "7-Zip portable descargado: $destExe" -ForegroundColor Green
-            return $destExe
-        }
-        else {
-            Write-Host "No se pudo extraer 7za.exe del ZIP descargado" -ForegroundColor Red
-        }
-    }
-    catch {
-        Write-Host "No se pudo descargar 7-Zip portable: $($_.Exception.Message)" -ForegroundColor Red
+        if ($get7zInsertIndex -gt 0) {
+            $get7zPatch = @'
+function Get-SevenZip {
+    $llevar7z = "C:\Llevar\7za.exe"
+    if (Test-Path $llevar7z) { return $llevar7z }
+    
+    # 1) Buscar en PATH
+    $cmd = Get-Command 7za, 7z -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($cmd) { return $cmd.Source }
+    
+    # 2) Rutas estándar
+    $stdPaths = @("${env:ProgramFiles}\7-Zip\7z.exe", "${env:ProgramFiles(x86)}\7-Zip\7z.exe")
+    foreach ($p in $stdPaths) { if (Test-Path $p) { return $p } }
+    
+    # 3) Descarga de emergencia a C:\Llevar
+    Write-Host ">> 7-Zip no encontrado. Descargando motor portable..." -ForegroundColor Yellow
+    $url = "https://www.7-zip.org/a/7za920.zip"
+    $t = Join-Path $env:TEMP "7z_Llevar"
+    New-Item $t -ItemType Directory -Force | Out-Null
+    Invoke-WebRequest $url -OutFile "$t\7z.zip" -UseBasicParsing
+    Expand-Archive "$t\7z.zip" -DestinationPath $t -Force
+    
+    if (-not (Test-Path "C:\Llevar")) {
+        New-Item -Path "C:\Llevar" -ItemType Directory -Force | Out-Null
     }
     
-    throw "7-Zip no encontrado ni descargado. No se puede continuar la instalación."
+    Copy-Item -Path "$t\7za.exe" -Destination $llevar7z -Force -ErrorAction SilentlyContinue
+    if (Test-Path $llevar7z) { return $llevar7z }
+    
+    throw "7-Zip no encontrado ni descargado. No se puede continuar."
 }
 '@ -split "`r?`n"
-    
-        # Agregar función Get-SevenZip justo después del comentario (dividir en líneas)
-        $get7zLines = $get7zPatch -split "`r?`n"
-        $before = $newLines[0..($get7zInsertIndex - 1)]
-        $after = $newLines[$get7zInsertIndex..($newLines.Count - 1)]
-        $newLines = $before + $get7zLines + $after
+            
+            $newLines = $newLines[0..($get7zInsertIndex - 1)] + $get7zPatch + $newLines[$get7zInsertIndex..($newLines.Count - 1)]
+        }
+        
+        # 4. Guardar el script Instalar.ps1 final
+        $installerPath = Join-Path $Temp "Instalar.ps1"
+        $newLines | Set-Content -Path $installerPath -Encoding UTF8
     }
-    
-    # Guardar archivo INSTALAR.ps1
-    $installerPath = Join-Path $Temp "Instalar.ps1"
-    Set-Content -Path $installerPath -Value $newLines -Encoding UTF8
-    
-    Write-Log "Script INSTALAR.ps1 generado: $installerPath" "INFO"
-    Write-Log "  Destino: $(if ($Destino) { $Destino } else { 'No especificado' })" "INFO"
-    Write-Log "  Compresión: $CompressionType" "INFO"
-    
+
+    # ==========================================================================
+    # 5. GENERAR EL LANZADOR .CMD (El "Puente" de compatibilidad)
+    # ==========================================================================
+    $installerCmd = Join-Path $Temp "Instalar.cmd"
+    $cmdContent = @'
+@echo off
+setlocal
+title RESTAURANDO ARCHIVOS - LLEVAR v2.0
+echo ------------------------------------------------------------
+echo  LLEVAR: Lanzando instalador de PowerShell...
+echo ------------------------------------------------------------
+
+:: Detectar PowerShell 7 (pwsh) o fallback a 5.1 (powershell)
+where pwsh.exe >nul 2>&1
+if %errorlevel% == 0 (set "PS=pwsh.exe") else (set "PS=powershell.exe")
+
+"%PS%" -NoProfile -ExecutionPolicy Bypass -File "%~dp0Instalar.ps1"
+
+if %errorlevel% neq 0 (
+    echo.
+    echo [ERROR] La restauracion no pudo completarse.
+    pause
+) else (
+    echo [OK] Proceso terminado.
+    timeout /t 5
+)
+'@
+    $cmdContent | Set-Content -Path $installerCmd -Encoding ASCII
+
+    Write-Log "Ecosistema de instalación generado en: $Temp" "INFO"
     return $installerPath
 }
-
 # Exportar funciones
 Export-ModuleMember -Function @(
     'New-InstallerScript'

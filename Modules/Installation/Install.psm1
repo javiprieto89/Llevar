@@ -43,7 +43,7 @@ function Invoke-InstallParameter {
     )
     
     if (-not $Instalar) {
-        return $false
+        return
     }
     
     # Si está en IDE, omitir verificación de permisos
@@ -112,7 +112,7 @@ function Invoke-UninstallParameter {
     )
     
     if (-not $Desinstalar) {
-        return $false
+        return
     }
     
     # Si está en IDE, omitir verificación de permisos
