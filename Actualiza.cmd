@@ -155,7 +155,8 @@ if not exist "%ROBOCOPY%" (
 )
 
 REM Probar ejecucion; si falla, usar robocopy del sistema
-"%ROBOCOPY%" /? >nul 2>&1
+ver >nul
+"%ROBOCOPY%" /? 2>nul | findstr /I /C:"ROBOCOPY" >nul
 if errorlevel 1 (
     echo [WARN] Robocopy portable fallo en prueba. Usando robocopy del sistema.
     set "ROBOCOPY=robocopy.exe"

@@ -1,0 +1,10 @@
+{
+  "repoOwner": "javiprieto89",
+  "repoName": "Llevar",
+  "docsPath": "Q:\\Utilidad\\Llevar\\Docs",
+  "excludeFiles": [
+    "README.md",
+    "CHANGELOG.md",
+    "TEMPLATE.md"
+  ]
+}
