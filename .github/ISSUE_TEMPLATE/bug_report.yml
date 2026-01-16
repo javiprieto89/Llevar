@@ -1,0 +1,109 @@
+name: 🐛 Bug Report
+description: Reportar un error o comportamiento inesperado
+title: "[BUG]: "
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Gracias por reportar este bug. Por favor completa la información para ayudarnos a resolverlo.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Descripción del Bug
+      description: Describe claramente qué está fallando
+      placeholder: Al ejecutar X, esperaba Y pero obtuve Z...
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Pasos para Reproducir
+      description: Pasos detallados para reproducir el problema
+      placeholder: |
+        1. Ejecutar '...'
+        2. Click en '...'
+        3. Ver error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Comportamiento Esperado
+      description: Qué debería pasar
+      placeholder: Debería copiar los archivos sin errores...
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Comportamiento Actual
+      description: Qué está pasando realmente
+      placeholder: Se muestra error "..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Contenido relevante de C:\Llevar\Logs\LLEVAR_*.log
+      render: shell
+      placeholder: Pega aquí el contenido del log...
+
+  - type: input
+    id: powershell-version
+    attributes:
+      label: Versión de PowerShell
+      description: Ejecuta `$PSVersionTable.PSVersion` y pega el resultado
+      placeholder: "7.4.0"
+    validations:
+      required: true
+
+  - type: input
+    id: windows-version
+    attributes:
+      label: Versión de Windows
+      description: Ejecuta `[System.Environment]::OSVersion.Version` y pega el resultado
+      placeholder: "10.0.22631.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: transfer-type
+    attributes:
+      label: Tipo de Transferencia
+      description: ¿Qué tipo de transferencia estabas realizando?
+      options:
+        - Local a Local
+        - Local a USB
+        - Local a FTP
+        - Local a OneDrive
+        - Local a Dropbox
+        - Local a ISO
+        - FTP a FTP
+        - FTP a Local
+        - Otro
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: compression
+    attributes:
+      label: Opciones Usadas
+      description: Marca las opciones que estabas usando
+      options:
+        - label: Compresión 7-Zip
+        - label: División de bloques
+        - label: Modo interactivo
+        - label: Modo normal (parámetros)
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Información Adicional
+      description: Cualquier otra información relevante (capturas de pantalla, configuración especial, etc.)

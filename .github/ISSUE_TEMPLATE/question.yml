@@ -1,0 +1,50 @@
+name: ❓ Question
+description: Hacer una pregunta sobre uso o configuración
+title: "[QUESTION]: "
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Antes de preguntar, revisa la [documentación](https://github.com/javiprieto89/Llevar/tree/master/Docs) y el [README](https://github.com/javiprieto89/Llevar/blob/master/README.md).
+
+  - type: textarea
+    id: question
+    attributes:
+      label: Tu Pregunta
+      description: ¿Qué quieres saber?
+      placeholder: ¿Cómo puedo...? ¿Es posible...? ¿Por qué...?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Categoría
+      description: ¿Sobre qué trata tu pregunta?
+      options:
+        - Instalación/Configuración
+        - Uso/Funcionalidades
+        - Transferencias FTP
+        - OneDrive/Dropbox
+        - Compresión/Bloques
+        - ISOs
+        - Troubleshooting
+        - Desarrollo/Contribución
+        - Otro
+    validations:
+      required: false
+
+  - type: textarea
+    id: tried
+    attributes:
+      label: Qué has Intentado
+      description: ¿Qué has probado hasta ahora?
+      placeholder: He intentado... pero...
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Contexto Adicional
+      description: Cualquier información que ayude a entender tu pregunta
+      placeholder: Estoy usando Llevar para... Mi setup es...

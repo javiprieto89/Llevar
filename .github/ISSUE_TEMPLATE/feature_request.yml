@@ -1,0 +1,92 @@
+name: ✨ Feature Request
+description: Sugerir una nueva funcionalidad o mejora
+title: "[FEATURE]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ¡Gracias por tu sugerencia! Ayúdanos a entender tu idea.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problema a Resolver
+      description: ¿Qué problema o limitación actual resolverías con esta funcionalidad?
+      placeholder: Actualmente no puedo... y me gustaría poder...
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Solución Propuesta
+      description: Describe cómo funcionaría tu idea
+      placeholder: |
+        Agregaría un botón/opción que permitiera...
+        Al usarlo, debería...
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternativas Consideradas
+      description: ¿Qué otras soluciones has pensado?
+      placeholder: También podría hacerse mediante... pero prefiero X porque...
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Categoría
+      description: ¿A qué área pertenece esta mejora?
+      options:
+        - Transferencia (nuevo destino/origen)
+        - Compresión
+        - UI/Menús
+        - Performance
+        - Configuración
+        - Logs/Debugging
+        - Documentación
+        - Instalación/Desinstalación
+        - Otro
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Prioridad Sugerida
+      description: ¿Qué tan importante es esta funcionalidad?
+      options:
+        - Crítica (bloquea uso normal)
+        - Alta (muy útil)
+        - Media (nice to have)
+        - Baja (deseable)
+    validations:
+      required: false
+
+  - type: textarea
+    id: use-cases
+    attributes:
+      label: Casos de Uso
+      description: Ejemplos concretos de cómo usarías esta funcionalidad
+      placeholder: |
+        1. Cuando necesito backup a Google Drive...
+        2. Al trabajar con archivos >10GB...
+
+  - type: checkboxes
+    id: willing-to-help
+    attributes:
+      label: Disposición a Contribuir
+      description: ¿Estarías dispuesto/a a ayudar?
+      options:
+        - label: Puedo ayudar con testing
+        - label: Puedo ayudar con documentación
+        - label: Puedo ayudar con código (Pull Request)
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Información Adicional
+      description: Mockups, referencias, links, etc.
