@@ -135,150 +135,40 @@ $Global:ScriptDir = $PSScriptRoot
 $Global:ScriptDir = $PSScriptRoot
 $Global:ModulesPath = Join-Path $Global:ScriptDir "Modules"
 
-# Importar módulo de verificación de PowerShell
-try {
-    $psVersionPath = Join-Path $Global:ModulesPath "System\PowerShellVersion.psm1"
-    if (Test-Path $psVersionPath) {
-        Import-Module $psVersionPath -Force -Global -WarningAction SilentlyContinue -ErrorAction SilentlyContinue
-        
-        # Verificar PowerShell 7 - si falla, el script terminará
-        if (-not (Assert-PowerShell7)) {
-            exit 1
-        }
-    }
-    else {
-        # Si no existe el módulo, hacer verificación básica
-        if ($PSVersionTable.PSVersion.Major -lt 7) {
-            Write-Host ""
-            Write-Host "═══════════════════════════════════════════════════════════" -ForegroundColor Red
-            Write-Host " ⚠ POWERSHELL 7 REQUERIDO" -ForegroundColor Yellow
-            Write-Host "═══════════════════════════════════════════════════════════" -ForegroundColor Red
-            Write-Host ""
-            Write-Host "Este programa requiere PowerShell 7 o superior." -ForegroundColor White
-            Write-Host "Versión actual: PowerShell $($PSVersionTable.PSVersion)" -ForegroundColor Gray
-            Write-Host "Descargue desde: https://aka.ms/powershell" -ForegroundColor Cyan
-            Write-Host ""
-            Write-Host "Presione cualquier tecla para salir..." -ForegroundColor Gray
-            $null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
-            exit 1
-        }
-    }
+# Verificar PowerShell 7 (la función muestra mensajes y devuelve True/False)
+$psVersionPath = Join-Path $Global:ModulesPath "System\PowerShellVersion.psm1"
+if (Test-Path $psVersionPath) {
+    Import-Module $psVersionPath -Force -Global -WarningAction SilentlyContinue -ErrorAction SilentlyContinue
+    if (-not (Assert-PowerShell7)) { exit 1 }
 }
-catch {
-    Write-Host "Error al verificar versión de PowerShell: $_" -ForegroundColor Red
+elseif ($PSVersionTable.PSVersion.Major -lt 7) {
     exit 1
 }
 
-# Verificar si se está ejecutando como administrador
-$currentPrincipal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
-$isAdmin = $currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+# Importar módulo de elevación de permisos y detección de entorno
+try {
+    Import-Module (Join-Path $Global:ModulesPath "System\AdminElevation.psm1") -Force -Global -ErrorAction Stop
+}
+catch {
+    Write-Host "Error cargando AdminElevation.psm1: $($_.Exception.Message)" -ForegroundColor Red
+    exit 1
+}
 
-# Determinar si se necesitan permisos de administrador
-# Solo requerir admin para: instalación, desintalación, o configuración del sistema
+# Detectar entorno de ejecución (IDE o terminal)
+$isInIDE = Test-IsRunningInIDE
+
+# Si estamos en IDE, activar verbose automáticamente (debug mode)
+if ($isInIDE -and -not $Verbose) {
+    $Verbose = $true
+    Write-Host "[DEBUG/IDE] Verbose activado automáticamente" -ForegroundColor DarkGray
+}
+
+# Verificar y elevar permisos si es necesario
 $requiresAdmin = $Instalar -or $Desinstalar
+Assert-AdminPrivileges -RequiresAdmin $requiresAdmin -ScriptPath $PSCommandPath -BoundParameters $PSBoundParameters
 
-# Si se requieren permisos de admin y no los tiene, elevar
-if ($requiresAdmin -and -not $isAdmin) {
-    Write-Host "🔒 Esta operación requiere permisos de administrador..." -ForegroundColor Cyan
-    Write-Host "   Elevando permisos..." -ForegroundColor Gray
-    
-    try {
-        # Construir argumentos para mantener todos los parámetros
-        $argList = @(
-            '-NoProfile'
-            '-ExecutionPolicy', 'Bypass'
-            '-File', "`"$PSCommandPath`""
-        )
-        
-        # Agregar parámetros bound
-        foreach ($param in $PSBoundParameters.GetEnumerator()) {
-            if ($param.Value -is [switch]) {
-                if ($param.Value) {
-                    $argList += "-$($param.Key)"
-                }
-            }
-            else {
-                $argList += "-$($param.Key)"
-                $argList += "`"$($param.Value)`""
-            }
-        }
-        
-        # Iniciar proceso elevado
-        $process = Start-Process -FilePath "pwsh.exe" `
-            -ArgumentList $argList `
-            -Verb RunAs `
-            -PassThru `
-            -WindowStyle Normal `
-            -ErrorAction Stop
-        
-        # Esperar a que termine el proceso elevado
-        $process.WaitForExit()
-        
-        # Salir del proceso no elevado
-        exit $process.ExitCode
-    }
-    catch {
-        # Si falla la elevación automática (usuario cancela UAC o error de seguridad)
-        $errorType = $_.Exception.GetType().Name
-        
-        # Si es una cancelación del usuario
-        if ($errorType -eq "Win32Exception" -or $_.Exception.Message -match "cancel|1223") {
-            try {
-                Add-Type -AssemblyName PresentationFramework
-                [System.Windows.MessageBox]::Show(
-                    "Esta operación requiere permisos de administrador.`n`n" +
-                    "La operación fue cancelada por el usuario.`n`n" +
-                    "No se puede continuar sin permisos de administrador.",
-                    "Permisos de Administrador Requeridos",
-                    "OK",
-                    "Warning"
-                ) | Out-Null
-            }
-            catch {
-                Write-Host ""
-                Write-Host "╔═══════════════════════════════════════════════════════════════╗" -ForegroundColor Yellow
-                Write-Host "║  ⚠ PERMISOS DE ADMINISTRADOR REQUERIDOS                      ║" -ForegroundColor Yellow
-                Write-Host "║  La operación fue cancelada.                                  ║" -ForegroundColor Yellow
-                Write-Host "║  No se puede continuar sin permisos de administrador.         ║" -ForegroundColor Yellow
-                Write-Host "╚═══════════════════════════════════════════════════════════════╝" -ForegroundColor Yellow
-                Write-Host ""
-                Write-Host "Presione cualquier tecla para salir..." -ForegroundColor Gray
-                $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
-            }
-        }
-        else {
-            # Otro tipo de error
-            try {
-                Add-Type -AssemblyName PresentationFramework
-                [System.Windows.MessageBox]::Show(
-                    "No se pudo elevar permisos de administrador.`n`n" +
-                    "Error: $($_.Exception.Message)`n`n" +
-                    "Por favor ejecute PowerShell como administrador manualmente.",
-                    "Error de Elevación de Permisos",
-                    "OK",
-                    "Error"
-                ) | Out-Null
-            }
-            catch {
-                Write-Host ""
-                Write-Host "❌ No se pudo elevar permisos de administrador" -ForegroundColor Red
-                Write-Host "Error: $($_.Exception.Message)" -ForegroundColor Yellow
-                Write-Host ""
-                Write-Host "Por favor ejecute PowerShell como administrador manualmente." -ForegroundColor Yellow
-                Write-Host ""
-                Write-Host "Presione cualquier tecla para salir..." -ForegroundColor Gray
-                $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
-            }
-        }
-        exit 1
-    }
-}
-elseif (-not $requiresAdmin -and -not $isAdmin) {
-    # No requiere admin y no lo tiene - mostrar advertencia info pero continuar
-    Write-Host "ℹ Ejecutando sin permisos de administrador" -ForegroundColor Cyan
-    Write-Host "  (Solo se requiere admin para instalar/desinstalar)" -ForegroundColor Gray
-    Write-Host ""
-}
+# Obtener estado de admin para uso posterior
+$isAdmin = Test-IsAdministrator
 
 # Configurar preferencias de error/warning
 $script:OriginalErrorPreference = $ErrorActionPreference
@@ -343,169 +233,31 @@ Write-InitLogSafe $initLog
 # Configurar preferencias de error
 $ErrorActionPreference = 'Continue'
 
-$ModulesPath = $Global:ModulesPath
+# Importar módulo central de carga
+Import-Module (Join-Path $ModulesPath "Core\ModuleLoader.psm1") -Force -Global -ErrorAction Stop
 
-# Importar módulos
-try {
-    $importWarnings = @()
-    $importErrors = @()
+# Importar todos los módulos
+$importResult = Import-LlevarModules -ModulesPath $ModulesPath -Categories 'All' -Global
 
-    # Módulos Core
-    Import-Module (Join-Path $ModulesPath "Core\TransferConfig.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
-    Import-Module (Join-Path $ModulesPath "Core\Validation.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
-    Import-Module (Join-Path $ModulesPath "Core\Logger.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
-    
-
-    # Módulos UI (básicos - ConfigMenus se importa después de Transfer)
-    Import-Module (Join-Path $ModulesPath "UI\Console.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
-    Import-Module (Join-Path $ModulesPath "UI\ProgressBar.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
-    Import-Module (Join-Path $ModulesPath "UI\Banners.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
-    Import-Module (Join-Path $ModulesPath "UI\Navigator.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
-    Import-Module (Join-Path $ModulesPath "UI\Menus.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
-
-    # Compresión
-    Import-Module (Join-Path $ModulesPath "Compression\SevenZip.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
-    Import-Module (Join-Path $ModulesPath "Compression\NativeZip.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
-    Import-Module (Join-Path $ModulesPath "Compression\BlockSplitter.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
-
-    # Transferencia
-    Import-Module (Join-Path $ModulesPath "Transfer\Local.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
-    Import-Module (Join-Path $ModulesPath "Transfer\FTP.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
-    Import-Module (Join-Path $ModulesPath "Transfer\UNC.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
-    Import-Module (Join-Path $ModulesPath "Transfer\OneDrive.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
-    Import-Module (Join-Path $ModulesPath "Transfer\Dropbox.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
-    Import-Module (Join-Path $ModulesPath "Transfer\Floppy.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
-    Import-Module (Join-Path $ModulesPath "Transfer\Unified.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
-    Import-Module (Join-Path $ModulesPath "UI\ConfigMenus.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
-
-    # Instalación
-    Import-Module (Join-Path $ModulesPath "Installation\SystemInstall.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
-    Import-Module (Join-Path $ModulesPath "Installation\Uninstall.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
-    Import-Module (Join-Path $ModulesPath "Installation\Installer.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
-    Import-Module (Join-Path $ModulesPath "Installation\Installation.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
-    Import-Module (Join-Path $ModulesPath "Installation\Install.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
-    Import-Module (Join-Path $ModulesPath "Installation\InstallationCheck.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
-
-    # Utilidades
-    Import-Module (Join-Path $ModulesPath "Utilities\Examples.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
-    Import-Module (Join-Path $ModulesPath "Utilities\Help.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
-    Import-Module (Join-Path $ModulesPath "Utilities\PathSelectors.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
-    Import-Module (Join-Path $ModulesPath "Utilities\VolumeManagement.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
-
-    # Sistema
-    Import-Module (Join-Path $ModulesPath "System\Audio.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
-    Import-Module (Join-Path $ModulesPath "System\FileSystem.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
-    Import-Module (Join-Path $ModulesPath "System\Robocopy.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
-    Import-Module (Join-Path $ModulesPath "System\ISO.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
-
-    # Parámetros
-    Import-Module (Join-Path $ModulesPath "Parameters\Help.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
-    Import-Module (Join-Path $ModulesPath "Parameters\Example.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
-    Import-Module (Join-Path $ModulesPath "Parameters\Test.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
-    Import-Module (Join-Path $ModulesPath "Parameters\Robocopy.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
-    Import-Module (Join-Path $ModulesPath "Parameters\InteractiveMenu.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
-    Import-Module (Join-Path $ModulesPath "Parameters\NormalMode.psm1") -Force -Global -WarningVariable +importWarnings -ErrorVariable +importErrors -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
-    
-    # Manejo de errores/advertencias durante importación
-    if ($importErrors -and $importErrors.Count -gt 0) {
-
-        $importErrorLog = @"
-[ERROR CRÍTICO]
-Se produjeron errores durante la importación de uno o más módulos.
-La inicialización del sistema no puede continuar.
-"@
-
-        $importErrorLog += "`nErrores ($($importErrors.Count)):`n"
-        foreach ($err in $importErrors) {
-            $importErrorLog += "  - $($err.Exception.Message)`n"
-        }
-
-        if ($importWarnings -and $importWarnings.Count -gt 0) {
-            $importErrorLog += "`nAdvertencias adicionales ($($importWarnings.Count)):`n"
-            foreach ($warning in $importWarnings) {
-                $importErrorLog += "  - $warning`n"
-            }
-        }
-
-        Write-InitLogSafe $importErrorLog
-        throw "ERROR CRÍTICO: Falló la importación de módulos. Revisa el log en: $Global:LogFile"
-    }
-
-    # Si NO hubo errores críticos, pero sí advertencias, registrarlas
-    if ($importWarnings -and $importWarnings.Count -gt 0) {
-
-        $importWarningLog = @"
-[ADVERTENCIAS DURANTE IMPORTACIÓN DE MÓDULOS]
-La inicialización continuó, pero se detectaron advertencias.
-"@
-
-        $importWarningLog += "`nAdvertencias ($($importWarnings.Count)):`n"
-        foreach ($warning in $importWarnings) {
-            $importWarningLog += "  - $warning`n"
-        }
-
-        Write-InitLogSafe $importWarningLog
-    }
-    
-    $script:HasImportWarnings = ($importWarnings -and $importWarnings.Count -gt 0)
-
-    # Restaurar preferencias
-    $ErrorActionPreference = $script:OriginalErrorPreference
-    $WarningPreference = $script:OriginalWarningPreference
-}
-catch {
-    $errorMsg = "Error crítico durante la importación de módulos: $($_.Exception.Message)"
-    Write-InitLogSafe "[ERROR CRÍTICO] $errorMsg"
-    Write-Host "× $errorMsg" -ForegroundColor Red
-    Write-Host "Línea: $($_.InvocationInfo.ScriptLineNumber)" -ForegroundColor Yellow
-    Read-Host "Presione ENTER para salir"
+# Verificar que la importación fue exitosa
+if (-not $importResult.Success) {
+    Write-Host "No se pudo inicializar el sistema debido a errores en la carga de módulos." -ForegroundColor Red
+    Write-Host "Presione ENTER para salir..." -ForegroundColor Yellow
+    Read-Host
     exit 1
 }
 
-try {
-    $currentPrincipal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
-    $isAdmin = $currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-    
-    # Detectar si estamos en VS Code, ISE, u otro IDE usando la función del módulo
-    $isInIDE = Test-IsRunningInIDE
+# Guardar warnings para mostrar más tarde (después del logo)
+$script:HasImportWarnings = $importResult.HasWarnings
+$importWarnings = $importResult.Warnings
 
-    # Si estamos en IDE, activar verbose automáticamente (sin pasarlo como parámetro)
-    if ($isInIDE -and -not $Verbose) {
-        $Verbose = $true
-        Write-Host "[DEBUG/IDE] Verbose activado automáticamente" -ForegroundColor DarkGray
+# Registrar advertencias en log si las hay (NO mostrar en consola aún)
+if ($script:HasImportWarnings) {
+    $importWarningLog = "[ADVERTENCIAS DURANTE IMPORTACIÓN] Se detectaron $($importResult.Warnings.Count) advertencias:`n"
+    foreach ($warning in $importResult.Warnings) {
+        $importWarningLog += "  - $warning`n"
     }
-}
-catch {
-    Write-Host "⚠ Error verificando permisos: $($_.Exception.Message)" -ForegroundColor Yellow
-    $isAdmin = $false
-    $isInIDE = $false
-}
-
-try {
-    if (-not $isInIDE -and -not $isAdmin -and -not $Instalar) {
-        Write-Host "`nLlevar requiere permisos de administrador." -ForegroundColor Yellow
-        Write-Host "Elevando automáticamente..." -ForegroundColor Cyan
-        
-        # Construir argumentos preservando todos los parámetros
-        $arguments = @("-NoExit", "-ExecutionPolicy", "Bypass", "-File", "`"$($MyInvocation.MyCommand.Path)`"")
-        
-        # Agregar parámetros originales
-        if ($Origen) { $arguments += "-Origen", "`"$Origen`"" }
-        if ($Destino) { $arguments += "-Destino", "`"$Destino`"" }
-        if ($RobocopyMirror) { $arguments += "-RobocopyMirror" }
-        if ($Ejemplo) { $arguments += "-Ejemplo" }
-        if ($Ayuda) { $arguments += "-Ayuda" }
-        if ($Test) { $arguments += "-Test" }
-        if ($ForceLogo) { $arguments += "-ForceLogo" }
-        if ($Verbose) { $arguments += "-Verbose" }
-        
-        Start-Process powershell.exe -ArgumentList $arguments -Verb RunAs
-        exit
-    }
-}
-catch {
-    Write-Host "⚠ Error durante elevación de permisos: $($_.Exception.Message)" -ForegroundColor Yellow
-    Write-Host "Continuando sin permisos de administrador..." -ForegroundColor Gray
+    Write-InitLogSafe $importWarningLog
 }
 
 try {
@@ -559,62 +311,28 @@ if ($shouldShowLogo) {
     $logoPath = Join-Path $PSScriptRoot "Data\alexsoft.txt"
     if (Test-Path $logoPath) {
         try {
-            # Usar Show-AsciiLogo como renderer unificado para el logo con sonidos estilo DOS
-            # Show-AsciiLogo hace su propio Clear-Host internamente
             Show-AsciiLogo -Path $logoPath -DelayMs 30 -ShowProgress $true -Label "Cargando..." -ForegroundColor Gray -PlaySound $true -FinalDelaySeconds 2
             $script:LogoWasShown = $true
-                
-            # Mostrar mensaje de bienvenida personalizado parpadeante
             Show-WelcomeMessage -BlinkCount 3 -VisibleDelayMs 450 -TextColor Cyan
-                
-            # Mostrar advertencias si las hay (los errores críticos ya abortaron antes)
-            if ($script:HasImportWarnings) {
-                Write-Host ""
-                Write-Host "═══════════════════════════════════════════════════════════" -ForegroundColor Yellow
-                Write-Host "  ADVERTENCIAS DURANTE LA CARGA DE MÓDULOS" -ForegroundColor Yellow
-                Write-Host "═══════════════════════════════════════════════════════════" -ForegroundColor Yellow
-                Write-Host ""
-                Write-Host "Advertencias ($($importWarnings.Count)):" -ForegroundColor Yellow
-                foreach ($warning in $importWarnings) {
-                    Write-Host "  ⚠ $warning" -ForegroundColor Yellow
-                }
-                Write-Host ""
-                Write-Host "Los detalles completos están en el log: $Global:LogFile" -ForegroundColor Gray
-                Write-Host ""
-                Write-Host "Presione cualquier tecla para continuar..." -ForegroundColor Cyan
-                $null = $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
-            }
-                
-            # Limpiar para mostrar el menú
             Clear-Host
         }
         catch {
-            # Si hay error en el logo (ej: cuando se usa -NoProfile), simplemente continuar
-            # No es un error crítico, solo significa que las funciones de consola no están disponibles
-            try {
-                Write-Log "Error mostrando logo ASCII: $($_.Exception.Message)" "WARNING"
-            }
-            catch {
-                # Ignorar errores al escribir el log
-            }
-            try {
-                Clear-Host
-            }
-            catch {
-                # Ignorar si Clear-Host falla
-            }
+            try { Write-Log "Error mostrando logo ASCII: $($_.Exception.Message)" "WARNING" } catch { }
+            try { Clear-Host } catch { }
         }
     }
 }
 
-# Si no se mostró el logo pero hubo advertencias y no hay parámetros, mostrarlas igual
-if (-not $script:LogoWasShown -and -not $hasExecutionParams -and $script:HasImportWarnings) {
+# Mostrar advertencias de importación si las hay (después del logo, antes del menú)
+if ($script:HasImportWarnings -and -not $hasExecutionParams) {
     Write-Host "═══════════════════════════════════════════════════════════" -ForegroundColor Yellow
     Write-Host "  ADVERTENCIAS DURANTE LA CARGA DE MÓDULOS" -ForegroundColor Yellow
     Write-Host "═══════════════════════════════════════════════════════════" -ForegroundColor Yellow
     Write-Host ""
     Write-Host "Advertencias ($($importWarnings.Count)):" -ForegroundColor Yellow
-    foreach ($warning in $importWarnings) { Write-Host "  ⚠ $warning" -ForegroundColor Yellow }
+    foreach ($warning in $importWarnings) {
+        Write-Host "  ⚠ $warning" -ForegroundColor Yellow
+    }
     Write-Host ""
     Write-Host "Los detalles completos están en el log: $Global:LogFile" -ForegroundColor Gray
     Write-Host ""

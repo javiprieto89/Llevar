@@ -11,64 +11,40 @@
 $ProjectRoot = $PSScriptRoot
 $ModulesPath = Join-Path $ProjectRoot "Modules"
 
+# Verificar PowerShell 7 antes de importar módulos
+$psVersionPath = Join-Path $ModulesPath "System\PowerShellVersion.psm1"
+if (Test-Path $psVersionPath) {
+    Import-Module $psVersionPath -Force -Global -WarningAction SilentlyContinue -ErrorAction SilentlyContinue
+    if (-not (Assert-PowerShell7)) { exit 1 }
+}
+elseif ($PSVersionTable.PSVersion.Major -lt 7) {
+    Write-Host "⚠ PowerShell 7 requerido" -ForegroundColor Yellow
+    exit 1
+}
+
 # ========================================================================== #
 #                        IMPORTAR TODOS LOS MÓDULOS                          #
 # ========================================================================== #
 
-# Módulos Core
-Import-Module (Join-Path $ModulesPath "Core\TransferConfig.psm1") -Force -Global -ErrorAction SilentlyContinue
-Import-Module (Join-Path $ModulesPath "Core\Validation.psm1") -Force -Global -ErrorAction SilentlyContinue
-Import-Module (Join-Path $ModulesPath "Core\Logger.psm1") -Force -Global -ErrorAction SilentlyContinue
+# Importar módulo central de carga
+Import-Module (Join-Path $ModulesPath "Core\ModuleLoader.psm1") -Force -Global -ErrorAction Stop
 
-# Módulos UI
-Import-Module (Join-Path $ModulesPath "UI\Console.psm1") -Force -Global -ErrorAction SilentlyContinue
-Import-Module (Join-Path $ModulesPath "UI\Banners.psm1") -Force -Global -ErrorAction SilentlyContinue
-Import-Module (Join-Path $ModulesPath "UI\ProgressBar.psm1") -Force -Global -ErrorAction SilentlyContinue
-Import-Module (Join-Path $ModulesPath "UI\Navigator.psm1") -Force -Global -ErrorAction SilentlyContinue
-Import-Module (Join-Path $ModulesPath "UI\Menus.psm1") -Force -Global -ErrorAction SilentlyContinue
-Import-Module (Join-Path $ModulesPath "UI\ConfigMenus.psm1") -Force -Global -ErrorAction SilentlyContinue
+# Importar todos los módulos
+$importResult = Import-LlevarModules -ModulesPath $ModulesPath -Categories 'All' -Global
 
-# Módulos de Compresión
-Import-Module (Join-Path $ModulesPath "Compression\SevenZip.psm1") -Force -Global -ErrorAction SilentlyContinue
-Import-Module (Join-Path $ModulesPath "Compression\NativeZip.psm1") -Force -Global -ErrorAction SilentlyContinue
-Import-Module (Join-Path $ModulesPath "Compression\BlockSplitter.psm1") -Force -Global -ErrorAction SilentlyContinue
+# Verificar que la importación fue exitosa
+if (-not $importResult.Success) {
+    Write-Host "✗ Error crítico durante importación de módulos" -ForegroundColor Red
+    Write-Host "Los tests no pueden ejecutarse sin los módulos requeridos." -ForegroundColor Yellow
+    exit 1
+}
 
-# Módulos de Transferencia
-Import-Module (Join-Path $ModulesPath "Transfer\Local.psm1") -Force -Global -ErrorAction SilentlyContinue
-Import-Module (Join-Path $ModulesPath "Transfer\FTP.psm1") -Force -Global -ErrorAction SilentlyContinue
-Import-Module (Join-Path $ModulesPath "Transfer\UNC.psm1") -Force -Global -ErrorAction SilentlyContinue
-Import-Module (Join-Path $ModulesPath "Transfer\OneDrive.psm1") -Force -Global -ErrorAction SilentlyContinue
-Import-Module (Join-Path $ModulesPath "Transfer\Dropbox.psm1") -Force -Global -ErrorAction SilentlyContinue
-Import-Module (Join-Path $ModulesPath "Transfer\Floppy.psm1") -Force -Global -ErrorAction SilentlyContinue
-Import-Module (Join-Path $ModulesPath "Transfer\Unified.psm1") -Force -Global -ErrorAction SilentlyContinue
+# Mostrar advertencias si las hay (solo para tests)
+if ($importResult.HasWarnings) {
+    Write-Host "⚠ Advertencias durante importación ($($importResult.Warnings.Count))" -ForegroundColor Yellow
+    foreach ($warning in $importResult.Warnings) {
+        Write-Host "  - $warning" -ForegroundColor Gray
+    }
+}
 
-# Módulos de Instalación
-Import-Module (Join-Path $ModulesPath "Installation\SystemInstall.psm1") -Force -Global -ErrorAction SilentlyContinue
-Import-Module (Join-Path $ModulesPath "Installation\Uninstall.psm1") -Force -Global -ErrorAction SilentlyContinue
-Import-Module (Join-Path $ModulesPath "Installation\Installer.psm1") -Force -Global -ErrorAction SilentlyContinue
-Import-Module (Join-Path $ModulesPath "Installation\Installation.psm1") -Force -Global -ErrorAction SilentlyContinue
-Import-Module (Join-Path $ModulesPath "Installation\Install.psm1") -Force -Global -ErrorAction SilentlyContinue
-Import-Module (Join-Path $ModulesPath "Installation\InstallationCheck.psm1") -Force -Global -ErrorAction SilentlyContinue
-
-# Módulos de Utilidades
-Import-Module (Join-Path $ModulesPath "Utilities\Examples.psm1") -Force -Global -ErrorAction SilentlyContinue
-Import-Module (Join-Path $ModulesPath "Utilities\Help.psm1") -Force -Global -ErrorAction SilentlyContinue
-Import-Module (Join-Path $ModulesPath "Utilities\PathSelectors.psm1") -Force -Global -ErrorAction SilentlyContinue
-Import-Module (Join-Path $ModulesPath "Utilities\VolumeManagement.psm1") -Force -Global -ErrorAction SilentlyContinue
-
-# Módulos del Sistema
-Import-Module (Join-Path $ModulesPath "System\PowerShellVersion.psm1") -Force -Global -ErrorAction SilentlyContinue
-Import-Module (Join-Path $ModulesPath "System\Audio.psm1") -Force -Global -ErrorAction SilentlyContinue
-Import-Module (Join-Path $ModulesPath "System\FileSystem.psm1") -Force -Global -ErrorAction SilentlyContinue
-Import-Module (Join-Path $ModulesPath "System\Robocopy.psm1") -Force -Global -ErrorAction SilentlyContinue
-Import-Module (Join-Path $ModulesPath "System\ISO.psm1") -Force -Global -ErrorAction SilentlyContinue
-Import-Module (Join-Path $ModulesPath "System\Browser.psm1") -Force -Global -ErrorAction SilentlyContinue
-
-# Módulos de Parámetros
-Import-Module (Join-Path $ModulesPath "Parameters\Help.psm1") -Force -Global -ErrorAction SilentlyContinue
-Import-Module (Join-Path $ModulesPath "Parameters\Example.psm1") -Force -Global -ErrorAction SilentlyContinue
-Import-Module (Join-Path $ModulesPath "Parameters\Robocopy.psm1") -Force -Global -ErrorAction SilentlyContinue
-Import-Module (Join-Path $ModulesPath "Parameters\InteractiveMenu.psm1") -Force -Global -ErrorAction SilentlyContinue
-Import-Module (Join-Path $ModulesPath "Parameters\NormalMode.psm1") -Force -Global -ErrorAction SilentlyContinue
-
-Write-Host "✓ Módulos de Llevar cargados para tests" -ForegroundColor Green
+Write-Host "✓ Módulos de Llevar cargados para tests ($($importResult.LoadedModules.Count)/$($importResult.TotalModules))" -ForegroundColor Green

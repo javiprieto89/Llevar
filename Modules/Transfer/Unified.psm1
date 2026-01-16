@@ -839,12 +839,13 @@ function Invoke-CloudToLocal {
             $sevenZip = Get-SevenZipLlevar
             
             # Comprimir archivos temporales
+            $destinoFinal = Get-TransferPath -Config $Llevar -Section "Destino"
             $tempCompress = Join-Path $env:TEMP "LLEVAR_COMPRESSED_$(Get-Date -Format 'yyyyMMddHHmmss')"
             New-Item -Type Directory $tempCompress | Out-Null
             
             try {
                 $compressResult = Compress-Folder -Origen $tempDownload -Temp $tempCompress -SevenZ $sevenZip `
-                    -Clave $null -BlockSizeMB $blockSizeMB
+                    -Clave $null -BlockSizeMB $blockSizeMB -DestinoFinal $destinoFinal
                 
                 if (-not $compressResult -or -not $compressResult.Files -or $compressResult.Files.Count -eq 0) {
                     throw "${CloudType}→Local: Error en la compresión - no se generaron archivos"
@@ -1265,12 +1266,13 @@ function Invoke-CloudToFtp {
             Write-Host "Comprimiendo archivos descargados..." -ForegroundColor Cyan
             
             $sevenZip = Get-SevenZipLlevar
+            $destinoFinal = Get-TransferPath -Config $Llevar -Section "Destino"
             $tempCompress = Join-Path $env:TEMP "LLEVAR_COMPRESSED_$(Get-Date -Format 'yyyyMMddHHmmss')"
             New-Item -Type Directory $tempCompress | Out-Null
             
             try {
                 $compressResult = Compress-Folder -Origen $tempDownload -Temp $tempCompress -SevenZ $sevenZip `
-                    -Clave $null -BlockSizeMB $blockSizeMB
+                    -Clave $null -BlockSizeMB $blockSizeMB -DestinoFinal $destinoFinal
                 
                 if ($ShowProgress) {
                     Write-LlevarProgressBar -Percent 70 -StartTime $StartTime -Label "Subiendo a FTP..." -Top $ProgressTop -Width 50

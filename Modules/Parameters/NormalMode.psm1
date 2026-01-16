@@ -608,13 +608,15 @@ function Invoke-CompressedTransfer {
         New-Item -Type Directory $tempDir | Out-Null
     }
     
+    $destinoFinal = Get-TransferPath -Config $TransferConfig -Section "Destino"
     # Llamar a Compress-Folder con la firma correcta
     $compressionResult = Compress-Folder `
         -Origen $origenParaComprimir `
         -Temp $tempDir `
         -SevenZ $sevenZipPath `
         -Clave $TransferConfig.Opciones.Clave `
-        -BlockSizeMB $TransferConfig.Opciones.BlockSizeMB
+        -BlockSizeMB $TransferConfig.Opciones.BlockSizeMB `
+        -DestinoFinal $destinoFinal
     
     $blocks = $compressionResult.Files
     $compressionType = $compressionResult.CompressionType

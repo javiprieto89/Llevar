@@ -91,27 +91,28 @@ REM VERIFICAR POWERSHELL 7+
 REM ============================================================
 
 echo [*] Verificando PowerShell 7+...
+echo.
 
-REM Usar PowerShell para detectar pwsh.exe
-for /f "delims=" %%i in ('powershell -NoProfile -Command "(Get-Command pwsh -ErrorAction SilentlyContinue).Source" 2^>nul') do set "PWSH_EXE=%%i"
-
-REM Si se encontró, verificar que sea válido
-if defined PWSH_EXE (
-    if exist "%PWSH_EXE%" (
-        goto :FoundPwsh
-    )
+REM Intentar ejecutar pwsh directamente para verificar si está en PATH
+pwsh.exe -NoProfile -Command "exit 0" >nul 2>&1
+if !ERRORLEVEL! equ 0 (
+    set "PWSH_EXE=pwsh.exe"
+    goto :FoundPwsh
 )
 
-REM Fallback: Buscar en ubicaciones comunes
-set "PWSH_EXE="
-
-REM Buscar en PATH con where
+REM Buscar con where (el más confiable si está en PATH)
 for /f "delims=" %%i in ('where pwsh.exe 2^>nul') do (
     set "PWSH_EXE=%%i"
     goto :FoundPwsh
 )
 
 REM Buscar en Program Files (cualquier versión 7+)
+if exist "%ProgramFiles%\PowerShell\7\pwsh.exe" (
+    set "PWSH_EXE=%ProgramFiles%\PowerShell\7\pwsh.exe"
+    goto :FoundPwsh
+)
+
+REM Buscar en otras versiones de Program Files
 for /d %%i in ("%ProgramFiles%\PowerShell\*") do (
     if exist "%%i\pwsh.exe" (
         set "PWSH_EXE=%%i\pwsh.exe"
@@ -123,6 +124,12 @@ REM Buscar en WindowsApps (Microsoft Store / Winget)
 if exist "%LocalAppData%\Microsoft\WindowsApps\pwsh.exe" (
     set "PWSH_EXE=%LocalAppData%\Microsoft\WindowsApps\pwsh.exe"
     goto :FoundPwsh
+)
+
+REM Último intento: usar PowerShell 5 para encontrar pwsh
+for /f "delims=" %%i in ('powershell -NoProfile -Command "(Get-Command pwsh -ErrorAction SilentlyContinue).Source" 2^>nul') do (
+    set "PWSH_EXE=%%i"
+    if exist "!PWSH_EXE!" goto :FoundPwsh
 )
 
 REM ============================================================

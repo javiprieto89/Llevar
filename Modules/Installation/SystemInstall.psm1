@@ -122,6 +122,45 @@ function Install-LlevarToSystem {
         Write-Host "⚠ Error al copiar datos: $_" -ForegroundColor Yellow
     }
     
+    # Copiar carpeta Robocopy (si existe)
+    Write-Host "Copiando robocopy..." -ForegroundColor Cyan
+    try {
+        $origenRobocopy = $null
+        $robocopyCandidates = @(
+            (Join-Path $currentDir "Robocopy"),
+            (Join-Path $currentDir "robocopy")
+        )
+        foreach ($candidate in $robocopyCandidates) {
+            if (Test-Path $candidate) {
+                $origenRobocopy = $candidate
+                break
+            }
+        }
+        $destinoRobocopy = Join-Path $installPath "robocopy"
+        if ($origenRobocopy) {
+            if (Test-Path $destinoRobocopy) {
+                Remove-Item -Path $destinoRobocopy -Recurse -Force
+            }
+            Copy-Item -Path $origenRobocopy -Destination $destinoRobocopy -Recurse -Force
+            Write-Host "V robocopy copiado" -ForegroundColor Green
+        }
+        else {
+            Write-Host "? Robocopy no encontrado en el directorio de origen" -ForegroundColor Yellow
+        }
+    }
+    catch {
+        Write-Host "? Error al copiar Robocopy: $_" -ForegroundColor Yellow
+    }
+
+    # Eliminar carpetas de trabajo si existen en destino
+    $cleanupDirs = @(".git", ".vscode", ".cursor")
+    foreach ($dir in $cleanupDirs) {
+        $path = Join-Path $installPath $dir
+        if (Test-Path $path) {
+            Remove-Item -Path $path -Recurse -Force
+        }
+    }
+
     # Crear carpeta Logs si no existe
     $logsDir = Join-Path $installPath "Logs"
     if (-not (Test-Path $logsDir)) {
@@ -148,8 +187,7 @@ function Install-LlevarToSystem {
     # Buscar archivos de 7-Zip en la carpeta actual
     $currentDir = Split-Path $scriptSource -Parent
     $sevenZipFiles = @(
-        "7z.exe", "7z.dll", "7za.exe",
-        "7zCon.sfx", "7zS2.sfx", "7zS2con.sfx", "7zSD.sfx"
+        "7za.exe"
     )
     
     $foundFiles = @()
@@ -180,7 +218,7 @@ function Install-LlevarToSystem {
         # Intentar descargar 7-Zip
         try {
             $7zUrl = "https://www.7-zip.org/a/7zr.exe"
-            $7zDest = Join-Path $installPath "7z.exe"
+            $7zDest = Join-Path $installPath "7za.exe"
             
             Write-Host "  Descargando desde $7zUrl..." -ForegroundColor Gray
             Invoke-WebRequest -Uri $7zUrl -OutFile $7zDest -UseBasicParsing
@@ -446,3 +484,5 @@ function Install-LlevarToSystem {
 Export-ModuleMember -Function @(
     'Install-LlevarToSystem'
 )
+
+

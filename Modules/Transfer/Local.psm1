@@ -165,7 +165,8 @@ function Copy-LlevarLocalToLocalRobocopy {
     Write-Log "Ejecutando: robocopy $($robocopyArgs -join ' ')" "INFO"
     
     # Ejecutar Robocopy
-    $process = Start-Process -FilePath "robocopy.exe" -ArgumentList $robocopyArgs -Wait -PassThru -NoNewWindow
+    $robocopyExe = Get-RobocopyExePath
+    $process = Start-Process -FilePath $robocopyExe -ArgumentList $robocopyArgs -Wait -PassThru -NoNewWindow
     $exitCode = $process.ExitCode
     
     # Robocopy exit codes:

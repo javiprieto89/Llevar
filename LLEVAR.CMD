@@ -1,127 +1,112 @@
 @echo off
 REM ============================================================
-REM  LLEVAR.CMD - Launcher inteligente para Llevar.ps1
-REM  - Verifica y requiere PowerShell 7+
-REM  - Elevación de permisos CONDICIONAL (solo cuando se necesita)
-REM  - Habilita ExecutionPolicy si es necesario
-REM  - Soporta arrastrar carpetas/archivos al icono
+REM  LLEVAR.CMD - Lanzador adaptado para Modo Interactivo
+REM  - Paso 0: Auto-elevación a Administrador
+REM  - Paso 4: Captura inteligente de Origen (Drag & Drop / Enviar a) 
+REM  - Paso 5: Ejecución coordinada con Llevar.ps1
 REM ============================================================
 
-setlocal EnableDelayedExpansion
+setlocal EnableExtensions
 
-REM ============================================================
-REM OBTENER LA RUTA DEL SCRIPT POWERSHELL
-REM ============================================================
+:: [AYUDA] Mostrar ayuda si se pasa /? -h --help
+if /I "%~1"=="/?" goto :ShowHelp
+if /I "%~1"=="-h" goto :ShowHelp
+if /I "%~1"=="--help" goto :ShowHelp
+if "%~1"=="" goto :NoArgs
 
-set "SCRIPT_DIR=%~dp0"
-set "PS_SCRIPT=%SCRIPT_DIR%Llevar.ps1"
+:: [PASO 0] AUTO-ELEVACIÓN
+:CheckPrivileges
+NET FILE >NUL 2>&1
+if %errorlevel% EQU 0 ( goto :GotPrivileges ) else ( goto :GetPrivileges )
 
-REM Verificar que existe el script
+:GetPrivileges
+echo [SISTEMA] Solicitando permisos de administrador...
+
+set "VBS=%temp%\llevar_elevate.vbs"
+
+if exist "%VBS%" del "%VBS%"
+if exist "%VBS%" (
+    echo [ERROR] No se pudo eliminar el script VBS existente
+    pause & exit /b 1
+)
+
+(
+  echo Set UAC = CreateObject^("Shell.Application"^)
+  echo q = Chr^(34^)
+  echo cmd_line = "/c " ^& q ^& q ^& "%~f0" ^& q ^& " " ^& q ^& "%~1" ^& q ^& q
+  echo UAC.ShellExecute "cmd.exe", cmd_line, "", "runas", 1
+) > "%VBS%"
+
+if not exist "%VBS%" (
+    echo [ERROR] No se pudo crear el script VBS para elevación
+    pause & exit /b 1
+)
+
+cscript //nologo "%VBS%"
+del "%VBS%"
+exit /b
+
+:GotPrivileges
+pushd "%~dp0"
+
+:: [1/4] VERIFICACIÓN DE ARCHIVOS
+set "PS_SCRIPT=%~dp0Llevar.ps1"
 if not exist "%PS_SCRIPT%" (
-    powershell -NoProfile -Command "& {Add-Type -AssemblyName PresentationFramework;[System.Windows.MessageBox]::Show('No se encuentra Llevar.ps1 en: %SCRIPT_DIR%', 'Error - Llevar', 'OK', 'Error')}" 2>nul
-    exit /b 1
+    echo [ERROR] No se encuentra Llevar.ps1 en %~dp0
+    pause & exit /b 1
 )
 
-REM ============================================================
-REM VERIFICAR POWERSHELL 7+
-REM ============================================================
-
-REM Usar PowerShell para detectar pwsh.exe
-for /f "delims=" %%i in ('powershell -NoProfile -Command "(Get-Command pwsh -ErrorAction SilentlyContinue).Source" 2^>nul') do set "PWSH_EXE=%%i"
-
-REM Si se encontró, verificar que sea válido
-if defined PWSH_EXE (
-    if exist "%PWSH_EXE%" (
-        goto :FoundPwsh
-    )
-)
-
-REM Fallback: Buscar en ubicaciones comunes
+:: [2/4] BUSCAR / INSTALAR POWERSHELL 7
+:SearchPowerShell
 set "PWSH_EXE="
-
-REM Buscar en PATH con where
-for /f "delims=" %%i in ('where pwsh.exe 2^>nul') do (
-    set "PWSH_EXE=%%i"
-    goto :FoundPwsh
+if exist "%ProgramFiles%\PowerShell\7\pwsh.exe" (
+    set "PWSH_EXE=%ProgramFiles%\PowerShell\7\pwsh.exe"
+) else if exist "%LocalAppData%\Microsoft\PowerShell\7\pwsh.exe" (
+    set "PWSH_EXE=%LocalAppData%\Microsoft\PowerShell\7\pwsh.exe"
+) else (
+    for /f "delims=" %%i in ('where pwsh.exe 2^>nul') do set "PWSH_EXE=%%i"
 )
 
-REM Buscar en Program Files (cualquier versión 7+)
-for /d %%i in ("%ProgramFiles%\PowerShell\*") do (
-    if exist "%%i\pwsh.exe" (
-        set "PWSH_EXE=%%i\pwsh.exe"
-        goto :FoundPwsh
+if "%PWSH_EXE%"=="" (
+    echo [AVISO] PowerShell 7 no detectado. Intentando instalacion...
+    where winget >nul 2>&1 && (
+        winget install --id Microsoft.PowerShell --silent --accept-source-agreements
+        timeout /t 5 >nul & goto :SearchPowerShell
+    )
+    echo [ERROR] No se pudo instalar PowerShell 7.
+    pause & exit /b 1
+)
+:: [3/4] PROCESAR ARGUMENTOS (ORIGEN)
+set "ORIGEN=%~1"
+
+if not "%ORIGEN%"=="" (
+    if not exist "%ORIGEN%" (        
+        echo [ERROR] El origen no existe: %ORIGEN%
+        pause & exit /b 1
     )
 )
 
-REM Buscar en WindowsApps (Microsoft Store / Winget)
-if exist "%LocalAppData%\Microsoft\WindowsApps\pwsh.exe" (
-    set "PWSH_EXE=%LocalAppData%\Microsoft\WindowsApps\pwsh.exe"
-    goto :FoundPwsh
-)
+:: [4/4] EJECUCIÓN DEL SCRIPT 
+"%PWSH_EXE%" -NoProfile -ExecutionPolicy Bypass -File "%PS_SCRIPT%" -Origen "%ORIGEN%"
+exit /b
 
-REM No se encontró PowerShell 7+
-powershell -NoProfile -Command "& {Add-Type -AssemblyName PresentationFramework;[System.Windows.MessageBox]::Show('LLEVAR requiere PowerShell 7 o superior.`n`nPowerShell 5 no es compatible con este script.`n`nPor favor ejecute INSTALAR.CMD para instalar PowerShell 7 automaticamente.', 'Error - PowerShell 7 Requerido', 'OK', 'Error')}" 2>nul
-
+:NoArgs
+echo [ERROR] Debes indicar un origen. Usa /? para ayuda.
+pause
 exit /b 1
 
-:FoundPwsh
-
-REM ============================================================
-REM VERIFICAR Y HABILITAR EXECUTIONPOLICY (silenciosamente)
-REM ============================================================
-
-REM Verificar política actual
-for /f "delims=" %%i in ('"%PWSH_EXE%" -NoProfile -Command "Get-ExecutionPolicy -Scope LocalMachine" 2^>nul') do set "CURRENT_POLICY=%%i"
-
-REM Si es Restricted o Undefined, habilitar RemoteSigned
-if /i "%CURRENT_POLICY%"=="Restricted" goto :EnablePolicy
-if /i "%CURRENT_POLICY%"=="Undefined" goto :EnablePolicy
-goto :PolicyOK
-
-:EnablePolicy
-"%PWSH_EXE%" -NoProfile -Command "try { Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope LocalMachine -Force } catch { exit 1 }" >nul 2>&1
-
-if !ERRORLEVEL! neq 0 (
-    powershell -NoProfile -Command "& {Add-Type -AssemblyName PresentationFramework;[System.Windows.MessageBox]::Show('No se pudo habilitar la ejecución de scripts de PowerShell.`n`nPor favor ejecute manualmente:`nSet-ExecutionPolicy RemoteSigned -Scope LocalMachine', 'Error - ExecutionPolicy', 'OK', 'Error')}" 2>nul
-    exit /b 1
-)
-
-:PolicyOK
-
-REM ============================================================
-REM PROCESAR ARGUMENTOS
-REM ============================================================
-
-set "FIRST_ARG=%~1"
-set "SCRIPT_ARGS="
-
-if exist "%FIRST_ARG%" (
-    REM El primer argumento es un archivo o carpeta válido - usarlo como origen
-    set "SCRIPT_ARGS=-Origen ""%FIRST_ARG%"""
-    
-    REM Agregar el resto de argumentos (si los hay)
-    shift
-    :ArgLoop
-    if "%~1"=="" goto ArgEnd
-    set "SCRIPT_ARGS=!SCRIPT_ARGS! %1"
-    shift
-    goto ArgLoop
-    :ArgEnd
-) else (
-    REM No se detectó archivo/carpeta como primer arg - pasar todos los argumentos tal cual
-    set "SCRIPT_ARGS=%*"
-)
-
-REM ============================================================
-REM EJECUTAR LLEVAR.PS1 CON POWERSHELL 7
-REM ============================================================
-
-REM Si hay argumentos (ejecutado desde menú contextual o arrastrando archivos),
-REM usar -NoExit para mantener la ventana abierta durante la interacción
-if "%~1" neq "" (
-    "%PWSH_EXE%" -NoExit -NoProfile -ExecutionPolicy Bypass -File "%PS_SCRIPT%" !SCRIPT_ARGS!
-) else (
-    "%PWSH_EXE%" -NoProfile -ExecutionPolicy Bypass -File "%PS_SCRIPT%" !SCRIPT_ARGS!
-)
-
-exit /b !ERRORLEVEL!
+:ShowHelp
+echo ============================================================
+echo  LLEVAR.CMD - Lanzador para Llevar.ps1
+echo ============================================================
+echo Uso:
+echo   Llevar.cmd "RUTA_ORIGEN"
+echo.
+echo Parametros:
+echo   RUTA_ORIGEN  Carpeta o archivo de origen (puede tener espacios).
+echo   /? -h --help Muestra esta ayuda.
+echo.
+echo Descripcion:
+echo   Lanza Llevar.ps1 en modo interactivo y bloquea el origen si se pasa.
+echo ============================================================
+exit /b 0

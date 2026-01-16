@@ -51,6 +51,7 @@ Esto copiará:
   • Documentación de usuario (Docs/)
   • Datos y configuraciones (Data/)
   • Utilidades (7za.exe, arj.exe, arj32.exe)
+  - Robocopy portable (robocopy\\robocopy.exe)
   • Agregará C:\Llevar al PATH del sistema
 "@
 
@@ -140,9 +141,40 @@ function Install-LlevarToSystem {
                 Remove-Item -Path $destinoData -Recurse -Force
             }
             Copy-Item -Path $origenData -Destination $destinoData -Recurse -Force
-            Write-Host "  ✓ Data/" -ForegroundColor Gray
+            Write-Host "  V Data/" -ForegroundColor Gray
         }
-        
+
+        # Copiar carpeta Robocopy (si existe)
+        Write-Host "`nCopiando robocopy..." -ForegroundColor Cyan
+        $origenRobocopy = $null
+        $robocopyCandidates = @(
+            (Join-Path $origenDir "Robocopy"),
+            (Join-Path $origenDir "robocopy")
+        )
+        foreach ($candidate in $robocopyCandidates) {
+            if (Test-Path $candidate) {
+                $origenRobocopy = $candidate
+                break
+            }
+        }
+        $destinoRobocopy = Join-Path $destinoDir "robocopy"
+        if ($origenRobocopy) {
+            if (Test-Path $destinoRobocopy) {
+                Remove-Item -Path $destinoRobocopy -Recurse -Force
+            }
+            Copy-Item -Path $origenRobocopy -Destination $destinoRobocopy -Recurse -Force
+            Write-Host "  V robocopy/ (completa con subcarpetas)" -ForegroundColor Gray
+        }
+
+        # Eliminar carpetas de trabajo si existen en destino
+        $cleanupDirs = @(".git", ".vscode", ".cursor")
+        foreach ($dir in $cleanupDirs) {
+            $path = Join-Path $destinoDir $dir
+            if (Test-Path $path) {
+                Remove-Item -Path $path -Recurse -Force
+            }
+        }
+
         # Copiar carpeta Docs (solo documentos de usuario)
         Write-Host "`nCopiando documentación de usuario..." -ForegroundColor Cyan
         $origenDocs = Join-Path $origenDir "Docs"
@@ -153,7 +185,13 @@ function Install-LlevarToSystem {
             }
             
             # Documentos para usuario final (no desarrollo)
-            $docsUsuario = @("README.md", "ONEDRIVE-README.md", "MENU-INTERACTIVO.md", "NAVEGADOR.md")
+            $docsUsuario = @(
+                "README.md", 
+                "ONEDRIVE-README.md", 
+                "MENU-INTERACTIVO.md", 
+                "NAVEGADOR.md",
+                "MODULE-LOADER-VALIDATION.md"
+            )
             foreach ($doc in $docsUsuario) {
                 $origenDoc = Join-Path $origenDocs $doc
                 if (Test-Path $origenDoc) {
@@ -297,3 +335,8 @@ Export-ModuleMember -Function @(
     'Show-InstallationPrompt',
     'Install-LlevarToSystem'
 )
+
+
+
+
+
