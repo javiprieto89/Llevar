@@ -414,7 +414,7 @@ function Compress-Folder {
         }
     }
 
-   # ============================================================================
+    # ============================================================================
     # Nombre de salida según volúmenes
     # CON volúmenes (-v): SIN extensión → 7-Zip genera Name.001, .002, etc.
     # SIN volúmenes: CON extensión .7z → genera Name.7z
@@ -465,7 +465,7 @@ function Compress-Folder {
         }
 
         Get-ChildItem -Path $Temp -Force -ErrorAction SilentlyContinue |
-            Remove-Item -Force -Recurse -ErrorAction SilentlyContinue
+        Remove-Item -Force -Recurse -ErrorAction SilentlyContinue
     }
     catch {
         Write-Log "No se pudo limpiar la carpeta temporal: $Temp" "WARN"
@@ -527,14 +527,14 @@ function Compress-Folder {
     # CON volúmenes
     if ($BlockSizeMB -gt 0) {
         Get-ChildItem $Temp -File -ErrorAction SilentlyContinue |
-            Where-Object { $_.Name -like "$baseName.7z.*" } |
-            Remove-Item -Force -ErrorAction SilentlyContinue
+        Where-Object { $_.Name -like "$baseName.7z.*" } |
+        Remove-Item -Force -ErrorAction SilentlyContinue
     }
     else {
         if (Test-Path $Out) {
             Remove-Item $Out -Force -ErrorAction SilentlyContinue
         }
-}
+    }
 
 
 

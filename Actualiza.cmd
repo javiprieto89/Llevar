@@ -16,16 +16,14 @@ REM ============================================================
 set "HAS_LINES="
 set "DEST_PREFIX=%DEST_DIR%\"
 
-for /f "usebackq delims=" %%L in ("%LOG_FILE%") do (
+REM Leer log (robocopy puede escribir en Unicode)
+for /f "usebackq tokens=1* delims=:" %%A in (`findstr /n "^" "%LOG_FILE%"`) do (
     set "HAS_LINES=1"
-    set "LINE=%%L"
+    set "LINE=%%B"
     call :TrimLine
-    set "LINE=!LINE:%SOURCE_DIR%=%DEST_PREFIX%!"
-    if not defined PRINTED (
-        echo [OK] Archivos actualizados:
-        set "PRINTED=1"
+    if defined LINE (
+        call :EmitLineSegments
     )
-    echo * !LINE!
 )
 
 if not defined HAS_LINES (
@@ -34,6 +32,28 @@ if not defined HAS_LINES (
 
 echo   Log: %LOG_FILE%
 exit /b 0
+
+REM ============================================================
+REM EMITIR LINEAS (SOPORTA LINEAS CONCATENADAS)
+REM ============================================================
+:EmitLineSegments
+set "REST=!LINE:%SOURCE_DIR%=|%SOURCE_DIR%!"
+if "!REST:~0,1!"=="|" set "REST=!REST:~1!"
+:EmitLoop
+if not defined REST exit /b 0
+for /f "tokens=1* delims=|" %%P in ("!REST!") do (
+    set "PART=%%P"
+    set "REST=%%Q"
+)
+if defined PART (
+    set "PART=!PART:%SOURCE_DIR%=%DEST_PREFIX%!"
+    if not defined PRINTED (
+        echo [OK] Archivos actualizados:
+        set "PRINTED=1"
+    )
+    echo * !PART!
+)
+goto :EmitLoop
 
 REM ============================================================
 REM TRIM DE LINEA
@@ -59,6 +79,7 @@ REM ============================================================
 set "FILE=%~1"
 if exist "%SOURCE_DIR%%FILE%" (
     "%ROBOCOPY%" "%SOURCE_DIR%" "%DEST_DIR%" "%FILE%" %RC_OPTS% /LOG+:"%LOG_FILE%" >nul
+    >>"%LOG_FILE%" echo.
     if %errorlevel% GEQ 8 (
         set "HAD_ERROR=1"
         exit /b 1
@@ -74,8 +95,11 @@ REM COPIAR DIRECTORIO
 REM ============================================================
 :CopyDir
 set "DIR=%~1"
+set "DIR_OPTS=%RC_DIR_OPTS%"
+if not "%~2"=="" set "DIR_OPTS=%~2"
 if exist "%SOURCE_DIR%%DIR%\" (
-    "%ROBOCOPY%" "%SOURCE_DIR%%DIR%" "%DEST_DIR%\%DIR%" *.* %RC_DIR_OPTS% /LOG+:"%LOG_FILE%" >nul
+    "%ROBOCOPY%" "%SOURCE_DIR%%DIR%" "%DEST_DIR%\%DIR%" *.* %DIR_OPTS% /LOG+:"%LOG_FILE%" >nul
+    >>"%LOG_FILE%" echo.
     if %errorlevel% GEQ 8 (
         set "HAD_ERROR=1"
         exit /b 1
@@ -194,6 +218,8 @@ if errorlevel 1 goto :Fail
 call :CopyDir "Modules"
 if errorlevel 1 goto :Fail
 call :CopyDir "Data"
+if errorlevel 1 goto :Fail
+call :CopyDir "Scripts" "%RC_DIR_OPTS% /XF Update-GitHubWiki.ps1 Publish-DocsToWiki.ps1"
 if errorlevel 1 goto :Fail
 set "ROBO_SRC_DIR="
 if exist "%SOURCE_DIR%Robocopy\" set "ROBO_SRC_DIR=Robocopy"
