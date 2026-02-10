@@ -226,8 +226,10 @@ set "ROBO_SRC_DIR="
 if exist "%SOURCE_DIR%Robocopy\" set "ROBO_SRC_DIR=Robocopy"
 if not defined ROBO_SRC_DIR if exist "%SOURCE_DIR%robocopy\" set "ROBO_SRC_DIR=robocopy"
 if defined ROBO_SRC_DIR (
-    call :CopyDir "%ROBO_SRC_DIR%"
-    if errorlevel 1 goto :Fail
+    xcopy "%SOURCE_DIR%%ROBO_SRC_DIR%" "%DEST_DIR%\%ROBO_SRC_DIR%\" /E /I /Y >nul
+    if errorlevel 1 (
+        echo [WARN] Error copiando la carpeta %ROBO_SRC_DIR% ^(posible archivo en uso^).
+    )
 ) else (
     echo [WARN] No se encontró carpeta Robocopy/robocopy en el origen.
 )

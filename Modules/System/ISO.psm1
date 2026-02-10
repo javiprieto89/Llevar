@@ -127,7 +127,7 @@ function New-LlevarIsoMain {
     .PARAMETER Origen
         Carpeta origen con archivos a incluir
     .PARAMETER Destino
-        Ruta de destino para el instalador
+        Carpeta de salida donde se guardarán las imágenes ISO
     .PARAMETER Temp
         Carpeta temporal de trabajo
     .PARAMETER SevenZ
@@ -156,6 +156,28 @@ function New-LlevarIsoMain {
         
         [string]$IsoDestino = 'dvd'
     )
+
+    # Resolver carpeta de salida para ISOs
+    $outputDir = $null
+    if ($Destino) {
+        $destinoIsContainer = Test-Path $Destino -PathType Container
+        if ($destinoIsContainer) {
+            $outputDir = $Destino
+        }
+        elseif ($Destino -match '\.iso$') {
+            $outputDir = Split-Path $Destino -Parent
+        }
+        else {
+            $outputDir = Split-Path $Destino -Parent
+        }
+    }
+    if (-not $outputDir) {
+        $outputDir = $PSScriptRoot
+    }
+    $outputDirExists = Test-Path $outputDir -PathType Container
+    if (-not $outputDirExists) {
+        New-Item -ItemType Directory -Path $outputDir -Force | Out-Null
+    }
 
     # Determinar capacidad del medio
     $mediaCapacity = switch ($IsoDestino) {
@@ -233,7 +255,7 @@ function New-LlevarIsoMain {
 
         # Generar ISO
         $isoName = "{0}_{1}.iso" -f $label, $mediaTag
-        $isoPath = Join-Path $PSScriptRoot $isoName
+        $isoPath = Join-Path $outputDir $isoName
 
         $isoResult = New-LlevarIsoImage -SourceFolder $isoRoot -IsoPath $isoPath -VolumeLabel $label
 
@@ -336,7 +358,7 @@ function New-LlevarIsoMain {
 
             # Generar nombre del ISO
             $isoName = "{0}_{1}_VOL{2:D2}.iso" -f $label, $mediaTag, $vol.Number
-            $isoPath = Join-Path $PSScriptRoot $isoName
+            $isoPath = Join-Path $outputDir $isoName
 
             # Crear imagen ISO
             $isoResult = New-LlevarIsoImage -SourceFolder $isoRoot -IsoPath $isoPath -VolumeLabel $volumeLabel
@@ -357,7 +379,7 @@ function New-LlevarIsoMain {
         # Resumen final
         Show-Banner "✓ VOLÚMENES ISO GENERADOS" -BorderColor Green -TextColor Green
         Write-Host "Total de volúmenes: $($isoFiles.Count)" -ForegroundColor White
-        Write-Host "Ubicación: $PSScriptRoot" -ForegroundColor White
+        Write-Host "Ubicación: $outputDir" -ForegroundColor White
         Write-Host ""
         Write-Host "Archivos generados:" -ForegroundColor Cyan
         foreach ($iso in $isoFiles) {

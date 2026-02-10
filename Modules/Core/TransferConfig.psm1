@@ -65,6 +65,11 @@ class TransferConfig {
         Local    = [PSCustomObject]@{
             Path = $null
         }
+
+        # Subestructura USB
+        USB      = [PSCustomObject]@{
+            Path = $null
+        }
     }
     
     # ====== DESTINO ======
@@ -115,6 +120,11 @@ class TransferConfig {
         
         # Subestructura Local
         Local    = [PSCustomObject]@{
+            Path = $null
+        }
+
+        # Subestructura USB
+        USB      = [PSCustomObject]@{
             Path = $null
         }
         
@@ -1249,4 +1259,3 @@ Export-ModuleMember -Function @(
     'Copy-TransferConfigSection',
     'New-ConfigNode'
 )
-

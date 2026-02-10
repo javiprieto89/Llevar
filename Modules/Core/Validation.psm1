@@ -69,13 +69,31 @@ function Test-IsRunningInIDE {
 function Test-LlevarInstallation {
     <#
     .SYNOPSIS
-        Verifica si Llevar está instalado en C:\Llevar
+        Verifica si Llevar está instalado en C:\Llevar o en el PATH del sistema
     .DESCRIPTION
-        Comprueba la existencia del directorio de instalación
+        Comprueba si el script se ejecuta desde C:\Llevar o si C:\Llevar está
+        presente en el PATH del sistema.
     #>
     
-    $installPath = "C:\Llevar"
-    return (Test-Path $installPath)
+    $currentPath = $PSCommandPath
+    if (-not $currentPath) {
+        $currentPath = $PSScriptRoot
+    }
+    
+    $expectedPath = "C:\Llevar"
+    
+    # Normalizar rutas para comparación
+    $currentDir = (Split-Path $currentPath -Parent).ToLower().TrimEnd('\')
+    $expectedPathNormalized = $expectedPath.ToLower().TrimEnd('\')
+    
+    # Verificar si está en C:\Llevar
+    $isInLlevarDir = ($currentDir -eq $expectedPathNormalized)
+    
+    # Verificar si C:\Llevar está en el PATH del sistema
+    $systemPath = [Environment]::GetEnvironmentVariable("Path", "Machine")
+    $isInSystemPath = $systemPath -and ($systemPath.ToLower() -split ';' | Where-Object { $_.TrimEnd('\') -eq $expectedPathNormalized })
+    
+    return ($isInLlevarDir -or $isInSystemPath)
 }
 
 function Test-Windows10OrLater {

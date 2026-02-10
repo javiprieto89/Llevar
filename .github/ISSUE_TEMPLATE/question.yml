@@ -1,5 +1,5 @@
 name: ❓ Question
-description: Hacer una pregunta sobre uso o configuración
+description: Hacer una pregunta sobre el uso o la configuración
 title: "[QUESTION]: "
 labels: ["question"]
 body:

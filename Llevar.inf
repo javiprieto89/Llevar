@@ -28,7 +28,7 @@ HKCR,"Drive\shell\Llevar","Icon",0x00020000,"%SystemRoot%\System32\imageres.dll,
 HKCR,"Drive\shell\Llevar\command",,0x00020000,"""C:\Llevar\LLEVAR.CMD"" ""%1"""
 
 ; Información de desinstalación (Panel de Control - Agregar o Quitar Programas)
-; NOTA: La versión y otros valores dinámicos se actualizan mediante SystemInstall.psm1
+; NOTA: La versión y otros valores dinámicos se actualizan mediante Installation.psm1
 HKLM,"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Llevar","DisplayName",0x00000000,"Llevar"
 HKLM,"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Llevar","DisplayVersion",0x00000000,"2.0"
 HKLM,"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Llevar","Publisher",0x00000000,"Alex-Soft"

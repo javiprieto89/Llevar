@@ -760,19 +760,12 @@ function Invoke-CompressedTransfer {
         "USB" {
             # Copiar bloques a USB (similar a Local pero con detección de dispositivos)
             Write-Host "Copiando bloques a USB..." -ForegroundColor Cyan
-            # TODO: Implementar lógica de detección de USB y copia multi-dispositivo
-            $destinoPath = Get-TransferConfigValue -Config $TransferConfig -Path "Destino.USB.Path"
             
-            $archivosParaCopiar = @($blocks) + @($installerScript)
-            if ($sevenZipPath -ne "NATIVE_ZIP" -and (Test-Path $sevenZipPath)) {
-                $archivosParaCopiar += @($sevenZipPath)
-            }
-            
-            foreach ($archivo in $archivosParaCopiar) {
-                $nombreArchivo = Split-Path $archivo -Leaf
-                Write-Host "  → $nombreArchivo" -ForegroundColor Gray
-                Copy-Item -Path $archivo -Destination (Join-Path $destinoPath $nombreArchivo) -Force
-            }
+            Copy-BlocksToUSB `
+                -Blocks $blocks `
+                -InstallerPath $installerScript `
+                -SevenZPath $sevenZipPath `
+                -CompressionType $compressionType
             
             Write-Host "✓ Bloques copiados a USB" -ForegroundColor Green
         }

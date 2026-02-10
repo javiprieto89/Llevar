@@ -3,36 +3,20 @@
 # ========================================================================== #
 # Propósito: Verificación, prompts e instalación completa del sistema
 # Funciones:
-#   - Test-LlevarInstallation: Verifica si está en C:\Llevar
 #   - Show-InstallationPrompt: Muestra prompt para instalar
 #   - Install-LlevarToSystem: Realiza la instalación completa
 # ========================================================================== #
 
-function Test-LlevarInstallation {
-    <#
-    .SYNOPSIS
-        Verifica si el script está ejecutándose desde C:\Llevar
-    #>
-    $currentPath = $PSCommandPath
-    if (-not $currentPath) {
-        $currentPath = $PSScriptRoot
+# Asegurar disponibilidad de Test-LlevarInstallation desde Core/Validation
+if (-not (Get-Command Test-LlevarInstallation -ErrorAction SilentlyContinue)) {
+    $modulesRoot = Split-Path $PSScriptRoot -Parent
+    $validationPath = Join-Path $modulesRoot "Core\Validation.psm1"
+    if (Test-Path $validationPath) {
+        Import-Module $validationPath -Force -Global -ErrorAction SilentlyContinue
     }
-    
-    $expectedPath = "C:\Llevar"
-    
-    # Normalizar rutas para comparación
-    $currentDir = (Split-Path $currentPath -Parent).ToLower().TrimEnd('\')
-    $expectedPathNormalized = $expectedPath.ToLower().TrimEnd('\')
-    
-    # Verificar si está en C:\Llevar
-    $isInLlevarDir = ($currentDir -eq $expectedPathNormalized)
-    
-    # Verificar si C:\Llevar está en el PATH del sistema
-    $systemPath = [Environment]::GetEnvironmentVariable("Path", "Machine")
-    $isInSystemPath = $systemPath -and ($systemPath.ToLower() -split ';' | Where-Object { $_.TrimEnd('\') -eq $expectedPathNormalized })
-    
-    return ($isInLlevarDir -or $isInSystemPath)
 }
+
+# Test-LlevarInstallation vive en Modules/Core/Validation.psm1
 
 function Show-InstallationPrompt {
     <#
@@ -331,12 +315,9 @@ IconIndex=0
 
 # Exportar funciones
 Export-ModuleMember -Function @(
-    'Test-LlevarInstallation',
     'Show-InstallationPrompt',
     'Install-LlevarToSystem'
 )
-
-
 
 
 

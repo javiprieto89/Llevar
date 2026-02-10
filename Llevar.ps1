@@ -145,6 +145,12 @@ elseif ($PSVersionTable.PSVersion.Major -lt 7) {
     exit 1
 }
 
+# Importar validaciones centrales (Test-IsRunningInIDE, Test-LlevarInstallation, etc.)
+$validationPath = Join-Path $Global:ModulesPath "Core\Validation.psm1"
+if (Test-Path $validationPath) {
+    Import-Module $validationPath -Force -Global -WarningAction SilentlyContinue -ErrorAction SilentlyContinue
+}
+
 # Importar módulo de elevación de permisos y detección de entorno
 try {
     Import-Module (Join-Path $Global:ModulesPath "System\AdminElevation.psm1") -Force -Global -ErrorAction Stop

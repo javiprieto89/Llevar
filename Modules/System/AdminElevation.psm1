@@ -10,38 +10,7 @@
     - Detectar si está ejecutándose en un IDE (VS Code, ISE, etc.)
 #>
 
-function Test-IsRunningInIDE {
-    <#
-    .SYNOPSIS
-        Detecta si el script se está ejecutando en un IDE
-    
-    .OUTPUTS
-        Boolean - True si está en IDE, False si está en terminal normal
-    #>
-    try {
-        $hostName = $host.Name
-        
-        # Detectar VS Code
-        if ($hostName -match 'Visual Studio Code' -or $env:TERM_PROGRAM -eq 'vscode') {
-            return $true
-        }
-        
-        # Detectar PowerShell ISE
-        if ($hostName -match 'ISE') {
-            return $true
-        }
-        
-        # Detectar Windows Terminal con extensión de VS Code
-        if ($env:WT_SESSION -and $env:VSCODE_PID) {
-            return $true
-        }
-        
-        return $false
-    }
-    catch {
-        return $false
-    }
-}
+# Test-IsRunningInIDE vive en Modules/Core/Validation.psm1
 
 function Test-IsAdministrator {
     <#
@@ -245,7 +214,6 @@ function Assert-AdminPrivileges {
 }
 
 Export-ModuleMember -Function @(
-    'Test-IsRunningInIDE'
     'Test-IsAdministrator'
     'Invoke-AdminElevation'
     'Show-ElevationError'

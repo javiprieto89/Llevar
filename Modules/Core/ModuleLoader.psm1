@@ -67,7 +67,6 @@ function Import-LlevarModules {
             'UI\Banners.psm1'
             'UI\Navigator.psm1'
             'UI\Menus.psm1'
-            'UI\ConfigMenus.psm1'
         )
         Compression  = @(
             'Compression\SevenZip.psm1'
@@ -101,6 +100,7 @@ function Import-LlevarModules {
             'System\FileSystem.psm1'
             'System\Robocopy.psm1'
             'System\ISO.psm1'
+            'System\PowerShell7Installer.psm1'
         )
         Parameters   = @(
             'Parameters\Help.psm1'
@@ -111,19 +111,33 @@ function Import-LlevarModules {
             'Parameters\NormalMode.psm1'
         )
     }
+
+    $uiAdvancedModules = @(
+        'UI\ConfigMenus.psm1'
+    )
     
     # Determinar qué módulos importar
     $modulesToImport = @()
     if ($Categories -contains 'All') {
-        foreach ($category in $modulesByCategory.Keys) {
-            $modulesToImport += $modulesByCategory[$category]
-        }
+        $modulesToImport += $modulesByCategory['Core']
+        $modulesToImport += $modulesByCategory['UI']
+        $modulesToImport += $modulesByCategory['Compression']
+        $modulesToImport += $modulesByCategory['Transfer']
+        $modulesToImport += $uiAdvancedModules
+        $modulesToImport += $modulesByCategory['Installation']
+        $modulesToImport += $modulesByCategory['Utilities']
+        $modulesToImport += $modulesByCategory['System']
+        $modulesToImport += $modulesByCategory['Parameters']
     }
     else {
         foreach ($category in $Categories) {
             if ($modulesByCategory.ContainsKey($category)) {
                 $modulesToImport += $modulesByCategory[$category]
             }
+        }
+
+        if ($Categories -contains 'UI') {
+            $modulesToImport += $uiAdvancedModules
         }
     }
     

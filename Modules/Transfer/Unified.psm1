@@ -1036,7 +1036,222 @@ function Invoke-LocalToUNC {
         }
     }
 }
-function Invoke-LocalToUSB { param($Llevar, $ShowProgress, $ProgressTop, $StartTime); throw "Local→USB: En desarrollo" }
+function Invoke-SourcePathToUSB {
+    <#
+    .SYNOPSIS
+        Handler genérico: Origen→USB (comprime, genera bloques y copia a USBs)
+    #>
+    param(
+        $Llevar,
+        [string]$SourcePath,
+        [string]$RouteLabel,
+        [bool]$ShowProgress,
+        [int]$ProgressTop,
+        [datetime]$StartTime
+    )
+
+    if (-not $SourcePath) {
+        throw "${RouteLabel}: Origen no especificado"
+    }
+
+    $sourceExists = Test-Path $SourcePath
+    if (-not $sourceExists) {
+        throw "${RouteLabel}: Origen no válido o inexistente: '$SourcePath'"
+    }
+
+    if ($ShowProgress) {
+        Write-LlevarProgressBar -Percent 5 -StartTime $StartTime -Label "Preparando compresión..." -Top $ProgressTop -Width 50 -CheckCancellation
+    }
+
+    $tempDir = Join-Path $env:TEMP "LLEVAR_USB_TEMP_$(Get-Date -Format 'yyyyMMddHHmmss')"
+    $tempDirExists = Test-Path $tempDir
+    if (-not $tempDirExists) {
+        New-Item -ItemType Directory -Path $tempDir -Force | Out-Null
+    }
+
+    $useNativeZip = $Llevar.Opciones.UseNativeZip
+    $sevenZipPath = if ($useNativeZip) { "NATIVE_ZIP" } else { Get-SevenZipLlevar }
+
+    if (-not $sevenZipPath) {
+        throw "${RouteLabel}: No se pudo determinar la ruta de 7-Zip."
+    }
+
+    $Llevar.Interno.TempDir = $tempDir
+    $Llevar.Interno.SevenZipPath = $sevenZipPath
+
+    try {
+        if ($ShowProgress) {
+            Write-LlevarProgressBar -Percent 15 -StartTime $StartTime -Label "Comprimiendo..." -Top $ProgressTop -Width 50 -CheckCancellation
+        }
+
+        $compressionResult = Compress-Folder `
+            -Origen $SourcePath `
+            -Temp $tempDir `
+            -SevenZ $sevenZipPath `
+            -Clave $Llevar.Opciones.Clave `
+            -BlockSizeMB $Llevar.Opciones.BlockSizeMB `
+            -DestinoFinal ""
+
+        $blocks = $compressionResult.Files
+        $compressionType = $compressionResult.CompressionType
+
+        if (-not $blocks -or $blocks.Count -eq 0) {
+            throw "${RouteLabel}: No se generaron bloques para copiar."
+        }
+
+        if ($ShowProgress) {
+            Write-LlevarProgressBar -Percent 40 -StartTime $StartTime -Label "Generando instalador..." -Top $ProgressTop -Width 50 -CheckCancellation
+        }
+
+        $installerScript = New-InstallerScript -Temp $tempDir -CompressionType $compressionType
+
+        if ($ShowProgress) {
+            Write-LlevarProgressBar -Percent 55 -StartTime $StartTime -Label "Copiando a USB..." -Top $ProgressTop -Width 50 -CheckCancellation
+        }
+
+        Copy-BlocksToUSB `
+            -Blocks $blocks `
+            -InstallerPath $installerScript `
+            -SevenZPath $sevenZipPath `
+            -CompressionType $compressionType
+
+        if ($ShowProgress) {
+            Write-LlevarProgressBar -Percent 100 -StartTime $StartTime -Label "Copia a USB completada" -Top $ProgressTop -Width 50
+        }
+
+        Write-Log "${RouteLabel}: Transferencia completada" "INFO"
+        return @{ Success = $true; Route = $RouteLabel }
+    }
+    finally {
+        $tempDirFinalExists = Test-Path $tempDir
+        if ($tempDirFinalExists) {
+            Remove-Item $tempDir -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+
+function Invoke-LocalToUSB {
+    <#
+    .SYNOPSIS
+        Handler: Local→USB (comprime, genera bloques y copia a múltiples USBs)
+    #>
+    param(
+        $Llevar,
+        [bool]$ShowProgress,
+        [int]$ProgressTop,
+        [datetime]$StartTime
+    )
+
+    Write-Log "Handler: Local→USB" "INFO"
+
+    $sourcePath = Get-TransferPath -Config $Llevar -Section "Origen"
+    $isLocal = ($Llevar.Origen.Tipo -eq "Local")
+    if (-not $isLocal) {
+        throw "Origen no es Local"
+    }
+
+    return Invoke-SourcePathToUSB -Llevar $Llevar -SourcePath $sourcePath -RouteLabel "Local→USB" `
+        -ShowProgress $ShowProgress -ProgressTop $ProgressTop -StartTime $StartTime
+}
+function Invoke-SourcePathToISO {
+    param(
+        $Llevar,
+        [string]$SourcePath,
+        [string]$RouteLabel,
+        [bool]$ShowProgress,
+        [int]$ProgressTop,
+        [datetime]$StartTime
+    )
+
+    if (-not $SourcePath) {
+        throw "${RouteLabel}: Origen no especificado"
+    }
+
+    $sourceExists = Test-Path $SourcePath
+    if (-not $sourceExists) {
+        throw "${RouteLabel}: Origen no válido o inexistente: '$SourcePath'"
+    }
+
+    # Obtener configuración ISO destino
+    $isoOutputPath = Get-TransferConfigValue -Config $Llevar -Path "Destino.ISO.OutputPath"
+    $isoSizeValue = Get-TransferConfigValue -Config $Llevar -Path "Destino.ISO.Size"
+    $isoSize = if ($isoSizeValue) { $isoSizeValue } else { "dvd" }
+
+    if (-not $isoOutputPath) {
+        $isoOutputPath = Split-Path $SourcePath -Parent
+        if (-not $isoOutputPath) {
+            $isoOutputPath = $PSScriptRoot
+        }
+    }
+
+    $isoOutputExists = Test-Path $isoOutputPath -PathType Container
+    if (-not $isoOutputExists) {
+        New-Item -ItemType Directory -Path $isoOutputPath -Force | Out-Null
+    }
+
+    Write-Log "${RouteLabel}: $SourcePath → $isoOutputPath" "INFO"
+
+    if ($ShowProgress) {
+        Write-LlevarProgressBar -Percent 0 -StartTime $StartTime -Label "Generando ISO..." -Top $ProgressTop -Width 50
+    }
+
+    $sevenZ = Get-SevenZipLlevar
+    if (-not $sevenZ -or $sevenZ -eq "NATIVE_ZIP") {
+        $sevenZ = "NATIVE_ZIP"
+    }
+
+    $password = $Llevar.Opciones.Clave
+    if ([string]::IsNullOrWhiteSpace($password)) {
+        $password = $null
+    }
+
+    $blockSizeMB = $Llevar.Opciones.BlockSizeMB
+    if ($blockSizeMB -le 0) {
+        $blockSizeMB = 0
+    }
+
+    $isoDestino = switch ($isoSize.ToLower()) {
+        "cd" { "cd" }
+        "dvd" { "dvd" }
+        "usb" { "usb" }
+        default { "dvd" }
+    }
+
+    $tempDir = Join-Path $env:TEMP "LLEVAR_ISO_TEMP_$(Get-Date -Format 'yyyyMMddHHmmss')"
+    $tempDirExists = Test-Path $tempDir
+    if ($tempDirExists) {
+        Remove-Item $tempDir -Recurse -Force -ErrorAction SilentlyContinue
+    }
+    New-Item -ItemType Directory -Path $tempDir -Force | Out-Null
+
+    try {
+        if ($ShowProgress) {
+            Write-LlevarProgressBar -Percent 25 -StartTime $StartTime -Label "Comprimiendo archivos..." -Top $ProgressTop -Width 50
+        }
+
+        New-LlevarIsoMain -Origen $SourcePath -Destino $isoOutputPath -Temp $tempDir `
+            -SevenZ $sevenZ -BlockSizeMB $blockSizeMB -Clave $password -IsoDestino $isoDestino
+
+        if ($ShowProgress) {
+            Write-LlevarProgressBar -Percent 100 -StartTime $StartTime -Label "ISO generado exitosamente" -Top $ProgressTop -Width 50
+        }
+
+        Write-Log "${RouteLabel}: Imagen ISO generada exitosamente en $isoOutputPath" "INFO"
+
+        return @{ Success = $true; Route = $RouteLabel; OutputPath = $isoOutputPath }
+    }
+    catch {
+        Write-Log "Error generando ISO (${RouteLabel}): $($_.Exception.Message)" "ERROR" -ErrorRecord $_
+        throw "Error al generar imagen ISO (${RouteLabel}): $($_.Exception.Message)"
+    }
+    finally {
+        $tempDirFinalExists = Test-Path $tempDir
+        if ($tempDirFinalExists) {
+            Remove-Item $tempDir -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+
 function Invoke-LocalToISO {
     <#
     .SYNOPSIS
@@ -1057,96 +1272,8 @@ function Invoke-LocalToISO {
         throw "Origen no es Local"
     }
     
-    if (-not $sourcePath -or -not (Test-Path $sourcePath)) {
-        throw "Local→ISO: Origen no válido o inexistente: '$sourcePath'"
-    }
-    
-    # Obtener configuración ISO destino
-    $isoOutputPath = Get-TransferConfigValue -Config $Llevar -Path "Destino.ISO.OutputPath"
-    $isoSizeValue = Get-TransferConfigValue -Config $Llevar -Path "Destino.ISO.Size"
-    $isoSize = if ($isoSizeValue) { $isoSizeValue } else { "dvd" }
-    
-    if (-not $isoOutputPath) {
-        # Si no hay ruta de salida, usar el directorio del origen
-        $isoOutputPath = Split-Path $sourcePath -Parent
-        if (-not $isoOutputPath) {
-            $isoOutputPath = $PSScriptRoot
-        }
-    }
-    
-    # Asegurar que el directorio de salida existe
-    if (-not (Test-Path $isoOutputPath -PathType Container)) {
-        New-Item -ItemType Directory -Path $isoOutputPath -Force | Out-Null
-    }
-    
-    Write-Log "Local→ISO: $sourcePath → $isoOutputPath" "INFO"
-    
-    if ($ShowProgress) {
-        Write-LlevarProgressBar -Percent 0 -StartTime $StartTime -Label "Generando ISO..." -Top $ProgressTop -Width 50
-    }
-    
-    # Módulos ISO y SevenZip ya fueron importados por Llevar.ps1
-    
-    # Obtener 7-Zip
-    $sevenZ = Get-SevenZipLlevar
-    if (-not $sevenZ -or $sevenZ -eq "NATIVE_ZIP") {
-        $sevenZ = "NATIVE_ZIP"
-    }
-    
-    # Obtener contraseña si existe
-    $password = $Llevar.Opciones.Clave
-    if ([string]::IsNullOrWhiteSpace($password)) {
-        $password = $null
-    }
-    
-    # Obtener tamaño de bloque si existe
-    $blockSizeMB = $Llevar.Opciones.BlockSizeMB
-    if ($blockSizeMB -le 0) {
-        $blockSizeMB = 0  # Usar valor por defecto
-    }
-    
-    # Determinar tipo de ISO según tamaño
-    $isoDestino = switch ($isoSize.ToLower()) {
-        "cd" { "cd" }
-        "dvd" { "dvd" }
-        "usb" { "usb" }
-        default { "dvd" }
-    }
-    
-    # Crear directorio temporal
-    $tempDir = Join-Path $env:TEMP "LLEVAR_ISO_TEMP_$(Get-Date -Format 'yyyyMMddHHmmss')"
-    if (Test-Path $tempDir) {
-        Remove-Item $tempDir -Recurse -Force -ErrorAction SilentlyContinue
-    }
-    New-Item -ItemType Directory -Path $tempDir -Force | Out-Null
-    
-    try {
-        if ($ShowProgress) {
-            Write-LlevarProgressBar -Percent 25 -StartTime $StartTime -Label "Comprimiendo archivos..." -Top $ProgressTop -Width 50
-        }
-        
-        # Llamar a New-LlevarIsoMain que maneja compresión y creación de ISO
-        New-LlevarIsoMain -Origen $sourcePath -Destino $isoOutputPath -Temp $tempDir `
-            -SevenZ $sevenZ -BlockSizeMB $blockSizeMB -Clave $password -IsoDestino $isoDestino
-        
-        if ($ShowProgress) {
-            Write-LlevarProgressBar -Percent 100 -StartTime $StartTime -Label "ISO generado exitosamente" -Top $ProgressTop -Width 50
-        }
-        
-        Write-Log "Local→ISO: Imagen ISO generada exitosamente en $isoOutputPath" "INFO"
-        
-        return @{ Success = $true; Route = "Local→ISO"; OutputPath = $isoOutputPath }
-    }
-    catch {
-        Write-Log "Error generando ISO: $($_.Exception.Message)" "ERROR" -ErrorRecord $_
-        throw "Error al generar imagen ISO: $($_.Exception.Message)"
-    }
-    finally {
-        # Limpiar directorio temporal
-        if (Test-Path $tempDir) {
-            Remove-Item $tempDir -Recurse -Force -ErrorAction SilentlyContinue
-        }
-    }
+    return Invoke-SourcePathToISO -Llevar $Llevar -SourcePath $sourcePath -RouteLabel "Local→ISO" `
+        -ShowProgress $ShowProgress -ProgressTop $ProgressTop -StartTime $StartTime
 }
 function Invoke-LocalToDiskette {
     param(
@@ -1158,11 +1285,33 @@ function Invoke-LocalToDiskette {
 
     Write-Log "Handler: Local→Diskette (via Copy-ToFloppyDisks)" "INFO"
 
-    # Origen local desde TransferConfig
-    $sourcePath = $Llevar.Origen.Local.Path
+    $sourcePath = Get-TransferPath -Config $Llevar -Section "Origen"
+    $isLocal = ($Llevar.Origen.Tipo -eq "Local")
+    if (-not $isLocal) {
+        throw "Origen no es Local"
+    }
 
-    if (-not $sourcePath -or -not (Test-Path $sourcePath)) {
-        throw "Local→Diskette: Origen no válido o inexistente: '$sourcePath'"
+    return Invoke-SourcePathToDiskette -Llevar $Llevar -SourcePath $sourcePath -RouteLabel "Local→Diskette" `
+        -ShowProgress $ShowProgress -ProgressTop $ProgressTop -StartTime $StartTime
+}
+
+function Invoke-SourcePathToDiskette {
+    param(
+        $Llevar,
+        [string]$SourcePath,
+        [string]$RouteLabel,
+        [bool]$ShowProgress,
+        [int]$ProgressTop,
+        [datetime]$StartTime
+    )
+
+    if (-not $SourcePath) {
+        throw "${RouteLabel}: Origen no especificado"
+    }
+
+    $sourceExists = Test-Path $SourcePath
+    if (-not $sourceExists) {
+        throw "${RouteLabel}: Origen no válido o inexistente: '$SourcePath'"
     }
 
     $tempDir = $Llevar.Destino.Diskette.OutputPath
@@ -1172,23 +1321,101 @@ function Invoke-LocalToDiskette {
 
     $password = $Llevar.Opciones.Clave
 
-    $ok = Copy-ToFloppyDisks -SourcePath $sourcePath -TempDir $tempDir -SevenZPath $null -Password $password -VerifyDisks
+    if ($ShowProgress) {
+        Write-LlevarProgressBar -Percent 10 -StartTime $StartTime -Label "Preparando diskettes..." -Top $ProgressTop -Width 50 -CheckCancellation
+    }
+
+    $ok = Copy-ToFloppyDisks -SourcePath $SourcePath -TempDir $tempDir -SevenZPath $null -Password $password -VerifyDisks
 
     if (-not $ok) {
-        throw "Local→Diskette: error durante la copia a diskettes"
+        throw "${RouteLabel}: error durante la copia a diskettes"
+    }
+
+    if ($ShowProgress) {
+        Write-LlevarProgressBar -Percent 100 -StartTime $StartTime -Label "Diskettes generados" -Top $ProgressTop -Width 50
     }
 
     return @{
         Success = $true
-        Route   = "Local→Diskette"
+        Route   = $RouteLabel
     }
 }
 
 function Invoke-FtpToCloud { param($Llevar, $CloudType, $ShowProgress, $ProgressTop, $StartTime); throw "FTP→${CloudType}: En desarrollo" }
 function Invoke-FtpToUNC { param($Llevar, $ShowProgress, $ProgressTop, $StartTime); throw "FTP→UNC: En desarrollo" }
-function Invoke-FtpToUSB { param($Llevar, $ShowProgress, $ProgressTop, $StartTime); throw "FTP→USB: En desarrollo" }
-function Invoke-FtpToISO { param($Llevar, $ShowProgress, $ProgressTop, $StartTime); throw "FTP→ISO: En desarrollo" }
-function Invoke-FtpToDiskette { param($Llevar, $ShowProgress, $ProgressTop, $StartTime); throw "FTP→Diskette: En desarrollo" }
+function Invoke-FtpToUSB {
+    param($Llevar, [bool]$ShowProgress, [int]$ProgressTop, [datetime]$StartTime)
+
+    Write-Log "Handler: FTP→USB (descarga a temp + USB)" "INFO"
+
+    $tempDownload = Join-Path $env:TEMP "LLEVAR_FTP_USB_$(Get-Date -Format 'yyyyMMddHHmmss')"
+    New-Item -Type Directory $tempDownload | Out-Null
+
+    $originalLocalPath = $Llevar.Destino.Local.Path
+    try {
+        $Llevar.Destino.Local.Path = $tempDownload
+        Invoke-FtpToLocal -Llevar $Llevar -ShowProgress $ShowProgress -ProgressTop $ProgressTop -StartTime $StartTime | Out-Null
+
+        return Invoke-SourcePathToUSB -Llevar $Llevar -SourcePath $tempDownload -RouteLabel "FTP→USB" `
+            -ShowProgress $ShowProgress -ProgressTop $ProgressTop -StartTime $StartTime
+    }
+    finally {
+        $Llevar.Destino.Local.Path = $originalLocalPath
+        $tempExists = Test-Path $tempDownload
+        if ($tempExists) {
+            Remove-Item $tempDownload -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+function Invoke-FtpToISO {
+    param($Llevar, [bool]$ShowProgress, [int]$ProgressTop, [datetime]$StartTime)
+
+    Write-Log "Handler: FTP→ISO (descarga a temp + ISO)" "INFO"
+
+    $tempDownload = Join-Path $env:TEMP "LLEVAR_FTP_ISO_$(Get-Date -Format 'yyyyMMddHHmmss')"
+    New-Item -Type Directory $tempDownload | Out-Null
+
+    $originalLocalPath = $Llevar.Destino.Local.Path
+    try {
+        # Reutilizar lógica FTP→Local descargando en temp
+        $Llevar.Destino.Local.Path = $tempDownload
+        Invoke-FtpToLocal -Llevar $Llevar -ShowProgress $ShowProgress -ProgressTop $ProgressTop -StartTime $StartTime | Out-Null
+
+        return Invoke-SourcePathToISO -Llevar $Llevar -SourcePath $tempDownload -RouteLabel "FTP→ISO" `
+            -ShowProgress $ShowProgress -ProgressTop $ProgressTop -StartTime $StartTime
+    }
+    finally {
+        $Llevar.Destino.Local.Path = $originalLocalPath
+        $tempExists = Test-Path $tempDownload
+        if ($tempExists) {
+            Remove-Item $tempDownload -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+function Invoke-FtpToDiskette {
+    param($Llevar, [bool]$ShowProgress, [int]$ProgressTop, [datetime]$StartTime)
+
+    Write-Log "Handler: FTP→Diskette (descarga a temp + diskettes)" "INFO"
+
+    $tempDownload = Join-Path $env:TEMP "LLEVAR_FTP_FLOPPY_$(Get-Date -Format 'yyyyMMddHHmmss')"
+    New-Item -Type Directory $tempDownload | Out-Null
+
+    $originalLocalPath = $Llevar.Destino.Local.Path
+    try {
+        $Llevar.Destino.Local.Path = $tempDownload
+        Invoke-FtpToLocal -Llevar $Llevar -ShowProgress $ShowProgress -ProgressTop $ProgressTop -StartTime $StartTime | Out-Null
+
+        return Invoke-SourcePathToDiskette -Llevar $Llevar -SourcePath $tempDownload -RouteLabel "FTP→Diskette" `
+            -ShowProgress $ShowProgress -ProgressTop $ProgressTop -StartTime $StartTime
+    }
+    finally {
+        $Llevar.Destino.Local.Path = $originalLocalPath
+        $tempExists = Test-Path $tempDownload
+        if ($tempExists) {
+            Remove-Item $tempDownload -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
 function Invoke-CloudToFtp {
     <#
     .SYNOPSIS
@@ -1352,16 +1579,178 @@ function Invoke-CloudToFtp {
     }
 }
 function Invoke-CloudToUNC { param($Llevar, $CloudType, $ShowProgress, $ProgressTop, $StartTime); throw "${CloudType}→UNC: En desarrollo" }
-function Invoke-CloudToUSB { param($Llevar, $CloudType, $ShowProgress, $ProgressTop, $StartTime); throw "${CloudType}→USB: En desarrollo" }
-function Invoke-CloudToISO { param($Llevar, $CloudType, $ShowProgress, $ProgressTop, $StartTime); throw "${CloudType}→ISO: En desarrollo" }
-function Invoke-CloudToDiskette { param($Llevar, $CloudType, $ShowProgress, $ProgressTop, $StartTime); throw "${CloudType}→Diskette: En desarrollo" }
+function Invoke-CloudToUSB {
+    param($Llevar, [string]$CloudType, [bool]$ShowProgress, [int]$ProgressTop, [datetime]$StartTime)
+
+    Write-Log "Handler: ${CloudType}→USB (descarga a temp + USB)" "INFO"
+
+    if ($Llevar.Origen.Tipo -ne $CloudType) {
+        throw "${CloudType}→USB: Origen no es ${CloudType}"
+    }
+
+    $tempDownload = Join-Path $env:TEMP "LLEVAR_CLOUD_USB_$(Get-Date -Format 'yyyyMMddHHmmss')"
+    New-Item -Type Directory $tempDownload | Out-Null
+
+    try {
+        if ($ShowProgress) {
+            Write-LlevarProgressBar -Percent 5 -StartTime $StartTime -Label "Descargando desde ${CloudType}..." -Top $ProgressTop -Width 50 -CheckCancellation
+        }
+
+        if ($CloudType -eq "OneDrive") {
+            Import-Module (Join-Path (Split-Path $PSScriptRoot -Parent) "Transfer\OneDrive\OneDriveTransfer.psm1") -Force
+            $downloadSuccess = Receive-OneDriveItem -Llevar $Llevar -LocalDestination $tempDownload
+        }
+        elseif ($CloudType -eq "Dropbox") {
+            Import-Module (Join-Path (Split-Path $PSScriptRoot -Parent) "Transfer\Dropbox.psm1") -Force
+            $downloadSuccess = Receive-DropboxItem -Llevar $Llevar -LocalDestination $tempDownload
+        }
+        else {
+            throw "${CloudType}→USB: Tipo de nube no soportado: $CloudType"
+        }
+
+        if (-not $downloadSuccess) {
+            throw "${CloudType}→USB: Error al descargar archivos desde ${CloudType}"
+        }
+
+        return Invoke-SourcePathToUSB -Llevar $Llevar -SourcePath $tempDownload -RouteLabel "${CloudType}→USB" `
+            -ShowProgress $ShowProgress -ProgressTop $ProgressTop -StartTime $StartTime
+    }
+    finally {
+        $tempExists = Test-Path $tempDownload
+        if ($tempExists) {
+            Remove-Item $tempDownload -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+function Invoke-CloudToISO {
+    param($Llevar, [string]$CloudType, [bool]$ShowProgress, [int]$ProgressTop, [datetime]$StartTime)
+
+    Write-Log "Handler: ${CloudType}→ISO (descarga a temp + ISO)" "INFO"
+
+    if ($Llevar.Origen.Tipo -ne $CloudType) {
+        throw "${CloudType}→ISO: Origen no es ${CloudType}"
+    }
+
+    $tempDownload = Join-Path $env:TEMP "LLEVAR_CLOUD_ISO_$(Get-Date -Format 'yyyyMMddHHmmss')"
+    New-Item -Type Directory $tempDownload | Out-Null
+
+    try {
+        if ($ShowProgress) {
+            Write-LlevarProgressBar -Percent 5 -StartTime $StartTime -Label "Descargando desde ${CloudType}..." -Top $ProgressTop -Width 50 -CheckCancellation
+        }
+
+        if ($CloudType -eq "OneDrive") {
+            Import-Module (Join-Path (Split-Path $PSScriptRoot -Parent) "Transfer\OneDrive\OneDriveTransfer.psm1") -Force
+            $downloadSuccess = Receive-OneDriveItem -Llevar $Llevar -LocalDestination $tempDownload
+        }
+        elseif ($CloudType -eq "Dropbox") {
+            Import-Module (Join-Path (Split-Path $PSScriptRoot -Parent) "Transfer\Dropbox.psm1") -Force
+            $downloadSuccess = Receive-DropboxItem -Llevar $Llevar -LocalDestination $tempDownload
+        }
+        else {
+            throw "${CloudType}→ISO: Tipo de nube no soportado: $CloudType"
+        }
+
+        if (-not $downloadSuccess) {
+            throw "${CloudType}→ISO: Error al descargar archivos desde ${CloudType}"
+        }
+
+        return Invoke-SourcePathToISO -Llevar $Llevar -SourcePath $tempDownload -RouteLabel "${CloudType}→ISO" `
+            -ShowProgress $ShowProgress -ProgressTop $ProgressTop -StartTime $StartTime
+    }
+    finally {
+        $tempExists = Test-Path $tempDownload
+        if ($tempExists) {
+            Remove-Item $tempDownload -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+function Invoke-CloudToDiskette {
+    param($Llevar, [string]$CloudType, [bool]$ShowProgress, [int]$ProgressTop, [datetime]$StartTime)
+
+    Write-Log "Handler: ${CloudType}→Diskette (descarga a temp + diskettes)" "INFO"
+
+    if ($Llevar.Origen.Tipo -ne $CloudType) {
+        throw "${CloudType}→Diskette: Origen no es ${CloudType}"
+    }
+
+    $tempDownload = Join-Path $env:TEMP "LLEVAR_CLOUD_FLOPPY_$(Get-Date -Format 'yyyyMMddHHmmss')"
+    New-Item -Type Directory $tempDownload | Out-Null
+
+    try {
+        if ($ShowProgress) {
+            Write-LlevarProgressBar -Percent 5 -StartTime $StartTime -Label "Descargando desde ${CloudType}..." -Top $ProgressTop -Width 50 -CheckCancellation
+        }
+
+        if ($CloudType -eq "OneDrive") {
+            Import-Module (Join-Path (Split-Path $PSScriptRoot -Parent) "Transfer\OneDrive\OneDriveTransfer.psm1") -Force
+            $downloadSuccess = Receive-OneDriveItem -Llevar $Llevar -LocalDestination $tempDownload
+        }
+        elseif ($CloudType -eq "Dropbox") {
+            Import-Module (Join-Path (Split-Path $PSScriptRoot -Parent) "Transfer\Dropbox.psm1") -Force
+            $downloadSuccess = Receive-DropboxItem -Llevar $Llevar -LocalDestination $tempDownload
+        }
+        else {
+            throw "${CloudType}→Diskette: Tipo de nube no soportado: $CloudType"
+        }
+
+        if (-not $downloadSuccess) {
+            throw "${CloudType}→Diskette: Error al descargar archivos desde ${CloudType}"
+        }
+
+        return Invoke-SourcePathToDiskette -Llevar $Llevar -SourcePath $tempDownload -RouteLabel "${CloudType}→Diskette" `
+            -ShowProgress $ShowProgress -ProgressTop $ProgressTop -StartTime $StartTime
+    }
+    finally {
+        $tempExists = Test-Path $tempDownload
+        if ($tempExists) {
+            Remove-Item $tempDownload -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
 function Invoke-UNCToLocal { param($Llevar, $ShowProgress, $ProgressTop, $StartTime); throw "UNC→Local: En desarrollo" }
 function Invoke-UNCToFtp { param($Llevar, $ShowProgress, $ProgressTop, $StartTime); throw "UNC→FTP: En desarrollo" }
 function Invoke-UNCToCloud { param($Llevar, $CloudType, $ShowProgress, $ProgressTop, $StartTime); throw "UNC→${CloudType}: En desarrollo" }
 function Invoke-UNCToUNC { param($Llevar, $ShowProgress, $ProgressTop, $StartTime); throw "UNC→UNC: En desarrollo" }
-function Invoke-UNCToUSB { param($Llevar, $ShowProgress, $ProgressTop, $StartTime); throw "UNC→USB: En desarrollo" }
-function Invoke-UNCToISO { param($Llevar, $ShowProgress, $ProgressTop, $StartTime); throw "UNC→ISO: En desarrollo" }
-function Invoke-UNCToDiskette { param($Llevar, $ShowProgress, $ProgressTop, $StartTime); throw "UNC→Diskette: En desarrollo" }
+function Invoke-UNCToUSB {
+    param($Llevar, [bool]$ShowProgress, [int]$ProgressTop, [datetime]$StartTime)
+
+    Write-Log "Handler: UNC→USB" "INFO"
+
+    if ($Llevar.Origen.Tipo -ne "UNC") {
+        throw "UNC→USB: Origen no es UNC"
+    }
+
+    $sourcePath = Get-TransferPath -Config $Llevar -Section "Origen"
+    return Invoke-SourcePathToUSB -Llevar $Llevar -SourcePath $sourcePath -RouteLabel "UNC→USB" `
+        -ShowProgress $ShowProgress -ProgressTop $ProgressTop -StartTime $StartTime
+}
+function Invoke-UNCToISO {
+    param($Llevar, [bool]$ShowProgress, [int]$ProgressTop, [datetime]$StartTime)
+
+    Write-Log "Handler: UNC→ISO" "INFO"
+
+    if ($Llevar.Origen.Tipo -ne "UNC") {
+        throw "UNC→ISO: Origen no es UNC"
+    }
+
+    $sourcePath = Get-TransferPath -Config $Llevar -Section "Origen"
+    return Invoke-SourcePathToISO -Llevar $Llevar -SourcePath $sourcePath -RouteLabel "UNC→ISO" `
+        -ShowProgress $ShowProgress -ProgressTop $ProgressTop -StartTime $StartTime
+}
+function Invoke-UNCToDiskette {
+    param($Llevar, [bool]$ShowProgress, [int]$ProgressTop, [datetime]$StartTime)
+
+    Write-Log "Handler: UNC→Diskette" "INFO"
+
+    if ($Llevar.Origen.Tipo -ne "UNC") {
+        throw "UNC→Diskette: Origen no es UNC"
+    }
+
+    $sourcePath = Get-TransferPath -Config $Llevar -Section "Origen"
+    return Invoke-SourcePathToDiskette -Llevar $Llevar -SourcePath $sourcePath -RouteLabel "UNC→Diskette" `
+        -ShowProgress $ShowProgress -ProgressTop $ProgressTop -StartTime $StartTime
+}
 
 # ========================================================================== #
 #                  HANDLERS DISKETTE→* (ORIGEN DISKETTE)                      #
