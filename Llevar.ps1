@@ -593,7 +593,7 @@ try {
             $exampleStartTime = Get-Date
             Invoke-NormalMode -TransferConfig $transferConfig
             $exampleElapsed = (Get-Date) - $exampleStartTime
-            Show-ExampleSummary -ExampleInfo $script:ExampleInfo -TransferConfig $transferConfig -ElapsedTime $exampleElapsed
+            Show-ExampleSummary -ExampleInfo $Global:ExampleInfo -TransferConfig $transferConfig -ElapsedTime $exampleElapsed
             exit
         }
     }
@@ -604,7 +604,7 @@ try {
             $exampleStartTime = Get-Date
             Invoke-NormalMode -TransferConfig $transferConfig
             $exampleElapsed = (Get-Date) - $exampleStartTime
-            Show-ExampleSummary -ExampleInfo $script:ExampleInfo -TransferConfig $transferConfig -ElapsedTime $exampleElapsed
+            Show-ExampleSummary -ExampleInfo $Global:ExampleInfo -TransferConfig $transferConfig -ElapsedTime $exampleElapsed
             exit
         }
     }

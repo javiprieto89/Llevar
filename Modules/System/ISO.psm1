@@ -8,6 +8,30 @@
 #   - New-LlevarIsoMain: Orquestador de creación ISO con volúmenes
 # ========================================================================== #
 
+# IMAPI2 entrega el ISO como IStream COM, que PowerShell no puede leer directo.
+# Este helper lee un bloque del IStream a un buffer y devuelve los bytes leídos.
+if (-not ('LlevarIsoStreamReader' -as [type])) {
+    Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+using System.Runtime.InteropServices.ComTypes;
+
+public static class LlevarIsoStreamReader {
+    public static int Read(object comStream, byte[] buffer) {
+        IStream stream = (IStream)comStream;
+        IntPtr bytesRead = Marshal.AllocHGlobal(sizeof(int));
+        try {
+            stream.Read(buffer, buffer.Length, bytesRead);
+            return Marshal.ReadInt32(bytesRead);
+        }
+        finally {
+            Marshal.FreeHGlobal(bytesRead);
+        }
+    }
+}
+'@
+}
+
 function New-LlevarIsoImage {
     <#
     .SYNOPSIS
@@ -73,8 +97,10 @@ function New-LlevarIsoImage {
         Write-Host "Escribiendo imagen ISO: $IsoPath" -ForegroundColor Cyan
         
         # Escribir con barra de progreso
+        $isoStartTime = Get-Date
+        $isoBarTop = try { [console]::CursorTop } catch { -1 }
         while ($true) {
-            $readCount = $imageStream.Read($buffer, 0, $bufferSize)
+            $readCount = [LlevarIsoStreamReader]::Read($imageStream, $buffer)
             if ($readCount -le 0) { break }
             
             $fileStream.Write($buffer, 0, $readCount)
@@ -86,15 +112,15 @@ function New-LlevarIsoImage {
                 $sizeMB = [math]::Round($bytesWritten / 1MB, 2)
                 $totalMB = [math]::Round($totalBytes / 1MB, 2)
                 
-                Write-LlevarProgressBar -Current $percent -Total 100 -Activity "Creando ISO" `
-                    -Status "$sizeMB MB / $totalMB MB"
+                Write-LlevarProgressBar -Percent $percent -StartTime $isoStartTime -Top $isoBarTop `
+                    -Label "Creando ISO: $sizeMB MB / $totalMB MB"
             }
         }
         
         # Cerrar streams
         $fileStream.Close()
-        $imageStream.Close()
-        
+        [System.Runtime.InteropServices.Marshal]::ReleaseComObject($imageStream) | Out-Null
+
         # Liberar COM
         [System.Runtime.InteropServices.Marshal]::ReleaseComObject($fsi) | Out-Null
         
@@ -106,7 +132,10 @@ function New-LlevarIsoImage {
     catch {
         Write-Log "Error creando imagen ISO: $($_.Exception.Message)" "ERROR"
         Write-Host "Error: $($_.Exception.Message)" -ForegroundColor Red
-        
+
+        # Cerrar el archivo antes de intentar borrarlo
+        if ($fileStream) { $fileStream.Dispose() }
+
         # Limpiar archivo parcial
         if (Test-Path $IsoPath) {
             Remove-Item $IsoPath -Force -ErrorAction SilentlyContinue

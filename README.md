@@ -1,62 +1,34 @@
 # LLEVAR – Alex Soft
 
-De un viejo `.BAT` a un moderno `.PS1`.
+**Modular system for file transfer and compression on Windows.**  
+PowerShell 7 · USB · FTP · OneDrive · Dropbox · ISO · Block splitting
 
 ---
 
-## 🧭 Historia del Proyecto
+## 🚀 ¿Qué es LLEVAR?
 
-Este proyecto comenzó cuando tenía 12 años, como un script Batch/DOS.
-Gracias a una persona con muchísima paciencia, aprendí a programar con él.
+**LLEVAR** es un sistema modular para **transferencia, compresión y división de archivos en Windows**, diseñado para mover datos grandes de forma flexible entre distintos medios y destinos.
 
-Años después, decidí traer ese mismo espíritu al mundo moderno usando PowerShell.
-No es solo un proyecto técnico: es un tributo, un aprendizaje y una evolución.
-
-📖 Historia completa: [Docs/HISTORIA-DEL-PROYECTO.md](Docs/HISTORIA-DEL-PROYECTO.md)
-
----
-
-## 🎯 Propósito
-
-- Aprender PowerShell en profundidad
-- Modernizar un proyecto histórico
-- Mantener el espíritu retro con herramientas actuales
-- Divertirme programando
+Permite:
+- Copiar y transferir archivos
+- Comprimir contenido
+- Dividir archivos en bloques
+- Preparar datos para USB, FTP, nube o ISOs
+- Automatizar flujos reales con PowerShell 7
 
 ---
 
-## ⚠️ Estado del Proyecto
+## ⚡ Quick start
 
-Este proyecto está **en desarrollo activo**.
+```powershell
+.\Llevar.ps1 -Source "C:\Data" -Target "D:\Backup" -Compress -Split
 
-> MUCHÍSIMAS cosas no andan  
-> MUCHÍSIMAS cosas están a medias  
-> MUCHÍSIMAS cosas faltan  
 
-Y eso es parte de la gracia 🙂
-
----
-
-## 📚 Documentación
-
-Toda la documentación técnica está en la carpeta `/Docs`:
-
-- **[Instalación y desinstalación](Docs/INSTALACION-Y-DESINSTALACION.md)**
-- **[PowerShell 7 - Detección e Instalación](Docs/POWERSHELL7-REQUIREMENT.md)** ⭐ NUEVO
-- **[Módulo PowerShell7Installer](Docs/POWERSHELL7-INSTALLER-MODULE.md)** ⭐ NUEVO
-- **[Menú interactivo](Docs/MENU-INTERACTIVO.md)**
-- **[TransferConfig](Docs/TRANSFERCONFIG.md)**
-- **[OneDrive / Dropbox](Docs/ONEDRIVE-README.md)**
-- **[Testing](Docs/TESTING.md)**
-- **[Banners y UI](Docs/BANNERS.md)**
-- **[Navegador](Docs/NAVEGADOR.md)**
-
-👉 [Ver documentación completa](Docs)
-
----
-
-## 🤝 Contribuciones
-
-Aporten lo que quieran.
-Algo chiquito me marcó la vida…  
-andá a saber hasta dónde puede llegar esto.
+> Requiere **PowerShell 7+**.  
+> En algunos entornos, PowerShell puede bloquear la ejecución de scripts descargados.
+> En ese caso, podés habilitarlo solo para la sesión actual:
+>
+> ```powershell
+> Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+> ```
+> Esto no modifica la configuración del sistema ni se mantiene al cerrar la consola.

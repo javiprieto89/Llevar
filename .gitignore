@@ -19,3 +19,10 @@ logs/
 
 # Archivos de ayuda
 *.code-workspace
+
+# Credenciales y configuraciones con datos sensibles (NO versionar)
+Data/ftp-test-config.json
+*.credentials.json
+*.secrets.json
+*.local.json
+.env
