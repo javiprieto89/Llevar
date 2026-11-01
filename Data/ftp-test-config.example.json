@@ -1,0 +1,24 @@
+{
+  "Origen": {
+    "Server": "ftp.origen.example",
+    "Port": 21,
+    "Directory": "/Test",
+    "User": "USUARIO",
+    "Password": "CONTRASEÑA",
+    "UseSsl": false
+  },
+  "Destino": {
+    "Server": "ftp.destino.example",
+    "Port": 21,
+    "Directory": "/",
+    "User": "USUARIO",
+    "Password": "CONTRASEÑA",
+    "UseSsl": false
+  },
+  "Opciones": {
+    "BlockSizeMB": 10,
+    "UseNativeZip": false,
+    "RobocopyMirror": false,
+    "TransferMode": "Direct"
+  }
+}

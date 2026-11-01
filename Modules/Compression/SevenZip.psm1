@@ -178,16 +178,42 @@ function Get-SevenZip {
     throw "No se puede continuar la instalación sin 7-Zip."
 }
 
+function Get-SevenZipMajorVersion {
+    <#
+    .SYNOPSIS
+        Obtiene la versión mayor de un ejecutable 7-Zip (ej: 9 para 7za 9.20, 24 para 24.09)
+    .DESCRIPTION
+        Las versiones anteriores a 15 no soportan -bsp1/-bb1 (progreso en stdout).
+        Devuelve 0 si no se puede determinar.
+    .PARAMETER SevenZipPath
+        Ruta al ejecutable 7z.exe / 7za.exe
+    #>
+    param([string]$SevenZipPath)
+
+    try {
+        $banner = & $SevenZipPath 2>$null | Select-Object -First 3
+        $bannerText = $banner -join ' '
+        if ($bannerText -match '7-Zip[^0-9]*(\d+)\.\d+') {
+            return [int]$matches[1]
+        }
+    }
+    catch { }
+    return 0
+}
+
 function Invoke-SevenZipWithProgress {
     <#
     .SYNOPSIS
         Ejecuta 7-Zip con barra de progreso en tiempo real y estimación de tiempo inteligente
+    .PARAMETER NoInactivityTimeout
+        No abortar por falta de salida (7-Zip antiguo no reporta progreso con salida redirigida)
     #>
     param(
         [string]$SevenZipPath,
         [string[]]$Arguments,
         [datetime]$StartTime,
-        [int]$BarTop
+        [int]$BarTop,
+        [switch]$NoInactivityTimeout
     )
 
     $psi = New-Object System.Diagnostics.ProcessStartInfo
@@ -324,7 +350,7 @@ function Invoke-SevenZipWithProgress {
         }
 
         if ($hadOutput) { $timeout = 0 } else { $timeout++ }
-        if ($timeout -ge 600) {
+        if (-not $NoInactivityTimeout -and $timeout -ge 600) {
             # 60 segundos (600 * 100ms)
             try { $process.Kill() } catch { }
             throw "7-Zip no responde (timeout de 60 segundos)"
@@ -510,10 +536,19 @@ function Compress-Folder {
         "-t7z",
         "-mx=9",
         "-y",
-        "-aoa",
-        "-bsp1",   # ← PROGRESO OBLIGATORIO
-        "-bb1"     # ← VERBOSIDAD MÍNIMA
+        "-aoa"
     )
+
+    # -bsp1/-bb1 solo existen desde 7-Zip 15; el 7za.exe 9.20 incluido los rechaza (código 7)
+    $sevenZipMajor = Get-SevenZipMajorVersion -SevenZipPath $SevenZ
+    $supportsProgress = ($sevenZipMajor -ge 15)
+    if ($supportsProgress) {
+        $sevenArgs += "-bsp1"   # ← PROGRESO EN STDOUT
+        $sevenArgs += "-bb1"    # ← VERBOSIDAD MÍNIMA
+    }
+    else {
+        Write-Log "7-Zip versión $sevenZipMajor sin soporte de -bsp1/-bb1; compresión sin porcentaje de progreso" "WARNING"
+    }
 
     if ($Clave) {
         $sevenArgs += "-p$Clave"
@@ -526,6 +561,7 @@ function Compress-Folder {
     $volumeArg = $null
     # CON volúmenes
     if ($BlockSizeMB -gt 0) {
+        $volumeArg = "-v{0}m" -f $BlockSizeMB
         Get-ChildItem $Temp -File -ErrorAction SilentlyContinue |
         Where-Object { $_.Name -like "$baseName.7z.*" } |
         Remove-Item -Force -ErrorAction SilentlyContinue
@@ -572,7 +608,8 @@ function Compress-Folder {
                 -SevenZipPath $SevenZ `
                 -Arguments $sevenArgs `
                 -StartTime $startTime `
-                -BarTop $barTop
+                -BarTop $barTop `
+                -NoInactivityTimeout:(-not $supportsProgress)
 
             if ($exitCode -ne 0) {
                 Write-Log "7-Zip terminó con código de error: $exitCode" "ERROR"
@@ -597,7 +634,8 @@ function Compress-Folder {
                 -SevenZipPath $SevenZ `
                 -Arguments $sevenArgs `
                 -StartTime $startTime `
-                -BarTop $barTop
+                -BarTop $barTop `
+                -NoInactivityTimeout:(-not $supportsProgress)
 
             if ($exitCode -ne 0) {
                 Write-Log "7-Zip terminó con código de error: $exitCode" "ERROR"
@@ -625,11 +663,12 @@ function Compress-Folder {
         }
     }
 
-    # Con división: buscar volúmenes baseName.001, .002, etc.
-    Write-Log "Buscando volúmenes en: ${Temp} con patrón: ${baseName}.0*" "DEBUG"
+    # Con división: 7-Zip agrega .7z al nombre sin extensión → baseName.7z.001, .002, etc.
+    $volumePattern = '^' + [regex]::Escape($baseName) + '(\.7z)?\.\d{3}$'
+    Write-Log "Buscando volúmenes en: ${Temp} con patrón: $volumePattern" "DEBUG"
 
     $volumes = Get-ChildItem -Path $Temp -File -ErrorAction SilentlyContinue | Where-Object {
-        $_.Name -like "${baseName}.0*"
+        $_.Name -match $volumePattern
     } | Sort-Object Name
 
     Write-Log "Volúmenes encontrados: $($volumes.Count)" "DEBUG"
@@ -658,7 +697,7 @@ function Compress-Folder {
             Write-Log "  - $($_.Name) ($($_.Length) bytes)" "ERROR"
         }
 
-        throw "7-Zip no generó ningún archivo de salida. Patrón buscado: ${baseName}.0*"
+        throw "7-Zip no generó ningún archivo de salida. Patrón buscado: $volumePattern"
     }
 
     return @{
@@ -672,5 +711,6 @@ Export-ModuleMember -Function @(
     'Get-SevenZipLlevar',
     'Get-SevenZip',
     'Compress-Folder',
-    'Invoke-SevenZipWithProgress'
+    'Invoke-SevenZipWithProgress',
+    'Get-SevenZipMajorVersion'
 )

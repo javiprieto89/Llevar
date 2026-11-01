@@ -152,7 +152,7 @@ function Show-MainMenu {
                 Show-PasswordMenu -TransferConfig $TransferConfig | Out-Null
             }
             8 { 
-                $script:ExampleInfo = Initialize-ExampleTransfer -TransferConfig $TransferConfig
+                $Global:ExampleInfo = Initialize-ExampleTransfer -TransferConfig $TransferConfig
                 return @{ Action = "Example" }
             }
             9 { return @{ Action = "Help" } }

@@ -394,12 +394,19 @@ function Invoke-DirectTransfer {
     try {
         # Invoke-LlevarTransfer maneja TODAS las combinaciones
         # Detecta origen/destino desde $TransferConfig.Origen.Tipo y $TransferConfig.Destino.Tipo
+        $directStart = Get-Date
         $copyResult = Copy-LlevarFiles -TransferConfig $TransferConfig -ShowProgress $true -ProgressTop -1
-        
+        $elapsedSeconds = ((Get-Date) - $directStart).TotalSeconds
+
+        # Los handlers devuelven Route y, según la ruta, FilesUploaded o Files
+        $fileCount = if ($copyResult.FilesUploaded) { $copyResult.FilesUploaded } elseif ($copyResult.Files) { $copyResult.Files } else { $null }
+
         Show-Banner "TRANSFERENCIA COMPLETADA" -BorderColor Green -TextColor Green
-        Write-Host "Archivos copiados: $($copyResult.FileCount)" -ForegroundColor White
-        Write-Host "Bytes transferidos: $([Math]::Round($copyResult.BytesCopied / 1MB, 2)) MB" -ForegroundColor White
-        Write-Host "Tiempo transcurrido: $([Math]::Round($copyResult.ElapsedSeconds, 2)) segundos" -ForegroundColor White
+        Write-Host "Ruta: $($copyResult.Route)" -ForegroundColor White
+        if ($fileCount) {
+            Write-Host "Archivos transferidos: $fileCount" -ForegroundColor White
+        }
+        Write-Host "Tiempo transcurrido: $([Math]::Round($elapsedSeconds, 2)) segundos" -ForegroundColor White
         Write-Host ""
         
         Write-Host "✓ Transferencia directa completada." -ForegroundColor Green
@@ -793,6 +800,16 @@ function Invoke-CompressedTransfer {
             Write-Host "✓ ISO generado" -ForegroundColor Green
         }
         
+        "FTP" {
+            # Subir bloques, instalador y 7-Zip al FTP vía dispatcher (Local→FTP)
+            Copy-BlocksToUSB `
+                -Blocks $blocks `
+                -InstallerPath $installerScript `
+                -SevenZPath $sevenZipPath `
+                -CompressionType $compressionType `
+                -TransferConfig $TransferConfig
+        }
+
         "Diskette" {
             Write-Host "Generando disquetes..." -ForegroundColor Cyan
             
@@ -801,26 +818,27 @@ function Invoke-CompressedTransfer {
                 -TempDir $tempDir `
                 -SevenZPath $sevenZipPath `
                 -Password $TransferConfig.Opciones.Clave `
-                -VerifyDisks
+                -VerifyDisks $true
             
             Write-Host "✓ Disquetes generados" -ForegroundColor Green
         }
         
         default {
             # Local, USB, UNC, FTP, ISO - copiar bloques directamente
-            $destino = switch (.Tipo) {
-                "Local" { .Local.Path }
-                "USB" { .USB.Path }
+            $destinoConfig = $TransferConfig.Destino
+            $destino = switch ($destinoConfig.Tipo) {
+                "Local" { $destinoConfig.Local.Path }
+                "USB" { $destinoConfig.USB.Path }
                 "UNC" {
                     if ($TransferConfig.Interno.DestinoDrive) {
                         "$($TransferConfig.Interno.DestinoDrive):\"
                     }
                     else {
-                        .UNC.Path
+                        $destinoConfig.UNC.Path
                     }
                 }
-                "FTP" { .FTP.Directory }
-                "ISO" { .ISO.OutputPath }
+                "FTP" { $destinoConfig.FTP.Directory }
+                "ISO" { $destinoConfig.ISO.OutputPath }
             }
                 
             Write-Host "Copiando bloques a destino: $destino" -ForegroundColor Cyan

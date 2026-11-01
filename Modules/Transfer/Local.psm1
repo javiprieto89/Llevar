@@ -166,8 +166,10 @@ function Copy-LlevarLocalToLocalRobocopy {
     
     # Ejecutar Robocopy
     $robocopyExe = Get-RobocopyExePath
-    $process = Start-Process -FilePath $robocopyExe -ArgumentList $robocopyArgs -Wait -PassThru -NoNewWindow
-    $exitCode = $process.ExitCode
+    # Operador & en lugar de Start-Process: Start-Process no entrecomilla los
+    # argumentos del array y las rutas con espacios rompen robocopy (código 16)
+    & $robocopyExe @robocopyArgs | Out-Host
+    $exitCode = $LASTEXITCODE
     
     # Robocopy exit codes:
     # 0 = No changes (already synchronized)
