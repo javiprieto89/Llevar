@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="560" height="497" viewBox="0 0 560 497" role="img" aria-label="Menú interactivo de Llevar en acción">
+<style>text{font-family:'Cascadia Mono','Cascadia Code',Consolas,'DejaVu Sans Mono','Courier New',monospace;font-size:17px;white-space:pre}</style>
+<rect width="560" height="497" rx="10" fill="#0c0c0c"/>
+<rect width="560" height="38" rx="10" fill="#1f1f1f"/><rect y="26" width="560" height="12" fill="#1f1f1f"/>
+<circle cx="22" cy="19" r="6" fill="#ff5f56"/><circle cx="42" cy="19" r="6" fill="#ffbd2e"/><circle cx="62" cy="19" r="6" fill="#27c93f"/>
+<text x="280" y="24" fill="#767676" text-anchor="middle" style="font-size:13px">PowerShell 7 — .\Llevar.ps1</text>
+<g id="menu">
+<animate attributeName="opacity" values="1;1;0;0;1" keyTimes="0;0.6875;0.7125;0.9750;1" dur="16s" repeatCount="indefinite" calcMode="discrete"/>
+<text x="86" y="84" fill="#f2f2f2" textLength="387.6" lengthAdjust="spacing" xml:space="preserve" >╔════════════════════════════════════╗</text>
+<text x="86" y="109" fill="#f2f2f2" textLength="387.6" lengthAdjust="spacing" xml:space="preserve" >║      LLEVAR - MENÚ PRINCIPAL       ║</text>
+<text x="86" y="134" fill="#f2f2f2" textLength="387.6" lengthAdjust="spacing" xml:space="preserve" >╠════════════════════════════════════╣</text>
+<rect x="96.2" y="167" width="367.2" height="23" fill="#f9f1a5"><animate attributeName="y" values="167;192;217;242;267;292;317;342;367;392;142;392;392;167" keyTimes="0.0000;0.0573;0.1146;0.1719;0.2292;0.2865;0.3438;0.4010;0.4583;0.5156;0.5729;0.6302;0.6875;1" dur="16s" repeatCount="indefinite" calcMode="discrete"/></rect>
+<text x="86" y="159" fill="#cccccc" textLength="387.6" lengthAdjust="spacing" xml:space="preserve" >║  0: Cancelar / Volver              ║</text>
+<text x="86" y="159" fill="#f2f2f2" textLength="10.2" lengthAdjust="spacing" xml:space="preserve" >║</text><text x="463.4" y="159" fill="#f2f2f2" textLength="10.2" lengthAdjust="spacing" xml:space="preserve" >║</text>
+<text x="86" y="184" fill="#cccccc" textLength="387.6" lengthAdjust="spacing" xml:space="preserve" >║  1: Origen: Local → C:\Datos       ║</text>
+<text x="86" y="184" fill="#f2f2f2" textLength="10.2" lengthAdjust="spacing" xml:space="preserve" >║</text><text x="463.4" y="184" fill="#f2f2f2" textLength="10.2" lengthAdjust="spacing" xml:space="preserve" >║</text>
+<text x="147.2" y="184" fill="#3a96dd" textLength="10.2" lengthAdjust="spacing" xml:space="preserve" font-weight="700">O</text>
+<text x="86" y="209" fill="#cccccc" textLength="387.6" lengthAdjust="spacing" xml:space="preserve" >║  2: Destino: USB → E:\             ║</text>
+<text x="86" y="209" fill="#f2f2f2" textLength="10.2" lengthAdjust="spacing" xml:space="preserve" >║</text><text x="463.4" y="209" fill="#f2f2f2" textLength="10.2" lengthAdjust="spacing" xml:space="preserve" >║</text>
+<text x="147.2" y="209" fill="#3a96dd" textLength="10.2" lengthAdjust="spacing" xml:space="preserve" font-weight="700">D</text>
+<text x="86" y="234" fill="#cccccc" textLength="387.6" lengthAdjust="spacing" xml:space="preserve" >║  3: Tamaño de Bloque: 100 MB       ║</text>
+<text x="86" y="234" fill="#f2f2f2" textLength="10.2" lengthAdjust="spacing" xml:space="preserve" >║</text><text x="463.4" y="234" fill="#f2f2f2" textLength="10.2" lengthAdjust="spacing" xml:space="preserve" >║</text>
+<text x="147.2" y="234" fill="#3a96dd" textLength="10.2" lengthAdjust="spacing" xml:space="preserve" font-weight="700">T</text>
+<text x="86" y="259" fill="#cccccc" textLength="387.6" lengthAdjust="spacing" xml:space="preserve" >║  4: Modo Robocopy Mirror           ║</text>
+<text x="86" y="259" fill="#f2f2f2" textLength="10.2" lengthAdjust="spacing" xml:space="preserve" >║</text><text x="463.4" y="259" fill="#f2f2f2" textLength="10.2" lengthAdjust="spacing" xml:space="preserve" >║</text>
+<text x="198.2" y="259" fill="#3a96dd" textLength="10.2" lengthAdjust="spacing" xml:space="preserve" font-weight="700">R</text>
+<text x="86" y="284" fill="#cccccc" textLength="387.6" lengthAdjust="spacing" xml:space="preserve" >║  5: Generar ISO (en lugar de USB)  ║</text>
+<text x="86" y="284" fill="#f2f2f2" textLength="10.2" lengthAdjust="spacing" xml:space="preserve" >║</text><text x="463.4" y="284" fill="#f2f2f2" textLength="10.2" lengthAdjust="spacing" xml:space="preserve" >║</text>
+<text x="228.79999999999998" y="284" fill="#3a96dd" textLength="10.2" lengthAdjust="spacing" xml:space="preserve" font-weight="700">I</text>
+<text x="86" y="309" fill="#cccccc" textLength="387.6" lengthAdjust="spacing" xml:space="preserve" >║  6: Usar ZIP Nativo (sin 7-Zip)    ║</text>
+<text x="86" y="309" fill="#f2f2f2" textLength="10.2" lengthAdjust="spacing" xml:space="preserve" >║</text><text x="463.4" y="309" fill="#f2f2f2" textLength="10.2" lengthAdjust="spacing" xml:space="preserve" >║</text>
+<text x="239" y="309" fill="#3a96dd" textLength="10.2" lengthAdjust="spacing" xml:space="preserve" font-weight="700">N</text>
+<text x="86" y="334" fill="#cccccc" textLength="387.6" lengthAdjust="spacing" xml:space="preserve" >║  7: Configurar Contraseña          ║</text>
+<text x="86" y="334" fill="#f2f2f2" textLength="10.2" lengthAdjust="spacing" xml:space="preserve" >║</text><text x="463.4" y="334" fill="#f2f2f2" textLength="10.2" lengthAdjust="spacing" xml:space="preserve" >║</text>
+<text x="147.2" y="334" fill="#3a96dd" textLength="10.2" lengthAdjust="spacing" xml:space="preserve" font-weight="700">C</text>
+<text x="86" y="359" fill="#cccccc" textLength="387.6" lengthAdjust="spacing" xml:space="preserve" >║  8: Modo Ejemplo (Demo)            ║</text>
+<text x="86" y="359" fill="#f2f2f2" textLength="10.2" lengthAdjust="spacing" xml:space="preserve" >║</text><text x="463.4" y="359" fill="#f2f2f2" textLength="10.2" lengthAdjust="spacing" xml:space="preserve" >║</text>
+<text x="198.2" y="359" fill="#3a96dd" textLength="10.2" lengthAdjust="spacing" xml:space="preserve" font-weight="700">E</text>
+<text x="86" y="384" fill="#cccccc" textLength="387.6" lengthAdjust="spacing" xml:space="preserve" >║  9: Ayuda                          ║</text>
+<text x="86" y="384" fill="#f2f2f2" textLength="10.2" lengthAdjust="spacing" xml:space="preserve" >║</text><text x="463.4" y="384" fill="#f2f2f2" textLength="10.2" lengthAdjust="spacing" xml:space="preserve" >║</text>
+<text x="147.2" y="384" fill="#3a96dd" textLength="10.2" lengthAdjust="spacing" xml:space="preserve" font-weight="700">A</text>
+<text x="86" y="409" fill="#cccccc" textLength="387.6" lengthAdjust="spacing" xml:space="preserve" >║  10: Ejecutar Transferencia        ║</text>
+<text x="86" y="409" fill="#f2f2f2" textLength="10.2" lengthAdjust="spacing" xml:space="preserve" >║</text><text x="463.4" y="409" fill="#f2f2f2" textLength="10.2" lengthAdjust="spacing" xml:space="preserve" >║</text>
+<text x="167.6" y="409" fill="#3a96dd" textLength="10.2" lengthAdjust="spacing" xml:space="preserve" font-weight="700">j</text>
+<text x="86" y="434" fill="#f2f2f2" textLength="387.6" lengthAdjust="spacing" xml:space="preserve" >╚════════════════════════════════════╝</text>
+<clipPath id="selclip"><rect x="96.2" y="167" width="367.2" height="23"><animate attributeName="y" values="167;192;217;242;267;292;317;342;367;392;142;392;392;167" keyTimes="0.0000;0.0573;0.1146;0.1719;0.2292;0.2865;0.3438;0.4010;0.4583;0.5156;0.5729;0.6302;0.6875;1" dur="16s" repeatCount="indefinite" calcMode="discrete"/></rect></clipPath>
+<g clip-path="url(#selclip)">
+<text x="116.6" y="159" fill="#000000" textLength="204.0" lengthAdjust="spacing" xml:space="preserve" font-weight="700">0: Cancelar / Volver</text>
+<text x="116.6" y="184" fill="#000000" textLength="275.4" lengthAdjust="spacing" xml:space="preserve" font-weight="700">1: Origen: Local → C:\Datos</text>
+<text x="116.6" y="209" fill="#000000" textLength="214.2" lengthAdjust="spacing" xml:space="preserve" font-weight="700">2: Destino: USB → E:\</text>
+<text x="116.6" y="234" fill="#000000" textLength="275.4" lengthAdjust="spacing" xml:space="preserve" font-weight="700">3: Tamaño de Bloque: 100 MB</text>
+<text x="116.6" y="259" fill="#000000" textLength="234.6" lengthAdjust="spacing" xml:space="preserve" font-weight="700">4: Modo Robocopy Mirror</text>
+<text x="116.6" y="284" fill="#000000" textLength="326.4" lengthAdjust="spacing" xml:space="preserve" font-weight="700">5: Generar ISO (en lugar de USB)</text>
+<text x="116.6" y="309" fill="#000000" textLength="306.0" lengthAdjust="spacing" xml:space="preserve" font-weight="700">6: Usar ZIP Nativo (sin 7-Zip)</text>
+<text x="116.6" y="334" fill="#000000" textLength="244.8" lengthAdjust="spacing" xml:space="preserve" font-weight="700">7: Configurar Contraseña</text>
+<text x="116.6" y="359" fill="#000000" textLength="224.4" lengthAdjust="spacing" xml:space="preserve" font-weight="700">8: Modo Ejemplo (Demo)</text>
+<text x="116.6" y="384" fill="#000000" textLength="81.6" lengthAdjust="spacing" xml:space="preserve" font-weight="700">9: Ayuda</text>
+<text x="116.6" y="409" fill="#000000" textLength="265.2" lengthAdjust="spacing" xml:space="preserve" font-weight="700">10: Ejecutar Transferencia</text>
+</g>
+<text x="86" y="465" fill="#767676" textLength="335.4" lengthAdjust="spacing" xml:space="preserve" style="font-size:13px">↑↓ mover · Enter elegir · letra = atajo</text>
+</g>
+<g id="run" opacity="0">
+<animate attributeName="opacity" values="0;0;1;1;0" keyTimes="0;0.6875;0.7125;0.9750;1" dur="16s" repeatCount="indefinite" calcMode="discrete"/>
+<text x="28" y="78" fill="#cccccc" lengthAdjust="spacing" xml:space="preserve" >PS&gt; .\Llevar.ps1 -Source C:\Datos -Target E:\</text>
+<text x="28" y="128" fill="#16c60c" lengthAdjust="spacing" xml:space="preserve" >✓ Origen:  Local → C:\Datos</text>
+<text x="28" y="153" fill="#16c60c" lengthAdjust="spacing" xml:space="preserve" >✓ Destino: USB   → E:\</text>
+<text x="28" y="178" fill="#16c60c" lengthAdjust="spacing" xml:space="preserve" >✓ Compresión 7-Zip · bloques de 100 MB</text>
+<text x="28" y="228" fill="#f9f1a5" lengthAdjust="spacing" xml:space="preserve" >Comprimiendo…</text>
+<rect x="28" y="243" width="434" height="16" rx="3" fill="#1a3a6b"/>
+<rect x="28" y="243" width="0" height="16" rx="3" fill="#61d6d6"><animate attributeName="width" values="0;0;434;434;0" keyTimes="0;0.7125;0.9125;0.9750;1" dur="16s" repeatCount="indefinite"/></rect>
+<text x="474" y="257" fill="#61d6d6" style="font-size:15px">100%</text>
+<text x="28" y="293" fill="#16c60c" style="font-size:17px" opacity="0">✓ Listo — 3 bloques generados en E:\<animate attributeName="opacity" values="0;0;1;1;0" keyTimes="0;0.9125;0.91875;0.9750;1" dur="16s" repeatCount="indefinite" calcMode="discrete"/></text>
+</g>
+</svg>

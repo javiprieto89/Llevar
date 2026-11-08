@@ -3,6 +3,10 @@
 **Modular system for file transfer and compression on Windows.**  
 PowerShell 7 · USB · FTP · OneDrive · Dropbox · ISO · Block splitting
 
+<p align="center">
+  <img src="Docs/img/llevar-menu-demo.svg" alt="Menú interactivo de Llevar en acción" width="560">
+</p>
+
 ---
 
 ## 🚀 ¿Qué es LLEVAR?
@@ -22,7 +26,7 @@ Permite:
 
 ```powershell
 .\Llevar.ps1 -Source "C:\Data" -Target "D:\Backup" -Compress -Split
-
+```
 
 > Requiere **PowerShell 7+**.  
 > En algunos entornos, PowerShell puede bloquear la ejecución de scripts descargados.
