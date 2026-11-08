@@ -36,3 +36,17 @@ Permite:
 > Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 > ```
 > Esto no modifica la configuración del sistema ni se mantiene al cerrar la consola.
+
+---
+
+## 📚 Documentación
+
+- [Índice de la documentación](Docs/README.md)
+- [Integración con OneDrive](Docs/ONEDRIVE-README.md)
+- [Configuración de transferencias (TransferConfig)](Docs/TRANSFERCONFIG.md)
+- [Navegador de archivos](Docs/NAVEGADOR.md)
+- [Banners y logos](Docs/BANNERS.md)
+- [Validación de carga de módulos](Docs/MODULE-LOADER-VALIDATION.md)
+- [Testing](Docs/TESTING.md)
+
+También disponible en el [Wiki del proyecto](https://github.com/javiprieto89/Llevar/wiki).
