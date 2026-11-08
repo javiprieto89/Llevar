@@ -26,3 +26,5 @@ Data/ftp-test-config.json
 *.secrets.json
 *.local.json
 .env
+# Archivos de sesión generados por handoff (no versionar)
+.handoff/
