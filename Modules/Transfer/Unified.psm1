@@ -277,12 +277,13 @@ function Invoke-LocalToFtp {
     
     # Obtener configuración FTP destino
     $ftpConfig = [PSCustomObject]@{
-        Server    = $null
-        Port      = 21
-        User      = $null
-        Password  = $null
-        Directory = "/"
-        UseSsl    = $false
+        Server         = $null
+        Port           = 21
+        User           = $null
+        Password       = $null
+        SecurePassword = $null
+        Directory      = "/"
+        UseSsl         = $false
     }
 
     $ftpConfig.Server = Get-TransferConfigValue -Config $Llevar -Path "Destino.FTP.Server"
@@ -293,6 +294,13 @@ function Invoke-LocalToFtp {
     $ftpDirectory = Get-TransferConfigValue -Config $Llevar -Path "Destino.FTP.Directory"
     $ftpConfig.Directory = if ($ftpDirectory) { $ftpDirectory } else { "/" }
     $ftpConfig.UseSsl = Get-TransferConfigValue -Config $Llevar -Path "Destino.FTP.UseSsl"
+
+    # Si solo hay PSCredential (sin User/Password sueltos), tomar los datos de ahí
+    $ftpCredentials = Get-TransferConfigValue -Config $Llevar -Path "Destino.FTP.Credentials"
+    if ($ftpCredentials -and -not $ftpConfig.User) {
+        $ftpConfig.User = $ftpCredentials.UserName
+        $ftpConfig.Password = $ftpCredentials.Password
+    }
 
     if (-not $ftpConfig.Server -or -not $ftpConfig.User) {
         throw "Local→FTP: Configuración FTP incompleta (falta Server o User)"
@@ -1325,7 +1333,7 @@ function Invoke-SourcePathToDiskette {
         Write-LlevarProgressBar -Percent 10 -StartTime $StartTime -Label "Preparando diskettes..." -Top $ProgressTop -Width 50 -CheckCancellation
     }
 
-    $ok = Copy-ToFloppyDisks -SourcePath $SourcePath -TempDir $tempDir -SevenZPath $null -Password $password -VerifyDisks
+    $ok = Copy-ToFloppyDisks -SourcePath $SourcePath -TempDir $tempDir -SevenZPath $null -Password $password -VerifyDisks $true
 
     if (-not $ok) {
         throw "${RouteLabel}: error durante la copia a diskettes"

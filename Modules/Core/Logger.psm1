@@ -7,10 +7,12 @@
 #                          VARIABLES GLOBALES                                #
 # ========================================================================== #
 
-$Global:ScriptDir = Split-Path -Parent $PSCommandPath | Split-Path -Parent | Split-Path -Parent
-$Global:LogsDir = Join-Path $Global:ScriptDir "Logs"
-$Global:LogFile = $null
-$Global:VerboseLogging = $false
+# Solo inicializar si no existen: varios módulos re-importan Logger con -Force
+# y no deben perder el log activo ni el modo verbose a mitad de la ejecución
+$Global:ScriptDir ??= Split-Path -Parent $PSCommandPath | Split-Path -Parent | Split-Path -Parent
+$Global:LogsDir ??= Join-Path $Global:ScriptDir "Logs"
+$Global:LogFile ??= $null
+$Global:VerboseLogging ??= $false
 
 # ========================================================================== #
 #                          FUNCIONES DE LOGGING                              #
@@ -34,9 +36,9 @@ function Initialize-LogFile {
         New-Item -Path $Global:LogsDir -ItemType Directory -Force | Out-Null
     }
     
-    # Nombre del log con fecha, hora y minuto
-    $timestamp = Get-Date -Format "yyyy-MM-dd_HH-mm"
-    $Global:LogFile = Join-Path $Global:LogsDir "LLEVAR_$timestamp.log"
+    # Nombre del log con fecha, hora y minuto (reusar el de Llevar.ps1 para que coincida con el transcript)
+    $logBaseName = if ($Global:LogBaseName) { $Global:LogBaseName } else { "LLEVAR_$(Get-Date -Format 'yyyy-MM-dd_HH-mm')" }
+    $Global:LogFile = Join-Path $Global:LogsDir "$logBaseName.log"
     
     # Variable global para modo verbose
     $Global:VerboseLogging = $Verbose
